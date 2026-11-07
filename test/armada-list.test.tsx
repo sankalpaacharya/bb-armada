@@ -118,17 +118,8 @@ const anchorOf = (container: HTMLElement, id: string) =>
   );
 const rowOf = (container: HTMLElement, id: string) =>
   anchorOf(container, id)?.closest("li") ?? null;
-const projectHeaders = () =>
-  within(screen.getByRole("list", { name: "Threads" }))
-    .queryAllByRole("button")
-    .filter((button) => button.hasAttribute("aria-expanded"));
-/** The section list a row is in, past any project group inside it. */
-const listOf = (container: HTMLElement, id: string) => {
-  let list = rowOf(container, id)?.closest("ul") ?? null;
-  while (list?.parentElement?.closest("ul") != null)
-    list = list.parentElement.closest("ul");
-  return list?.getAttribute("aria-label") ?? null;
-};
+const listOf = (container: HTMLElement, id: string) =>
+  rowOf(container, id)?.closest("ul")?.getAttribute("aria-label") ?? null;
 
 describe("Armada thread list", () => {
   it("lists every worker once, in Threads, and keeps only the captain in the deck", async () => {
@@ -424,68 +415,6 @@ describe("Armada thread list", () => {
     await waitFor(() => expect(rowOf(view.container, "b")).not.toBeNull());
     expect(rowOf(view.container, "a")).toBeNull();
     expect(within(rowOf(view.container, "b")!).queryByText("Beta")).toBeNull();
-    expect(projectHeaders()).toEqual([]);
-  });
-
-  it("puts each project's threads under its own header, which folds them away and is remembered", async () => {
-    const { view } = await render();
-    await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
-    const list = within(screen.getByRole("list", { name: "Threads" }));
-    expect(
-      projectHeaders().map((button) => [
-        button.textContent,
-        button.getAttribute("aria-expanded"),
-      ]),
-    ).toEqual([
-      ["Alpha", "true"],
-      ["Beta", "true"],
-    ]);
-    expect(
-      within(screen.getByRole("list", { name: "Alpha" }))
-        .getAllByRole("link")
-        .map((link) => link.getAttribute("aria-label")),
-    ).toEqual(["Build parser", "Write docs", "Approve deploy"]);
-
-    fireEvent.click(list.getByRole("button", { name: "Alpha" }));
-    expect(rowOf(view.container, "w_busy1")).toBeNull();
-    expect(rowOf(view.container, "plain")).not.toBeNull();
-    const alpha = list.getByRole("button", { name: /^Alpha/ });
-    expect(alpha.getAttribute("aria-expanded")).toBe("false");
-    expect(
-      alpha.querySelector('[data-thread-status-glyph="waiting-for-input"]'),
-    ).not.toBeNull();
-    expect(JSON.parse(stored.get("armada/collapsed-projects") ?? "{}")).toEqual(
-      { proj_a: true },
-    );
-
-    cleanup();
-    const again = await render();
-    await waitFor(() =>
-      expect(rowOf(again.view.container, "plain")).not.toBeNull(),
-    );
-    expect(rowOf(again.view.container, "w_busy1")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^Alpha/ }));
-    expect(rowOf(again.view.container, "w_busy1")).not.toBeNull();
-  });
-
-  it("draws the shade grid on a folded project while something inside is working", async () => {
-    stored.set("armada/collapsed-projects", JSON.stringify({ proj_a: true }));
-    const { view } = await render({
-      threads: [
-        thread("busy", { title: "Busy", projectId: "proj_a", ...busy }),
-        thread("calm", { title: "Calm", projectId: "proj_b" }),
-      ],
-    });
-    await waitFor(() => expect(rowOf(view.container, "calm")).not.toBeNull());
-    const list = within(screen.getByRole("list", { name: "Threads" }));
-    expect(
-      within(list.getByRole("button", { name: /^Alpha/ })).getByRole("img", {
-        name: "Working",
-      }),
-    ).toBeTruthy();
-    expect(
-      within(list.getByRole("button", { name: "Beta" })).queryByRole("img"),
-    ).toBeNull();
   });
 
   it("picks a project from a list that opens inside the sidebar", async () => {
