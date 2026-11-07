@@ -570,7 +570,7 @@ describe("Armada thread list", () => {
 const previewAvatar = () =>
   screen
     .getByRole("button", { name: "New avatar" })
-    .previousElementSibling?.querySelector("img")
+    .querySelector("img")
     ?.getAttribute("src");
 
 const projectTrigger = (dialog: ReturnType<typeof within>) =>
