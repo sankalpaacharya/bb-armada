@@ -35,6 +35,9 @@ export function captainItems(actions: {
   ];
 }
 
+/** Its own section after bb's organize items, so Archive and Delete stay last. */
+const PARK_GROUP = "3_park";
+
 /**
  * Settle and the snooze presets for a parkable thread, inactive ones
  * included; Move to active for a snoozed or settled one.
@@ -48,7 +51,7 @@ export function parkItems(
     return [
       {
         key: "keep",
-        group: GROUPS.lifecycle,
+        group: PARK_GROUP,
         action: {
           label: "Move to active",
           icon: "ArrowTurnBackward",
@@ -62,12 +65,12 @@ export function parkItems(
   return [
     {
       key: "settle",
-      group: GROUPS.lifecycle,
+      group: PARK_GROUP,
       action: { label: "Settle", icon: "Check", run: () => actions.settle(id) },
     },
     {
       key: "snooze",
-      group: GROUPS.lifecycle,
+      group: PARK_GROUP,
       action: {
         label: "Snooze",
         icon: "Clock",

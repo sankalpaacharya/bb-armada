@@ -12,12 +12,12 @@ export const rowFill = (active: boolean): string =>
 /**
  * A thread row's fill, as an opaque colour in `--row-fill` so its hover
  * actions can fade into the row exactly. At rest it is the sidebar's own
- * colour and is not painted.
+ * colour and is not painted; hovered, or with its menu open, it is lit.
  */
 export const threadRowFill = (active: boolean): string =>
   active
     ? "bg-(--row-fill) [--row-fill:var(--sidebar-accent)]"
-    : "[--row-fill:var(--sidebar)] hover:bg-(--row-fill) hover:[--row-fill:color-mix(in_srgb,var(--sidebar-accent)_60%,var(--sidebar))]";
+    : "[--row-fill:var(--sidebar)] hover:bg-(--row-fill) hover:[--row-fill:color-mix(in_srgb,var(--sidebar-accent)_60%,var(--sidebar))] has-[a[data-state=open]]:bg-(--row-fill) has-[a[data-state=open]]:[--row-fill:color-mix(in_srgb,var(--sidebar-accent)_60%,var(--sidebar))]";
 
 export const HEADER_ACTION = `grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-state-hover hover:text-foreground aria-expanded:bg-state-active aria-expanded:text-foreground ${FOCUS_RING}`;
 
