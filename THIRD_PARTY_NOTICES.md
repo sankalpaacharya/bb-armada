@@ -82,8 +82,8 @@ Source: <https://github.com/get-bb/bb>
 
 MIT License, Copyright (c) 2026 Kun Chen.
 
-The captain skill in `skills/firstmate/` is adapted from firstmate, and
-`skills/firstmate/references/diagnostic-reasoning.md` is copied from its
+The captain skill in `skills/armada/` is adapted from firstmate, and
+`skills/armada/references/diagnostic-reasoning.md` is copied from its
 `.agents/skills/diagnostic-reasoning`.
 
 Source: <https://github.com/kunchenguid/firstmate>

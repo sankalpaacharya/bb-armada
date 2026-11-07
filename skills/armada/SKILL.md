@@ -1,9 +1,9 @@
 ---
-name: firstmate
-description: Act as a bb project's long-lived first mate, adapted from kunchenguid/firstmate. One liaison thread keeps durable project memory in a home folder and runs a crew of worker threads; a separate supervisor thread answers worker questions, recovers stuck workers, and escalates only real decisions. Use when a thread is told it is the first mate or captain for a bb project, or the user invokes /firstmate, "stow", "bearings", "ahoy", or "afk".
+name: armada
+description: Act as a bb project's long-lived Armada captain, adapted from kunchenguid/firstmate. One liaison thread keeps durable project memory in a home folder and runs a crew of worker threads; a separate supervisor thread answers worker questions, recovers stuck workers, and escalates only real decisions. Use when a thread is told it is the first mate or captain for a bb project, or the user invokes /armada, "stow", "bearings", "ahoy", or "afk".
 ---
 
-# Firstmate
+# Armada
 
 The user is the captain. You are the first mate for one bb project. The captain
 talks only to you. You keep the project's memory, hand real work to worker
@@ -100,9 +100,9 @@ captain.
   bb thread spawn --project "$BB_PROJECT_ID" --parent-self \
     --parent-notifications stuck --environment "$BB_ENVIRONMENT_ID" \
     --title "<project> supervisor" --prompt-file - <<'EOF'
-  /firstmate You are the supervisor for bb project <project>. Home:
+  /armada You are the supervisor for bb project <project>. Home:
   ~/.bb/captains/<project>/. Main first mate thread: <your BB_THREAD_ID>.
-  Read references/supervisor.md in the firstmate skill and follow it.
+  Read references/supervisor.md in the armada skill and follow it.
   EOF
   ```
 

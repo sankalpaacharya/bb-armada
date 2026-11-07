@@ -92,7 +92,7 @@ one.
 <img src="docs/screenshots/new-captain.png" alt="The New captain dialog" width="384">
 
 A captain keeps its memory in `~/.bb/captains/<project>/`, following the
-firstmate skill. The folder holds `captain.md`, `learnings.md`, `backlog.md`,
+armada skill. The folder holds `captain.md`, `learnings.md`, `backlog.md`,
 `archive.md`, and a `tasks/<name>/` folder for each piece of work. The Memory
 section in Crew lists the `.md` files in that folder, up to two folders deep,
 and clicking one opens it in bb's file preview.
@@ -103,10 +103,10 @@ workers. The first line of `backlog.md` names the supervisor
 of its captain. Workers show as the captain's own threads, and the supervisor
 never shows as a row. A new supervisor appears within 5 minutes.
 
-Armada ships the firstmate skill in `skills/firstmate/`, and bb loads every
+Armada ships the armada skill in `skills/armada/`, and bb loads every
 `skills/<name>/SKILL.md` in a plugin into agent threads. So installing Armada
 installs the skill, and nothing else is needed for a captain to work. A new
-captain's first prompt tells it to follow `/firstmate` and keep its home at
+captain's first prompt tells it to follow `/armada` and keep its home at
 `~/.bb/captains/<project>/` (`lib/captain-text.ts`). The skill is adapted from
 [kunchenguid/firstmate](https://github.com/kunchenguid/firstmate).
 
@@ -172,7 +172,7 @@ sidebar, the open project filter, the Crew tab and the New captain dialog at
 
 ```
 app.tsx          registers the sidebar list and the Crew tab
-skills/          the firstmate skill, which bb loads into agent threads
+skills/          the armada skill, which bb loads into agent threads
 server.ts        records, migration, RPC handlers and schedules
 lib/             model, folding, status table, shelves, scope, logos, memory reader
 hooks/           queries for captains, parks, supervisors and logos, park actions

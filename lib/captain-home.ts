@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { captainSlug } from "./captain-text";
 
-/** Where a captain keeps its memory, as the firstmate skill lays it out. */
+/** Where a captain keeps its memory, as the armada skill lays it out. */
 export const homeFolder = (projectName: string): string =>
   `~/.bb/captains/${captainSlug(projectName)}`;
 
