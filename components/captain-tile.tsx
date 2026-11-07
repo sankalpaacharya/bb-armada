@@ -1,6 +1,7 @@
 import { Icon } from "@/components/ui/icon";
 import { colorClass, type ColorId } from "@/lib/colors";
 import { logoIcon, type LogoId } from "@/lib/logos";
+import { TILE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
 export function CaptainTile({
@@ -20,7 +21,7 @@ export function CaptainTile({
       className={cn(
         "grid shrink-0 place-items-center text-white",
         colorClass(color),
-        size === "row" ? "size-[18px] rounded-[5px]" : "size-10 rounded-[10px]",
+        TILE[size],
         className,
       )}
     >

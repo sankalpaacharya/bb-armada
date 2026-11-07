@@ -98,12 +98,14 @@ async function render(
   return { view, onNavigate };
 }
 
-const rowOf = (container: HTMLElement, id: string) =>
-  container.querySelector<HTMLElement>(`[data-armada-row="${id}"]`);
 const anchorOf = (container: HTMLElement, id: string) =>
   container.querySelector<HTMLAnchorElement>(
     `a[data-sidebar-thread-id="${id}"]`,
   );
+const rowOf = (container: HTMLElement, id: string) =>
+  anchorOf(container, id)?.closest("li") ?? null;
+const listOf = (container: HTMLElement, id: string) =>
+  rowOf(container, id)?.closest("ul")?.getAttribute("aria-label") ?? null;
 
 describe("Armada thread list", () => {
   it("nests every worker under its captain and leaves the captain tree out of the thread list", async () => {
@@ -119,10 +121,22 @@ describe("Armada thread list", () => {
     expect(workers.queryByText("Nested helper")).toBeNull();
     const list = screen.getByRole("list", { name: "Threads" });
     expect(
-      Array.from(list.querySelectorAll("[data-armada-row]")).map(
-        (row) => (row as HTMLElement).dataset.armadaRow,
-      ),
-    ).toEqual(["plain"]);
+      within(list)
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("aria-label")),
+    ).toEqual(["Loose idea"]);
+    expect(listOf(view.container, "plain")).toBe("Threads");
+    expect(listOf(view.container, "cap")).toBe("Captains");
+  });
+
+  it("nests the workers inside their captain's list item, under a heading that is only its title", async () => {
+    const { view } = await render();
+    await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
+    const workers = screen.getByRole("list", { name: "Workers of Captain Alpha" });
+    expect(rowOf(view.container, "cap")!.contains(workers)).toBe(true);
+    expect(
+      screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
+    ).toEqual(["Captains", "Threads"]);
   });
 
   it("draws the captain as a small rounded square in its colour, without the title's emoji", async () => {
@@ -257,12 +271,58 @@ describe("Armada thread list", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Threads from All projects" }),
     );
-    const list = screen.getByRole("list", { name: "Show threads from" });
+    const list = screen.getByRole("listbox", { name: "Show threads from" });
     expect(view.container.contains(list)).toBe(true);
-    fireEvent.click(within(list).getByRole("button", { name: /^Beta/ }));
+    fireEvent.click(within(list).getByRole("option", { name: "Beta" }));
     await waitFor(() => expect(rowOf(view.container, "a")).toBeNull());
     expect(rowOf(view.container, "b")).not.toBeNull();
-    expect(screen.queryByRole("list", { name: "Show threads from" })).toBeNull();
+    expect(
+      screen.queryByRole("listbox", { name: "Show threads from" }),
+    ).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Threads from Beta" }),
+    );
+  });
+
+  it("moves through the project list with the keyboard and hands focus back on Escape", async () => {
+    const { view } = await render();
+    await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
+    const trigger = screen.getByRole("button", {
+      name: "Threads from All projects",
+    });
+    fireEvent.click(trigger);
+    const list = screen.getByRole("listbox", { name: "Show threads from" });
+    const all = within(list).getByRole("option", { name: "All projects" });
+    expect(document.activeElement).toBe(all);
+    expect(all.getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(list, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(
+      within(list).getByRole("option", { name: "Alpha" }),
+    );
+    fireEvent.keyDown(list, { key: "End" });
+    expect(document.activeElement).toBe(
+      within(list).getByRole("option", { name: "Personal" }),
+    );
+    fireEvent.keyDown(list, { key: "Escape" });
+    expect(
+      screen.queryByRole("listbox", { name: "Show threads from" }),
+    ).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("closes the project list on a click elsewhere", async () => {
+    const { view } = await render();
+    await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
+    fireEvent.click(
+      screen.getByRole("button", { name: "Threads from All projects" }),
+    );
+    expect(screen.getByRole("listbox", { name: "Show threads from" })).toBeTruthy();
+    fireEvent.pointerDown(document.body);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("listbox", { name: "Show threads from" }),
+      ).toBeNull(),
+    );
   });
 
   it("falls back to every project when the remembered one is gone", async () => {
@@ -367,12 +427,10 @@ describe("Armada thread list", () => {
     let answer = registry();
     const { view } = await render({ rpc: { captains_list: () => answer } });
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
-    expect(rowOf(view.container, "cap")?.dataset.kind).toBe("thread");
+    expect(listOf(view.container, "cap")).toBe("Threads");
     answer = registry("cap");
     await view.experimental_invalidateRpc(["captains"]);
-    await waitFor(() =>
-      expect(rowOf(view.container, "cap")?.dataset.kind).toBe("captain"),
-    );
+    await waitFor(() => expect(listOf(view.container, "cap")).toBe("Captains"));
   });
 });
 
@@ -391,10 +449,10 @@ describe("creating a captain", () => {
 
     const dialog = within(await screen.findByRole("dialog"));
     expect(
-      dialog.getByRole("radio", { name: "Beta" }).getAttribute("aria-checked"),
+      dialog.getByRole("option", { name: "Beta" }).getAttribute("aria-selected"),
     ).toBe("true");
     expect(dialog.getByText("Captain · Beta")).toBeTruthy();
-    fireEvent.click(dialog.getByRole("radio", { name: "Alpha" }));
+    fireEvent.click(dialog.getByRole("option", { name: "Alpha" }));
     fireEvent.click(dialog.getByRole("radio", { name: "flag" }));
     fireEvent.click(dialog.getByRole("radio", { name: "Violet" }));
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
@@ -421,11 +479,8 @@ describe("creating a captain", () => {
     await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
     const names = within(await screen.findByRole("dialog"))
-      .getAllByRole("radio")
-      .filter((radio) =>
-        ["Alpha", "Beta", "Personal"].includes(radio.textContent ?? ""),
-      )
-      .map((radio) => radio.textContent);
+      .getAllByRole("option")
+      .map((option) => option.textContent);
     expect(names).toEqual(["Alpha", "Beta", "Personal"]);
   });
 
@@ -476,7 +531,7 @@ describe("thread menu", () => {
 
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByText("Loose idea")).toBeTruthy();
-    expect(dialog.queryByRole("radiogroup", { name: "Project" })).toBeNull();
+    expect(dialog.queryByRole("listbox", { name: "Project" })).toBeNull();
     fireEvent.click(dialog.getByRole("radio", { name: "crown" }));
     fireEvent.click(dialog.getByRole("button", { name: "Make captain" }));
     await waitFor(() =>

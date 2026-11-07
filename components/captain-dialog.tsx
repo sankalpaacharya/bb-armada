@@ -24,6 +24,7 @@ import { rpcContract } from "@/lib/rpc";
 import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
+import { ChoiceList } from "./choice-list";
 
 export type CaptainDialogState =
   | { kind: "create" }
@@ -51,45 +52,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     <div className="grid gap-1.5">
       <span className="text-sm text-muted-foreground">{label}</span>
       {children}
-    </div>
-  );
-}
-
-function ProjectPicker({
-  projects,
-  value,
-  onChange,
-}: {
-  projects: readonly PluginSidebarProject[];
-  value: string;
-  onChange: (projectId: string) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Project"
-      className="grid max-h-36 gap-px overflow-y-auto rounded-lg border border-border p-1"
-    >
-      {projects.map((project) => (
-        <button
-          key={project.id}
-          type="button"
-          role="radio"
-          aria-checked={project.id === value}
-          onClick={() => onChange(project.id)}
-          className={cn(
-            "flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            project.id === value
-              ? "bg-accent text-foreground"
-              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-          )}
-        >
-          <span className="min-w-0 flex-1 truncate">{project.name}</span>
-          {project.id === value ? (
-            <Icon name="Check" className="size-3.5 shrink-0" />
-          ) : null}
-        </button>
-      ))}
     </div>
   );
 }
@@ -271,10 +233,15 @@ export function CaptainDialog({
         </div>
         {state.kind === "create" ? (
           <Field label="Project">
-            <ProjectPicker
-              projects={projects}
+            <ChoiceList
+              label="Project"
+              choices={projects.map((candidate) => ({
+                id: candidate.id,
+                label: candidate.name,
+              }))}
               value={projectId}
               onChange={setProjectId}
+              className="max-h-36 overflow-y-auto rounded-lg border border-border p-1"
             />
           </Field>
         ) : null}
