@@ -18,6 +18,7 @@ afterEach(cleanup);
 const ready = (...paths: string[]): CaptainHome => ({
   status: "ready",
   folder: "~/.bb/captains/cops",
+  root: "/home/me/.bb/captains/cops",
   files: paths.map((path) => ({
     path,
     sizeBytes: 100,
@@ -33,7 +34,12 @@ function renderCrew(home: () => unknown) {
     {
       sidebarThreads: {
         status: "ready",
-        threads: [thread("cap", { title: "cops" })],
+        threads: [
+          thread("cap", {
+            title: "cops",
+            host: { id: "host_mac", name: "MacBook" },
+          }),
+        ],
         projects: [project("proj_a", "cops")],
         sections: [],
       },
@@ -51,10 +57,6 @@ function renderCrew(home: () => unknown) {
           reads.push(input);
           return home();
         },
-        captain_home_file: ({ path }: { path: string }) => ({
-          content: `# Contents of ${path}`,
-          truncated: false,
-        }),
       } as never,
       settings: { inactiveAfterHours: 0 },
     },
@@ -62,10 +64,14 @@ function renderCrew(home: () => unknown) {
   return { view, reads };
 }
 
+const openMemory = async () =>
+  fireEvent.click(await screen.findByRole("button", { name: "Memory" }));
+
 /** Each row of the Memory section, with its "1h" age dropped. */
 const memoryRows = () =>
   within(screen.getByRole("heading", { name: "Memory" }).closest("section")!)
-    .getAllByRole("button")
+    .queryAllByRole("button")
+    .filter((button) => button.textContent !== "Memory")
     .map((button) => button.textContent?.replace(/1h$/, ""));
 
 describe("the crew tab's memory", () => {
@@ -79,6 +85,7 @@ describe("the crew tab's memory", () => {
         "learnings.md",
       ),
     );
+    await openMemory();
     await screen.findByText("~/.bb/captains/cops");
     expect(reads).toEqual([{ project: "cops" }]);
     expect(memoryRows()).toEqual([
@@ -93,16 +100,34 @@ describe("the crew tab's memory", () => {
     expect(memoryRows()).toContain("brief.md");
   });
 
-  it("opens a file in place and closes it again", async () => {
+  it("opens a file whole in bb's preview, on the captain's machine", async () => {
+    const { view } = renderCrew(() => ready("tasks/fix-login/brief.md"));
+    await openMemory();
+    fireEvent.click(await screen.findByRole("button", { name: /fix-login/ }));
+    fireEvent.click(screen.getByRole("button", { name: /brief\.md/ }));
+    expect(view.inspection.navigateCalls).toContainEqual({
+      method: "experimental_openFilePreview",
+      options: {
+        target: {
+          kind: "host",
+          hostId: "host_mac",
+          path: "/home/me/.bb/captains/cops/tasks/fix-login/brief.md",
+        },
+        location: null,
+      },
+    });
+  });
+
+  it("starts folded, opens, and folds away again", async () => {
     renderCrew(() => ready("backlog.md"));
-    const row = await screen.findByRole("button", { name: /backlog\.md/ });
-    fireEvent.click(row);
-    expect(row.getAttribute("aria-expanded")).toBe("true");
-    await screen.findByText("# Contents of backlog.md", { exact: false });
-    fireEvent.click(row);
-    await waitFor(() =>
-      expect(screen.queryByText(/Contents of backlog\.md/)).toBeNull(),
-    );
+    const header = await screen.findByRole("button", { name: "Memory" });
+    expect(header.getAttribute("aria-expanded")).toBe("false");
+    expect(memoryRows()).toEqual([]);
+    fireEvent.click(header);
+    expect(header.getAttribute("aria-expanded")).toBe("true");
+    await waitFor(() => expect(memoryRows()).toEqual(["backlog.md"]));
+    fireEvent.click(header);
+    expect(memoryRows()).toEqual([]);
   });
 
   it("says when the captain has no memory folder yet", async () => {
@@ -110,6 +135,7 @@ describe("the crew tab's memory", () => {
       status: "missing",
       folder: "~/.bb/captains/cops",
     }));
+    await openMemory();
     await screen.findByText("No memory folder yet at ~/.bb/captains/cops.");
   });
 });

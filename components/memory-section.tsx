@@ -1,5 +1,8 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Markdown, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
+import {
+  experimental_useRpcQuery,
+  useBbNavigate,
+} from "@get-bb/plugin-sdk/app";
 
 import { memoryTree, type MemoryNode } from "@/lib/captain-home";
 import { rpcContract } from "@/lib/rpc";
@@ -11,9 +14,11 @@ import { Icon } from "./ui/icon";
 
 type FileNode = Extract<MemoryNode, { kind: "file" }>;
 type FolderNode = Extract<MemoryNode, { kind: "folder" }>;
+type OpenFile = ((path: string) => void) | null;
 
 const ICON = "size-3.5 shrink-0 text-muted-foreground";
 const NODE_ROW = cn(PANEL_ROW, "h-7 items-center gap-1.5 px-2");
+const EASE_OUT = "duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]";
 
 const sizeLabel = (bytes: number): string =>
   bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
@@ -21,68 +26,53 @@ const sizeLabel = (bytes: number): string =>
 function Disclosure({ open }: { open: boolean }) {
   return (
     <Icon
-      name={open ? "ChevronDown" : "ChevronRight"}
-      className={ICON}
+      name="ChevronRight"
+      className={cn(
+        ICON,
+        "transition-transform motion-reduce:transition-none",
+        EASE_OUT,
+        open && "rotate-90",
+      )}
       aria-hidden
     />
   );
 }
 
-function FileContent({ project, path }: { project: string; path: string }) {
-  const { data, error } = experimental_useRpcQuery({
-    contract: rpcContract,
-    method: "captain_home_file",
-    input: { project, path },
-  });
-  if (data === undefined)
-    return (
-      <Note>{error === null ? "Loading file…" : "Could not read this file"}</Note>
-    );
-  return (
-    <div className="mx-2 mt-1 mb-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
-      <Markdown content={data.content} className="text-sm" />
-      {data.truncated ? (
-        <p className="pt-2 text-2xs text-muted-foreground">
-          Showing the first 200 KB.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function FileRow({ project, node }: { project: string; node: FileNode }) {
-  const [open, setOpen] = useState(false);
+function FileRow({ node, onOpen }: { node: FileNode; onOpen: OpenFile }) {
   return (
     <li className="list-none">
       <button
         type="button"
-        aria-expanded={open}
+        disabled={onOpen === null}
         title={sizeLabel(node.file.sizeBytes)}
-        onClick={() => setOpen((current) => !current)}
-        className={NODE_ROW}
+        onClick={() => onOpen?.(node.file.path)}
+        className={cn(NODE_ROW, "disabled:cursor-default")}
       >
-        <Disclosure open={open} />
-        <Icon name="File" className={ICON} aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+        <span className="size-3.5 shrink-0" aria-hidden />
+        <Icon
+          name="FileText"
+          className="size-3.5 shrink-0 text-sky-500/80"
+          aria-hidden
+        />
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">
           {node.name}
         </span>
         {node.file.modifiedAt === null ? null : (
           <Age at={node.file.modifiedAt} />
         )}
       </button>
-      {open ? <FileContent project={project} path={node.file.path} /> : null}
     </li>
   );
 }
 
 function FolderRow({
-  project,
   node,
   depth,
+  onOpen,
 }: {
-  project: string;
   node: FolderNode;
   depth: number;
+  onOpen: OpenFile;
 }) {
   const [open, setOpen] = useState(depth === 0);
   return (
@@ -94,38 +84,42 @@ function FolderRow({
         className={NODE_ROW}
       >
         <Disclosure open={open} />
-        <Icon name="Folder" className={ICON} aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+        <Icon
+          name={open ? "FolderOpen" : "Folder"}
+          className="size-3.5 shrink-0 text-amber-500/80"
+          aria-hidden
+        />
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">
           {node.name}/
         </span>
       </button>
       {open ? (
-        <Nodes project={project} nodes={node.children} depth={depth + 1} />
+        <Nodes nodes={node.children} depth={depth + 1} onOpen={onOpen} />
       ) : null}
     </li>
   );
 }
 
 function Nodes({
-  project,
   nodes,
   depth,
+  onOpen,
 }: {
-  project: string;
   nodes: readonly MemoryNode[];
   depth: number;
+  onOpen: OpenFile;
 }) {
   return (
     <ul className="m-0 flex flex-col gap-px p-0 pl-4">
       {nodes.map((node) =>
         node.kind === "file" ? (
-          <FileRow key={node.file.path} project={project} node={node} />
+          <FileRow key={node.file.path} node={node} onOpen={onOpen} />
         ) : (
           <FolderRow
             key={node.path}
-            project={project}
             node={node}
             depth={depth}
+            onOpen={onOpen}
           />
         ),
       )}
@@ -133,8 +127,16 @@ function Nodes({
   );
 }
 
-/** What a captain keeps in its home folder, each file readable in place. */
-export function MemorySection({ project }: { project: string }) {
+/** What a captain keeps in its home folder, each file opening in bb's preview. */
+export function MemorySection({
+  project,
+  hostId,
+}: {
+  project: string;
+  hostId: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const navigate = useBbNavigate();
   const { data, error } = experimental_useRpcQuery({
     contract: rpcContract,
     method: "captain_home",
@@ -152,21 +154,51 @@ export function MemorySection({ project }: { project: string }) {
     );
   else if (data.status === "missing")
     body = <Note>No memory folder yet at {data.folder}.</Note>;
-  else
+  else {
+    const { root } = data;
+    const onOpen: OpenFile =
+      hostId === null
+        ? null
+        : (path) =>
+            navigate.experimental_openFilePreview({
+              target: { kind: "host", hostId, path: `${root}/${path}` },
+              location: null,
+            });
     body = (
       <>
         <p className="m-0 flex h-7 items-center gap-1.5 px-2 text-sm text-muted-foreground">
           <Icon name="Folder" className={ICON} aria-hidden />
           <span className="truncate">{data.folder}</span>
         </p>
-        <Nodes project={project} nodes={tree} depth={0} />
+        <Nodes nodes={tree} depth={0} onOpen={onOpen} />
       </>
     );
+  }
 
   return (
     <section className="flex flex-col gap-1">
-      <h3 className={cn("px-2", SECTION_TITLE)}>Memory</h3>
-      {body}
+      <h3 className="m-0">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+          className={cn(PANEL_ROW, "h-7 items-center gap-1.5 px-2", SECTION_TITLE)}
+        >
+          <Disclosure open={open} />
+          Memory
+        </button>
+      </h3>
+      <div
+        inert={!open}
+        aria-hidden={!open}
+        className={cn(
+          "grid transition-[grid-template-rows,opacity] motion-reduce:transition-opacity",
+          EASE_OUT,
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">{body}</div>
+      </div>
     </section>
   );
 }
