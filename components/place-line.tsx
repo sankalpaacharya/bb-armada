@@ -34,13 +34,7 @@ function ActivityCount({ label, count }: { label: string; count: number }) {
 }
 
 /** The open thread's detail line: where it runs, its activity, PR and harness. */
-export function PlaceLine({
-  thread,
-  project,
-}: {
-  thread: PluginSidebarThread;
-  project: string | null;
-}) {
+export function PlaceLine({ thread }: { thread: PluginSidebarThread }) {
   const environment = thread.environment;
   const branch = environment?.branchName ?? null;
   const placeIcon =
@@ -53,9 +47,6 @@ export function PlaceLine({
         : null;
   return (
     <div className="flex h-5 items-center gap-1.5 pr-2 pl-8 text-2xs text-muted-foreground">
-      {project === null ? null : (
-        <span className="max-w-[40%] shrink-0 truncate">{project}</span>
-      )}
       {placeIcon === null ? null : (
         <Icon
           name={placeIcon.name}

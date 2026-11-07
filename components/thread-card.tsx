@@ -55,21 +55,26 @@ export function ThreadCard({
         titleClassName={
           entry.thread.isUnread ? undefined : "text-foreground/85"
         }
-        className="px-2"
+        className="px-2 py-1"
       >
         {({ title, shortcut }) => (
           <>
-            <div className="pointer-events-none relative flex h-8 items-center gap-2">
+            <div className="pointer-events-none relative flex h-6 items-center gap-2">
               <span className="grid size-4 shrink-0 place-items-center">
                 <Origin entry={entry} />
               </span>
               {title}
+              {project === null ? null : (
+                <span className="max-w-[35%] shrink-0 truncate text-2xs text-muted-foreground/70">
+                  {project}
+                </span>
+              )}
+              {active ? null : (
+                <span className="pointer-events-auto shrink-0 text-2xs">
+                  <PullRequestNumber environmentId={environmentId} />
+                </span>
+              )}
               <ParkableSlot entry={entry} actions={parkActions}>
-                {active ? null : (
-                  <span className="pointer-events-auto shrink-0 text-2xs">
-                    <PullRequestNumber environmentId={environmentId} />
-                  </span>
-                )}
                 {shortcut ??
                   (entry.status === null ? (
                     <Age at={entry.activityAt} />
@@ -79,8 +84,8 @@ export function ThreadCard({
               </ParkableSlot>
             </div>
             {active ? (
-              <div className="pointer-events-none relative -mt-1 pb-1">
-                <PlaceLine thread={entry.thread} project={project} />
+              <div className="pointer-events-none relative">
+                <PlaceLine thread={entry.thread} />
               </div>
             ) : null}
           </>
