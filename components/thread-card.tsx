@@ -2,6 +2,7 @@ import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
 import type { ThreadEntry } from "@/lib/model";
+import { cn } from "@/lib/utils";
 import { placeHint } from "@/lib/place";
 import { Age } from "./age";
 import { CaptainTile } from "./captain-tile";
@@ -69,9 +70,10 @@ export function ThreadCard({
         active={active}
         inline={inline}
         onOpen={onOpen}
-        titleClassName={
-          entry.thread.isUnread ? undefined : "text-foreground/85"
-        }
+        titleClassName={cn(
+          "flex-initial",
+          entry.thread.isUnread ? undefined : "text-foreground/85",
+        )}
         hint={placeHint(entry.thread, project)}
         className="px-2"
       >
@@ -82,6 +84,12 @@ export function ThreadCard({
                 <LeadMark entry={entry} />
               </span>
               {title}
+              {project === null || active ? null : (
+                <span className="min-w-0 shrink-[100] truncate text-2xs text-muted-foreground/70">
+                  {project}
+                </span>
+              )}
+              <span className="flex-1" />
               <ParkableSlot entry={entry} actions={parkActions}>
                 {active ? null : (
                   <span className="pointer-events-auto shrink-0 text-2xs">

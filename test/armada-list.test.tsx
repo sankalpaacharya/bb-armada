@@ -350,7 +350,7 @@ describe("Armada thread list", () => {
     });
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
     const card = within(rowOf(view.container, "plain")!);
-    expect(card.queryByText("Beta")).toBeNull();
+    expect(card.getByText("Beta")).toBeTruthy();
     expect(card.getByRole("img", { name: "Working" })).toBeTruthy();
     expect(
       rowOf(view.container, "plain")!.querySelector(
