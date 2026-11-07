@@ -44,12 +44,15 @@ export function ShelfRow({
           <div className="pointer-events-none relative flex h-8 items-center gap-2">
             <span aria-hidden="true" className="size-4 shrink-0" />
             {title}
-            {shortcut ??
-              (isSnoozed(entry) ? (
-                <WakesIn until={entry.park.until} />
-              ) : (
-                <Age at={entry.lastActivityAt} />
-              ))}
+            {shortcut ?? (
+              <span className="flex min-w-5 shrink-0 justify-end transition-opacity duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-focus-within/row:opacity-0 group-hover/row:opacity-0 motion-reduce:transition-none">
+                {isSnoozed(entry) ? (
+                  <WakesIn until={entry.park.until} />
+                ) : (
+                  <Age at={entry.lastActivityAt} />
+                )}
+              </span>
+            )}
             <RowActions actions={[action]} />
           </div>
         )}

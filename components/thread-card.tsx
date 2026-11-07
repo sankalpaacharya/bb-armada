@@ -6,6 +6,7 @@ import { tomorrowMorning } from "@/lib/lifecycle";
 import type { ThreadEntry } from "@/lib/model";
 import { rowHint } from "@/lib/place";
 import { formatAgo } from "@/lib/time";
+import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
 import { RowActions } from "./row-actions";
 import { PlaceLine } from "./place-line";
@@ -84,7 +85,13 @@ export function ThreadCard({
       >
         {({ title, shortcut }) => (
           <>
-            <div className="pointer-events-none relative flex h-8 items-center gap-2">
+            <div
+              className={cn(
+                "pointer-events-none relative flex h-8 items-center gap-2",
+                entry.parkable &&
+                  "group-focus-within/row:pr-11 group-hover/row:pr-11",
+              )}
+            >
               <span className="grid size-4 shrink-0 place-items-center">
                 <LeadMark entry={entry} />
               </span>
