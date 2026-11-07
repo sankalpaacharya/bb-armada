@@ -14,7 +14,7 @@ export function makeCaptainItem(
   return {
     key: "make-captain",
     group: GROUPS.organize,
-    action: { label: "Make captain…", icon: "Compass", run: onSelect },
+    action: { label: "Make captain…", icon: "Star", run: onSelect },
   };
 }
 
@@ -28,7 +28,7 @@ export function captainItems(actions: {
       group: GROUPS.organize,
       action: {
         label: "Change avatar…",
-        icon: "UserCircle",
+        icon: "Edit",
         run: actions.changeAvatar,
       },
     },

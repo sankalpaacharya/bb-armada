@@ -213,7 +213,7 @@ export function CaptainDialog({
             className="justify-self-start"
             onClick={shuffle}
           >
-            <Icon name="Shuffle" />
+            <Icon name="RotateCcw" />
             Shuffle
           </Button>
         </Field>

@@ -19,7 +19,7 @@ The user runs bb with Armada as their sidebar. They want three things.
   - Superseded by finding 1 and finding 8: no generalised registry hook and no document store. Use the SDK query and invalidate layer, with one KV key per record (below).
 - `design-plans/captain-avatars.md`: Adventurer avatars and project-named captains.
 - `design-plans/capy-compact-sidebar.md`: the current visual language. Keep the thread cards as they are; the user likes them.
-- The section design is **"Deck"**, the lead's recommendation from the mockups. Spec below. The user may still choose "Crew rail", so keep the sections in their own components so that swap is local.
+- The section design is **"Deck"**, which the user confirmed. Spec below.
 - t3sidebar reference (MIT, already credited): `/Users/sanku/.bb/plugins/cache/git/github.com/SawyerHood/sawyer-plugins/8b535729dd2251ceb293c7caf74e43e477f942a3/plugins/t3sidebar/src/` (`lifecycle.ts`, `server.ts`, `useLifecycle.ts`, `ThreadInbox.tsx`, `SlimRow.tsx`, `ThreadCard.tsx`).
 - SDK docs: `/Applications/bb.app/Contents/Resources/app.asar.unpacked/node_modules/bb-app/server/dist/builtin-skills/bb-plugin-authoring/references/`. Types are in `node_modules/@get-bb/plugin-sdk/bundled-types`; trust them over prose.
 
