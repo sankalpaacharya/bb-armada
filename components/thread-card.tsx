@@ -7,15 +7,15 @@ import { Age } from "./age";
 import { CaptainTile } from "./captain-tile";
 import { ParkableSlot } from "./park-buttons";
 import { PlaceLine } from "./place-line";
-import { ProviderGlyph } from "./provider-glyph";
 import { PullRequestNumber } from "./pull-request-number";
 import { StatusGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
 /**
  * The leading mark: live status first, since that is what a glance looks
- * for; at rest, who runs the thread, its captain or else its harness. The
- * captain stays named for screen readers either way.
+ * for; at rest, the captain that launched it, else a quiet dot (the harness
+ * is on the open thread's place line). The captain stays named for screen
+ * readers either way.
  */
 function LeadMark({ entry }: { entry: ThreadEntry }) {
   const captain = entry.captain;
@@ -25,7 +25,10 @@ function LeadMark({ entry }: { entry: ThreadEntry }) {
     ) : captain !== null ? (
       <CaptainTile avatar={captain.avatar} size="badge" />
     ) : (
-      <ProviderGlyph providerId={entry.thread.providerId} />
+      <span
+        aria-hidden="true"
+        className="size-1.5 rounded-full bg-muted-foreground/40"
+      />
     );
   return (
     <span className="flex items-center">
