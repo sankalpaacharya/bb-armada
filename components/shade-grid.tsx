@@ -56,7 +56,7 @@ const prefersReducedMotion = () => window.matchMedia(REDUCED).matches;
 const noopSubscribe = () => () => {};
 
 export function ShadeGrid({
-  size = 3,
+  size = 4,
   label,
   className,
 }: {
@@ -82,13 +82,13 @@ export function ShadeGrid({
       aria-label={label}
       aria-hidden={label === undefined ? true : undefined}
       className={cn("inline-grid shrink-0 gap-px", className)}
-      style={{ gridTemplateColumns: `repeat(${size}, 3px)` }}
+      style={{ gridTemplateColumns: `repeat(${size}, 2px)` }}
     >
       {frame.map((opacity, index) => (
         <span
           key={index}
           aria-hidden="true"
-          className="size-[3px] rounded-[0.5px] bg-current"
+          className="size-[2px] bg-current"
           style={{ opacity }}
         />
       ))}
