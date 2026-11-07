@@ -6,7 +6,7 @@ import { CaptainTile } from "./captain-tile";
 import { WorkingGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
-function Summary({ counts }: { counts: CaptainCounts }) {
+export function Summary({ counts }: { counts: CaptainCounts }) {
   if (counts.working === 0 && counts.needsYou === 0 && counts.failed === 0)
     return <span className="text-muted-foreground">Idle</span>;
   return (

@@ -113,6 +113,16 @@ decorative `<img alt="">` on the background colour, in a rounded-square tile.
 In the dialog, clicking the avatar rolls a different character, and the
 swatches beside it pick the background.
 
+## Crew tab
+
+The thread side panel's New tab lists **Crew** under Actions. It shows the
+open thread's captain (the thread itself, or the nearest captain above it) and
+that captain's workers, split into Active, Inactive and Settled like the
+sidebar shelves, each with its status, title, PR, age and where it runs.
+Clicking a row opens that thread. On a thread no captain launched, it lists
+the captains to pick one. It reads the same model as the sidebar through
+`useArmadaModel`.
+
 ## Design
 
 Captains sit flat on the sidebar, one row each: a 28px portrait, the

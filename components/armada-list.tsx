@@ -1,32 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  experimental_useSidebarThreads,
   useBbNavigate,
-  useSettings,
   type PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
 
 import { useArrowKeyRows } from "@/hooks/use-arrow-key-rows";
-import { useCaptains } from "@/hooks/use-captains";
+import { useArmadaModel } from "@/hooks/use-armada-model";
 import {
   useAutoSettleOnMount,
   useParkActions,
   usePruneParks,
 } from "@/hooks/use-park-actions";
-import { useParks } from "@/hooks/use-parks";
 import { useStoredState } from "@/hooks/use-stored-state";
-import { useWakeTime } from "@/lib/clock";
-import { inactiveWakesOf, wakesOf } from "@/lib/lifecycle";
-import { buildArmada } from "@/lib/model";
 import {
   parseScope,
   pickableProjects,
   resolveScope,
   scopeThreads,
 } from "@/lib/scope";
-import { parseSettings } from "@/lib/settings";
 import { parseBooleanMap, removeStored } from "@/lib/storage";
-import type { CaptainRecord } from "@/lib/captains";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
 import { CaptainsSection } from "./captains-section";
 import { ShelfSection } from "./shelf-section";
@@ -37,18 +29,14 @@ const SCOPE_KEY = "armada/thread-scope";
 const SHELVES_KEY = "armada/shelves";
 /** The registry cache from before captains were read through RPC, and the deck's old worker toggles. */
 const RETIRED_KEYS = ["armada/captains", "armada/captain-toggles"];
-const NO_CAPTAINS: readonly CaptainRecord[] = [];
 
 export function ArmadaList({
   activeThreadId,
   activeProjectId,
   onNavigate,
 }: PluginThreadListProps) {
-  const { status, threads, projects } = experimental_useSidebarThreads();
-  const captains = useCaptains();
-  const parks = useParks();
+  const { status, projects, captains, model } = useArmadaModel();
   const parkActions = useParkActions();
-  const { inactiveAfterMs } = parseSettings(useSettings().values);
   const navigate = useBbNavigate();
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
   const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, null);
@@ -59,16 +47,6 @@ export function ArmadaList({
   );
   const rows = useArrowKeyRows();
 
-  const records = captains.status === "ready" ? captains.records : NO_CAPTAINS;
-  const wakeTime = useWakeTime([
-    ...wakesOf(parks),
-    ...inactiveWakesOf(threads, inactiveAfterMs),
-  ]);
-  const model = useMemo(
-    () =>
-      buildArmada(threads, projects, records, parks, wakeTime, inactiveAfterMs),
-    [threads, projects, records, parks, wakeTime, inactiveAfterMs],
-  );
   usePruneParks(model.expiredParks);
   useAutoSettleOnMount();
   useEffect(() => RETIRED_KEYS.forEach(removeStored), []);
