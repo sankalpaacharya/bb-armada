@@ -23,3 +23,7 @@ export const SECTION_TITLE = `${SECTION_TEXT} font-semibold text-foreground/70`;
 export const DECK_PANEL = "overflow-hidden rounded-[10px] bg-foreground/5";
 
 export const AGE_TEXT = "shrink-0 tabular-nums text-2xs text-muted-foreground";
+
+/** Two layers sharing one slot, swapped by opacity so the slot never changes width. */
+export const CROSSFADE_LAYER =
+  "[grid-area:1/1] items-center justify-self-end transition-opacity duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none";

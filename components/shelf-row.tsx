@@ -1,7 +1,7 @@
 import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
 import { isSnoozed, type ThreadEntry } from "@/lib/model";
-import { FOCUS_RING } from "@/lib/styles";
+import { CROSSFADE_LAYER, FOCUS_RING } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age, WakesIn } from "./age";
 import { parkItems } from "./menu-items";
@@ -43,7 +43,7 @@ export function ShelfRow({
         inline={parkItems(entry, actions)}
         onOpen={onOpen}
         className="flex h-8 items-center gap-2 px-2"
-        titleClassName="text-muted-foreground/70 group-hover/row:text-foreground"
+        titleClassName="text-muted-foreground/70 transition-colors duration-150 ease-out group-hover/row:text-muted-foreground motion-reduce:transition-none"
       >
         {({ title, shortcut }) => (
           <>
@@ -51,8 +51,13 @@ export function ShelfRow({
             <span className="pointer-events-none relative flex min-w-0 flex-1 items-center">
               {title}
             </span>
-            <span className="relative flex w-7 shrink-0 items-center justify-end">
-              <span className="flex items-center group-hover/row:invisible group-focus-within/row:invisible">
+            <span className="grid shrink-0">
+              <span
+                className={cn(
+                  CROSSFADE_LAYER,
+                  "flex opacity-100 group-focus-within/row:opacity-0 group-hover/row:opacity-0",
+                )}
+              >
                 {shortcut ??
                   (isSnoozed(entry) ? (
                     <WakesIn until={entry.park.until} />
@@ -70,7 +75,8 @@ export function ShelfRow({
                   hover.run();
                 }}
                 className={cn(
-                  "pointer-events-auto absolute top-1/2 right-0 hidden size-5 -translate-y-1/2 cursor-pointer place-items-center rounded text-muted-foreground group-hover/row:grid group-focus-within/row:grid hover:bg-state-hover hover:text-foreground",
+                  CROSSFADE_LAYER,
+                  "pointer-events-none grid size-5 cursor-pointer place-items-center rounded text-muted-foreground opacity-0 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 group-hover/row:pointer-events-auto group-hover/row:opacity-100 hover:bg-state-hover hover:text-foreground",
                   FOCUS_RING,
                 )}
               >
