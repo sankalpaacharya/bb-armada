@@ -1,44 +1,30 @@
-import { createAvatar } from "@dicebear/core";
-import * as micah from "@dicebear/micah";
+import { AVATAR_BACKGROUNDS, PORTRAIT_COUNT, type Avatar } from "./captains";
+import { PORTRAITS } from "./portraits";
 
-import type { Avatar } from "./captains";
+PORTRAITS satisfies { length: typeof PORTRAIT_COUNT };
 
-const STYLES = { micah } satisfies Record<Avatar["style"], unknown>;
+export const portraitOf = (avatar: Avatar): string =>
+  PORTRAITS[avatar.character];
 
-const BACKGROUNDS = [
-  "b6e3f4",
-  "c0aede",
-  "d1d4f9",
-  "ffd5dc",
-  "ffdfbf",
-  "c1f4c5",
-];
+export const backgroundOf = (avatar: Avatar): string =>
+  AVATAR_BACKGROUNDS[avatar.background].color;
 
-const rendered = new Map<string, string>();
-
-/** The avatar as an SVG data URI, generated locally once per style and seed. */
-export function avatarDataUri(avatar: Avatar): string {
-  const key = `${avatar.style}:${avatar.seed}`;
-  let uri = rendered.get(key);
-  if (uri === undefined) {
-    uri = createAvatar(STYLES[avatar.style], {
-      seed: avatar.seed,
-      backgroundColor: BACKGROUNDS,
-      backgroundType: ["solid"],
-    }).toDataUri();
-    rendered.set(key, uri);
-  }
-  return uri;
-}
-
-const SEED_LENGTH = 10;
-const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+const randomBelow = (bound: number): number =>
+  crypto.getRandomValues(new Uint32Array(1))[0] % bound;
 
 export function randomAvatar(): Avatar {
-  const bytes = crypto.getRandomValues(new Uint8Array(SEED_LENGTH));
-  const seed = Array.from(
-    bytes,
-    (byte) => ALPHABET[byte % ALPHABET.length],
-  ).join("");
-  return { style: "micah", seed };
+  return {
+    style: "anime",
+    character: randomBelow(PORTRAIT_COUNT),
+    background: randomBelow(AVATAR_BACKGROUNDS.length),
+  };
+}
+
+/** A different character on the same background. */
+export function nextCharacter(avatar: Avatar): Avatar {
+  return {
+    ...avatar,
+    character:
+      (avatar.character + 1 + randomBelow(PORTRAIT_COUNT - 1)) % PORTRAIT_COUNT,
+  };
 }

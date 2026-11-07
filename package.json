@@ -16,8 +16,6 @@
     "app": "./app.tsx"
   },
   "dependencies": {
-    "@dicebear/core": "^9.4.3",
-    "@dicebear/micah": "^9.4.3",
     "@radix-ui/react-slot": "^1.3.0",
     "zod": "^4.6.5"
   },
@@ -46,6 +44,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "bb plugin build",
+    "portraits": "node scripts/embed-portraits.mjs",
     "check": "npm run typecheck && npm test && npm run build"
   }
 }

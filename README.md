@@ -13,9 +13,10 @@ snoozed onto quiet shelves below it.
 ## How it works
 
 The server keeps one KV record per captain at `captain:<threadId>`: the thread
-id, an avatar (`{ style: "micah", seed }`), and when it was made. A record
-from before avatars, with a logo and colour, reads as a Micah avatar seeded by
-its thread id, and a stored Adventurer avatar reads as Micah with the same seed. `captains_list` declares the
+id, an avatar (`{ style: "anime", character, background }`), and when it was
+made. A record from before avatars, with a logo and colour, gets the portrait
+and background its thread id picks, and a stored DiceBear avatar (Adventurer
+or Micah) gets the ones its seed picks (`avatarFromSeed`). `captains_list` declares the
 `captains` tag and every write calls `bb.rpc.experimental_invalidate`, so the
 sidebar reads through `experimental_useRpcQuery` and refreshes on each write,
 on reconnect, and from any client. Records that cannot be parsed are skipped
@@ -102,16 +103,19 @@ RPC, and `armada/captain-toggles`, from when workers nested in the deck.
 
 ## Avatars
 
-Captain avatars are DiceBear's **Micah** style on a solid pastel background picked by the seed, generated
-locally by `@dicebear/core` and `@dicebear/micah` from the record's seed
-(`lib/avatar.ts`, memoised per style and seed, no network). `CaptainTile` is
-the one owner of avatar rendering: a decorative `<img alt="">` inside a
-rounded-square tile. The dialog offers twelve random seeds, **Shuffle** draws
-twelve more, and picking one stores its seed.
+Captain avatars are ten original anime portraits with transparent
+backgrounds, drawn on one of six pastel backgrounds. The record stores the two
+separately, so either can change without the other. The portraits live in
+`assets/avatars/` as 128px WebP; `node scripts/embed-portraits.mjs` writes them
+into `lib/portraits.ts` as data URIs, so the app bundle carries them and the
+server bundle does not. `CaptainTile` is the one owner of avatar rendering: a
+decorative `<img alt="">` on the background colour, in a rounded-square tile.
+In the dialog, clicking the avatar rolls a different character, and the
+swatches beside it pick the background.
 
 ## Design
 
-Captains sit on one raised panel, the deck: a 28px Micah avatar, the
+Captains sit on one raised panel, the deck: a 28px portrait, the
 name, and a one-line summary of the captain's tree ("2 working" in the
 working tone, "1 needs you" in the attention tone, else "Idle") with the
 shade grid while working or the age at the right. "1 failed" shows in the
