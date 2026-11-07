@@ -7,7 +7,7 @@ import {
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -256,18 +256,23 @@ export function CaptainDialog({
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-3 rounded-lg bg-accent/50 p-3">
-          <CaptainTile avatar={avatar} size="preview" />
           <button
             type="button"
             aria-label="New avatar"
             title="New avatar"
             onClick={() => setAvatar(randomAvatar())}
             className={cn(
-              buttonVariants({ variant: "ghost", size: "icon" }),
-              "size-7",
+              "group/avatar relative shrink-0 cursor-pointer rounded-[10px]",
+              FOCUS_RING,
             )}
           >
-            <Icon name="RotateCcw" />
+            <CaptainTile avatar={avatar} size="preview" />
+            <span
+              aria-hidden="true"
+              className="absolute -right-1.5 -bottom-1.5 grid size-5 place-items-center rounded-full border border-border bg-popover text-muted-foreground shadow-sm transition-colors group-hover/avatar:text-foreground"
+            >
+              <Icon name="RotateCcw" className="size-3" />
+            </span>
           </button>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {name}
