@@ -75,7 +75,7 @@ function ProviderGlyph({ providerId }: { providerId: string }) {
   const { providers } = experimental_useProviders();
   const provider = providers.find((candidate) => candidate.id === providerId);
   return (
-    <span className="flex size-3.5 shrink-0 items-center justify-center">
+    <span className="flex size-3.5 shrink-0 items-center justify-center opacity-60 grayscale">
       <ProviderIcon
         providerKind="agent"
         provider={provider ?? { id: providerId }}
