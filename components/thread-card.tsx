@@ -1,29 +1,50 @@
+import type { ReactNode } from "react";
 import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
-import type { ThreadEntry } from "@/lib/model";
-import { Age } from "./age";
+import type { CaptainBadge, ThreadEntry } from "@/lib/model";
 import { CaptainTile } from "./captain-tile";
 import { ParkableSlot } from "./park-buttons";
-import { PlaceLine, ProviderGlyph } from "./place-line";
-import { PullRequestNumber } from "./pull-request-number";
-import { StatusGlyph } from "./status-mark";
+import { PlaceLine } from "./place-line";
+import { StatusOrAge } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
-/** Who runs the thread: the captain that launched it, else its harness. */
-function Origin({ entry }: { entry: ThreadEntry }) {
-  if (entry.captain === null) {
-    return <ProviderGlyph providerId={entry.thread.providerId} />;
-  }
+/**
+ * Where a card comes from: the captain that launched it, then its project.
+ * A project named like the captain is said once.
+ */
+function Origin({
+  captain,
+  project,
+}: {
+  captain: CaptainBadge | null;
+  project: string | null;
+}) {
+  const shownProject = project === captain?.name ? null : project;
   return (
-    <span className="flex items-center">
-      <span className="sr-only">Launched by {entry.captain.name}</span>
-      <CaptainTile avatar={entry.captain.avatar} size="badge" />
+    <span className="flex min-w-0 flex-1 items-center gap-1.5 text-2xs font-medium text-muted-foreground/80">
+      {captain === null ? null : (
+        <>
+          <CaptainTile avatar={captain.avatar} size="badge" />
+          <span className="min-w-0 truncate">
+            <span className="sr-only">Launched by </span>
+            {captain.name}
+          </span>
+          {shownProject === null ? null : (
+            <span aria-hidden="true" className="shrink-0">
+              ·
+            </span>
+          )}
+        </>
+      )}
+      {shownProject === null ? null : (
+        <span className="min-w-0 truncate">{shownProject}</span>
+      )}
     </span>
   );
 }
 
-/** A thread as one line, who on the left and state on the right; the open thread also shows where it runs. */
+/** A card as three lines: origin and status, title, place. */
 export function ThreadCard({
   entry,
   active,
@@ -40,11 +61,17 @@ export function ThreadCard({
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
 }) {
-  const environmentId = entry.thread.environment?.id ?? null;
-  const project =
-    showProject && entry.projectName !== entry.captain?.name
-      ? entry.projectName
-      : null;
+  const hasOrigin = showProject || entry.captain !== null;
+  const trailing = (shortcut: ReactNode | null) => (
+    <ParkableSlot entry={entry} actions={parkActions}>
+      {shortcut ?? (
+        <StatusOrAge
+          status={entry.status}
+          activityAt={entry.activityAt}
+        />
+      )}
+    </ParkableSlot>
+  );
   return (
     <li className="list-none">
       <ThreadLink
@@ -52,42 +79,24 @@ export function ThreadCard({
         active={active}
         inline={inline}
         onOpen={onOpen}
-        titleClassName={
-          entry.thread.isUnread ? undefined : "text-foreground/85"
-        }
-        className="px-2 py-1"
+        className="py-2 pr-2.5 pl-2.5"
       >
         {({ title, shortcut }) => (
           <>
-            <div className="pointer-events-none relative flex h-6 items-center gap-2">
-              <span className="grid size-4 shrink-0 place-items-center">
-                <Origin entry={entry} />
-              </span>
-              {title}
-              {project === null ? null : (
-                <span className="max-w-[35%] shrink-0 truncate text-2xs text-muted-foreground/70">
-                  {project}
-                </span>
-              )}
-              {active ? null : (
-                <span className="pointer-events-auto shrink-0 text-2xs">
-                  <PullRequestNumber environmentId={environmentId} />
-                </span>
-              )}
-              <ParkableSlot entry={entry} actions={parkActions}>
-                {shortcut ??
-                  (entry.status === null ? (
-                    <Age at={entry.activityAt} />
-                  ) : (
-                    <StatusGlyph status={entry.status} />
-                  ))}
-              </ParkableSlot>
-            </div>
-            {active ? (
-              <div className="pointer-events-none relative">
-                <PlaceLine thread={entry.thread} />
+            {hasOrigin ? (
+              <div className="pointer-events-none relative flex h-5 items-center gap-1.5">
+                <Origin
+                  captain={entry.captain}
+                  project={showProject ? entry.projectName : null}
+                />
+                {trailing(shortcut)}
               </div>
             ) : null}
+            <div className="pointer-events-none relative mt-0.5 flex h-5 items-center gap-1.5 first:mt-0">
+              {title}
+              {hasOrigin ? null : trailing(shortcut)}
+            </div>
+            <PlaceLine thread={entry.thread} />
           </>
         )}
       </ThreadLink>

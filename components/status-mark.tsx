@@ -27,18 +27,11 @@ function StatusMark({
     );
   if (variant === "compact") return glyph;
   return (
-    <span
-      className={cn("flex shrink-0 items-center gap-1.5 text-2xs", row.tone)}
-    >
+    <span className={cn("flex shrink-0 items-center gap-1.5 text-2xs", row.tone)}>
       {glyph}
       {row.wordOnCard ? row.word : null}
     </span>
   );
-}
-
-/** The status glyph alone, for the leading slot of a one-line row. */
-export function StatusGlyph({ status }: { status: Status }) {
-  return <StatusMark status={status} variant="compact" />;
 }
 
 /** A card's trailing slot: the status when it has something to say, else the age. */
@@ -61,7 +54,6 @@ export function WorkingOrAge({
   status: Status | null;
   activityAt: number;
 }) {
-  if (status === "working")
-    return <StatusMark status={status} variant="compact" />;
+  if (status === "working") return <StatusMark status={status} variant="compact" />;
   return <Age at={activityAt} />;
 }
