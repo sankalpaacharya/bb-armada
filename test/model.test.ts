@@ -14,7 +14,17 @@ const build = (
   captains: readonly CaptainRecord[],
   parks: readonly ParkRecord[] = [],
   inactiveAfterMs: number | null = null,
-) => buildArmada(threads, projects, captains, parks, NOW, inactiveAfterMs);
+  supervisors: ReadonlySet<string> = new Set(),
+) =>
+  buildArmada(
+    threads,
+    projects,
+    captains,
+    parks,
+    supervisors,
+    NOW,
+    inactiveAfterMs,
+  );
 
 function registryOf(
   ...ids: [id: string, createdAt?: string][]
@@ -122,6 +132,63 @@ describe("captains and their workers", () => {
   it("has no status while everything is idle", () => {
     const threads = [thread("cap"), thread("w", { parentThreadId: "cap" })];
     expect(build(threads, registryOf(["cap"])).captains[0]!.status).toBeNull();
+  });
+
+  describe("under a supervisor", () => {
+    const supervised = [
+      thread("cap", { title: "cops", createdAt: NOW - 5000 }),
+      thread("sup", { parentThreadId: "cap", ...blocked }),
+      thread("w1", { parentThreadId: "sup", createdAt: NOW - 3000, ...busy }),
+      thread("w2", { parentThreadId: "sup", createdAt: NOW - 2000 }),
+      thread("deep", { parentThreadId: "w2", indicator: "unread-error" }),
+    ];
+    const everyCard = (model: ReturnType<typeof build>) => [
+      ...idsOf(model.threads),
+      ...idsOf(model.inactive),
+      ...idsOf(model.snoozed),
+      ...idsOf(model.settled),
+    ];
+
+    it("lists each supervised worker as the captain's own card, and the supervisor nowhere", () => {
+      const model = build(
+        supervised,
+        registryOf(["cap"]),
+        [settledAt("sup", NOW - 1000)],
+        null,
+        new Set(["sup"]),
+      );
+      expect(threadIds(model)).toEqual(["w2", "w1"]);
+      expect(everyCard(model)).toEqual(["w2", "w1"]);
+      for (const worker of model.threads)
+        expect(worker).toMatchObject({
+          captain: badge("cap", "cops"),
+          adoptable: false,
+        });
+      expect(model.threads[0]).toMatchObject({ status: "failed" });
+    });
+
+    it("folds the supervisor and its workers into the captain's counts and status", () => {
+      const [captain] = build(
+        supervised,
+        registryOf(["cap"]),
+        [],
+        null,
+        new Set(["sup"]),
+      ).captains;
+      expect(captain!.counts).toEqual({ working: 1, needsYou: 1, failed: 1 });
+      expect(captain!.status).toBe("needs-you");
+    });
+
+    it("ignores a supervisor whose parent is not a captain, which stays one card", () => {
+      const threads = [
+        thread("root"),
+        thread("sup", { parentThreadId: "root" }),
+        thread("w", { parentThreadId: "sup" }),
+      ];
+      const model = build(threads, none, [], null, new Set(["sup"]));
+      expect(threadIds(model)).toEqual(["root"]);
+      expect(model.threads[0]).toMatchObject({ captain: null });
+    });
   });
 
   it("ignores records whose thread is gone, archived or hidden", () => {

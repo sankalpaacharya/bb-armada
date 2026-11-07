@@ -21,6 +21,7 @@ import {
 } from "./lib/lifecycle";
 import {
   CAPTAINS_TAG,
+  HOMES_TAG,
   PARKS_TAG,
   rpcContract,
   type Created,
@@ -94,9 +95,26 @@ export default async function plugin(bb: BbPluginApi) {
       return record;
     });
 
+  /**
+   * Every auto-settle pass, the first one at start included, reads the
+   * supervisors afresh and refreshes the homes reads when they changed, so a
+   * new supervisor reaches the sidebar within one schedule.
+   */
+  let supervisorsSeen: string | null = null;
+  const readSupervisors = async (): Promise<ReadonlySet<string>> => {
+    const ids = await homes.supervisors();
+    const seen = ids.join(" ");
+    if (seen !== supervisorsSeen) {
+      supervisorsSeen = seen;
+      bb.rpc.experimental_invalidate([HOMES_TAG]);
+    }
+    return new Set(ids);
+  };
+
   const { evaluate, reevaluate } = createAutoSettle(bb, {
     queue,
     readSettings: async () => parseSettings(await settings.get()).autoSettle,
+    readSupervisors,
     onChanged: () => bb.rpc.experimental_invalidate([PARKS_TAG]),
   });
   const inBackground = (run: () => Promise<unknown>) => () => {

@@ -19,6 +19,7 @@ const { threads } = buildArmada(
   projects,
   [],
   [],
+  new Set(),
   0,
   null,
 );

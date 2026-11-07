@@ -20,7 +20,7 @@ afterEach(() => {
 const HOMES = path.join(os.homedir(), ".bb", "captains");
 
 /** bb's host files over captain homes, keyed by their path under `~/.bb/captains`. */
-function homeFiles(homes: Record<string, string>) {
+function homeFiles(homesNow: () => Record<string, string>) {
   const keyOf = (file: string) => path.relative(HOMES, file);
   return {
     listPaths: async ({
@@ -30,7 +30,7 @@ function homeFiles(homes: Record<string, string>) {
       path: string;
       excludeNames?: string[];
     }) => ({
-      paths: Object.keys(homes)
+      paths: Object.keys(homesNow())
         .map((key) => path.relative(folder, path.join(HOMES, key)))
         .filter(
           (relative) =>
@@ -45,7 +45,7 @@ function homeFiles(homes: Record<string, string>) {
       truncated: false,
     }),
     read: async ({ path: file }: { path: string }) => {
-      const content = homes[keyOf(file)];
+      const content = homesNow()[keyOf(file)];
       if (content === undefined) throw new Error(`ENOENT: ${file}`);
       return {
         path: file,
@@ -72,16 +72,30 @@ async function load(
         spawn: async () => ({ id: "thr_new" }) as never,
         list: async () => [],
       },
-      files: homeFiles(options.homes ?? {}),
+      files: homeFiles(() => options.homes ?? {}),
     },
   });
   await options.seed?.(bb.storage.kv);
   await plugin(bb);
+  await harness.callRpc("parks_evaluate", null);
+  const started = {
+    calls: harness.sdk.calls.length,
+    invalidations: harness.experimental_rpcInvalidations.length,
+  };
   const list = () =>
     harness.callRpc("captains_list", null) as Promise<CaptainRecord[]>;
   const ids = async () =>
     (await list()).map((record) => record.threadId).sort();
-  return { bb, harness, list, ids };
+  /** What happened after the start-up pass. */
+  const since = {
+    calls: (callPath?: string) =>
+      harness.sdk.calls
+        .slice(started.calls)
+        .filter((call) => callPath === undefined || call.path === callPath),
+    invalidations: () =>
+      harness.experimental_rpcInvalidations.slice(started.invalidations),
+  };
+  return { bb, harness, list, ids, since };
 }
 
 type Kv = ReturnType<typeof createFakePluginHost>["bb"]["storage"]["kv"];
@@ -106,7 +120,7 @@ describe("captain records", () => {
   });
 
   it("spawns a captain thread titled with its name in the project, records it and invalidates the captains read", async () => {
-    const { harness, list } = await load();
+    const { harness, list, since } = await load();
     const created = (await harness.callRpc("captains_create", {
       ...create,
       projectId: "proj_a",
@@ -120,7 +134,7 @@ describe("captain records", () => {
     expect(await list()).toEqual([
       expect.objectContaining({ threadId: "thr_new", avatar: avatar("new") }),
     ]);
-    expect(harness.experimental_rpcInvalidations).toEqual([["captains"]]);
+    expect(since.invalidations()).toEqual([["captains"]]);
 
     const [spawn] = harness.sdk.callsTo("threads.spawn");
     expect(spawn![0]).toMatchObject({
@@ -267,25 +281,23 @@ describe("captain records", () => {
   });
 
   it("removes only the record, and removing twice is harmless", async () => {
-    const { harness, list } = await load();
+    const { harness, list, since } = await load();
     await harness.callRpc("captains_adopt", adopt("thr_x"));
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
     expect(await list()).toEqual([]);
-    expect(
-      harness.sdk.calls.filter((call) => call.path !== "threads.list"),
-    ).toEqual([]);
+    expect(since.calls()).toEqual([]);
   });
 
   it("invalidates the captains read after every write", async () => {
-    const { harness } = await load();
+    const { harness, since } = await load();
     await harness.callRpc("captains_adopt", adopt("thr_x"));
     await harness.callRpc("captains_update", {
       threadId: "thr_x",
       avatar: avatar("two"),
     });
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
-    expect(harness.experimental_rpcInvalidations).toEqual([
+    expect(since.invalidations()).toEqual([
       ["captains", "parks"],
       ["captains"],
       ["captains", "parks"],
@@ -403,7 +415,7 @@ describe("parks", () => {
     harness.callRpc("parks_list", null) as Promise<ParkRecord[]>;
 
   it("settles, snoozes and unparks a thread, invalidating the parks read each time", async () => {
-    const { harness } = await load();
+    const { harness, since } = await load();
     const settled = (await harness.callRpc("parks_settle", {
       threadId: "t",
       at: 1000,
@@ -432,7 +444,7 @@ describe("parks", () => {
     await harness.callRpc("parks_unpark", { threadId: "t" });
     await harness.callRpc("parks_unpark", { threadId: "t" });
     expect(await list(harness)).toEqual([]);
-    expect(harness.experimental_rpcInvalidations).toEqual([
+    expect(since.invalidations()).toEqual([
       ["parks"],
       ["parks"],
       ["parks"],
@@ -605,9 +617,11 @@ describe("auto-settle", () => {
       pullRequests?: Record<string, Row>;
       settings?: Record<string, number | boolean>;
       seed?: (kv: Kv) => Promise<void>;
+      homes?: Record<string, string>;
     } = {},
   ) {
     let threads = options.threads ?? [];
+    let homes = options.homes ?? {};
     const { bb, harness } = createFakePluginHost({
       pluginId: "armada",
       settings: options.settings,
@@ -618,6 +632,7 @@ describe("auto-settle", () => {
             return threads.slice(offset, offset + (args?.limit ?? 100));
           },
         },
+        files: homeFiles(() => homes),
         plugins: {
           callRpc: async ({ input }) => {
             const { keys } = input as { keys: string[] };
@@ -652,6 +667,9 @@ describe("auto-settle", () => {
       parks,
       setThreads: (next: Listed[]) => {
         threads = next;
+      },
+      setHomes: (next: Record<string, string>) => {
+        homes = next;
       },
     };
   }
@@ -730,6 +748,59 @@ describe("auto-settle", () => {
     expect(startup).toEqual(["worker"]);
   });
 
+  const withCaptain = async (kv: Kv) => {
+    await kv.set("captain:cap", {
+      threadId: "cap",
+      avatar: { style: "micah", seed: "cap" },
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+  };
+
+  it("folds a supervisor into its captain, so each worker it runs is a card and it never is", async () => {
+    const { startup } = await loadAuto({
+      threads: [
+        listed("cap"),
+        listed("thr_sup", { parentThreadId: "cap" }),
+        listed("quiet", { parentThreadId: "thr_sup" }),
+        listed("busy", { parentThreadId: "thr_sup", status: "active" }),
+      ],
+      homes: { "cops/backlog.md": "Supervisor: thr_sup\n" },
+      seed: withCaptain,
+    });
+    expect(startup).toEqual(["quiet"]);
+  });
+
+  it("settles nothing when the homes cannot be read, rather than fold workers into their supervisor", async () => {
+    const { harness, evaluate, parks } = await loadAuto({
+      threads: [listed("old")],
+    });
+    harness.sdk.stub("files.listPaths", async () => {
+      throw new Error("host offline");
+    });
+    await harness.callRpc("parks_unpark", { threadId: "old" });
+    await expect(evaluate()).rejects.toThrow("host offline");
+    expect(await parks()).toEqual([]);
+  });
+
+  it("refreshes the homes reads at start, then on the schedule only when a supervisor changed", async () => {
+    const { harness, setHomes } = await loadAuto({
+      homes: { "cops/backlog.md": "Supervisor: (none yet)\n" },
+    });
+    const homesRefreshes = () =>
+      harness.experimental_rpcInvalidations.filter((tags) =>
+        tags?.includes("homes"),
+      ).length;
+    expect(homesRefreshes()).toBe(1);
+    await harness.runSchedule("auto-settle");
+    expect(homesRefreshes()).toBe(1);
+    setHomes({ "cops/backlog.md": "Supervisor: thr_new\n" });
+    await harness.runSchedule("auto-settle");
+    expect(homesRefreshes()).toBe(2);
+    expect(await harness.callRpc("captain_supervisors", null)).toEqual([
+      "thr_new",
+    ]);
+  });
+
   it("holds pinned, waiting and queued cards, and skips hidden and archived threads", async () => {
     const { startup } = await loadAuto({
       threads: [
@@ -791,6 +862,7 @@ describe("auto-settle", () => {
             throw new Error("plugin not loaded");
           },
         },
+        files: homeFiles(() => ({})),
       },
     });
     await plugin(bb);
@@ -872,15 +944,15 @@ describe("captain homes", () => {
   });
 
   it("reads one file of a home, confined to that home", async () => {
-    const { harness } = await load({ homes });
+    const { harness, since } = await load({ homes });
     expect(
       await harness.callRpc("captain_home_file", {
         project: "cops",
         path: "tasks/fix-login/brief.md",
       }),
     ).toEqual({ content: "Fix the login.\n", truncated: false });
-    const [read] = harness.sdk.callsTo("files.read");
-    expect(read![0]).toMatchObject({
+    const [read] = since.calls("files.read");
+    expect(read!.args[0]).toMatchObject({
       path: path.join(HOMES, "cops/tasks/fix-login/brief.md"),
       rootPath: path.join(HOMES, "cops"),
     });
@@ -899,7 +971,7 @@ describe("captain homes", () => {
   });
 
   it("refuses a path outside the home, an absolute one, a hidden one or one that is not markdown, without reading", async () => {
-    const { harness } = await load({ homes });
+    const { harness, since } = await load({ homes });
     for (const bad of [
       "../x.md",
       "tasks/../../x.md",
@@ -912,7 +984,7 @@ describe("captain homes", () => {
         harness.callRpc("captain_home_file", { project: "cops", path: bad }),
       ).rejects.toThrow();
     }
-    expect(harness.sdk.callsTo("files.read")).toEqual([]);
+    expect(since.calls("files.read")).toEqual([]);
   });
 
   it("names each home's supervisor from its backlog, skipping homes without one", async () => {

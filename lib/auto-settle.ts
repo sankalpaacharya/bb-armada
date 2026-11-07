@@ -165,10 +165,13 @@ export function createAutoSettle(
   {
     queue,
     readSettings,
+    readSupervisors,
     onChanged,
   }: {
     queue: Queue;
     readSettings: () => Promise<AutoSettleSettings>;
+    /** A failed read fails the pass, so it never settles by a supervisor's card. */
+    readSupervisors: () => Promise<ReadonlySet<string>>;
     onChanged: () => void;
   },
 ): { evaluate: () => Promise<string[]>; reevaluate: () => Promise<string[]> } {
@@ -176,15 +179,17 @@ export function createAutoSettle(
 
   const pass = async (): Promise<string[]> => {
     const settings = await readSettings();
-    const [threads, captains, parks] = await Promise.all([
+    const [threads, captains, parks, supervisors] = await Promise.all([
       loadThreads(bb),
       listRecords(kv, CAPTAIN_KEY_PREFIX, parseStoredCaptain, bb.log.warn),
       listRecords(kv, PARK_KEY_PREFIX, parseStoredPark, bb.log.warn),
+      readSupervisors(),
     ]);
     const parkOf = new Map(parks.map((park) => [park.threadId, park]));
     const { roots, subtreeOf } = threadForest(
       threads,
       new Set(captains.map((record) => record.threadId)),
+      supervisors,
     );
     const cards = roots.map((root) => ({
       root,

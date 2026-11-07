@@ -16,6 +16,8 @@ const threads = [
   thread("done", { parentThreadId: "cap" }),
   thread("old", { parentThreadId: "cap", updatedAt: NOW - 30 * 3_600_000, createdAt: NOW - 30 * 3_600_000 }),
   thread("sub", { parentThreadId: "busy" }),
+  thread("sup", { parentThreadId: "cap" }),
+  thread("run", { parentThreadId: "sup", status: "active", createdAt: NOW }),
   thread("solo"),
   thread("other", { title: "personal", projectId: "proj_b" }),
   thread("theirs", { parentThreadId: "other", projectId: "proj_b" }),
@@ -27,6 +29,7 @@ const model = buildArmada(
   [project("proj_a", "Alpha"), project("proj_b", "Beta"), project("proj_c", "Gamma")],
   [record("cap"), record("other")],
   [settledAt("done", NOW - 1000)],
+  new Set(["sup"]),
   NOW,
   6 * 3_600_000,
 );
@@ -37,6 +40,11 @@ describe("a thread's captain", () => {
     expect(captainIdOf(model, threads, "busy")).toBe("cap");
     expect(captainIdOf(model, threads, "sub")).toBe("cap");
     expect(captainIdOf(model, threads, "theirs")).toBe("other");
+  });
+
+  it("is the supervisor's captain, for the supervisor and the threads it runs", () => {
+    expect(captainIdOf(model, threads, "sup")).toBe("cap");
+    expect(captainIdOf(model, threads, "run")).toBe("cap");
   });
 
   it("falls back to the captain of the thread's project when no captain launched it", () => {
@@ -50,10 +58,13 @@ describe("a thread's captain", () => {
 });
 
 describe("a captain's crew", () => {
-  it("splits its own workers into active, inactive and settled, leaving out other captains' threads", () => {
+  it("splits its own workers, its supervisor's included, into active, inactive and settled, leaving out other captains' threads", () => {
     const crew = crewOf(model, "cap")!;
     expect(crew.captain.thread.id).toBe("cap");
-    expect(crew.active.map((entry) => entry.thread.id)).toEqual(["busy"]);
+    expect(crew.active.map((entry) => entry.thread.id)).toEqual([
+      "run",
+      "busy",
+    ]);
     expect(crew.inactive.map((entry) => entry.thread.id)).toEqual(["old"]);
     expect(crew.parked.map((entry) => entry.thread.id)).toEqual(["done"]);
   });

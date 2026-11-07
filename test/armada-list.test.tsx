@@ -99,6 +99,7 @@ async function render(
         captains_list: () => options.registry ?? registry("cap"),
         parks_list: () => options.parks ?? [],
         parks_evaluate: () => ({ changed: [] }),
+        captain_supervisors: () => [],
         ...options.rpc,
       } as never,
       sdk: options.sdk as never,
@@ -176,6 +177,31 @@ describe("Armada thread list", () => {
     expect(
       within(rowOf(view.container, "plain")!).queryByText(/Launched by/),
     ).toBeNull();
+  });
+
+  it("lists the workers a captain's supervisor runs as the captain's, and never the supervisor", async () => {
+    const { view } = await render({
+      threads: [
+        thread("cap", { title: "Captain Alpha", projectId: "proj_a" }),
+        thread("thr_sup", {
+          title: "Alpha supervisor",
+          parentThreadId: "cap",
+          projectId: "proj_a",
+        }),
+        thread("w", {
+          title: "Build",
+          parentThreadId: "thr_sup",
+          projectId: "proj_a",
+        }),
+      ],
+      rpc: { captain_supervisors: () => ["thr_sup"] },
+    });
+    await waitFor(() => expect(rowOf(view.container, "w")).not.toBeNull());
+    expect(listOf(view.container, "w")).toBe("Threads");
+    expect(
+      within(rowOf(view.container, "w")!).getByText("Launched by Captain Alpha"),
+    ).toBeTruthy();
+    expect(anchorOf(view.container, "thr_sup")).toBeNull();
   });
 
   it("names the captain once when it is named like its project", async () => {

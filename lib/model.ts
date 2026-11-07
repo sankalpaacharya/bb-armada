@@ -4,7 +4,7 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 
 import type { Avatar, CaptainRecord } from "./captains";
-import { parentIdOf, threadForest } from "./forest";
+import { threadForest } from "./forest";
 import {
   isExpired,
   lastActivityOf,
@@ -141,6 +141,7 @@ export function buildArmada(
   projects: readonly PluginSidebarProject[],
   records: readonly CaptainRecord[],
   parks: readonly ParkRecord[],
+  supervisorIds: ReadonlySet<string>,
   now: number,
   inactiveAfterMs: number | null,
 ): ArmadaModel {
@@ -157,9 +158,10 @@ export function buildArmada(
     const thread = byId.get(record.threadId);
     return thread === undefined ? [] : [{ record, thread }];
   });
-  const { roots, subtreeOf } = threadForest(
+  const { roots, subtreeOf, parentOf } = threadForest(
     visible,
     new Set(captainRecords.map(({ thread }) => thread.id)),
+    supervisorIds,
   );
 
   const badgeOf = new Map(
@@ -175,7 +177,7 @@ export function buildArmada(
     const park = parkOf.get(thread.id) ?? null;
     if (park !== null && isExpired(park, folded, now))
       expiredParks.push(thread.id);
-    const parentId = parentIdOf(thread);
+    const parentId = parentOf(thread);
     const captain =
       (parentId === null ? undefined : badgeOf.get(parentId)) ?? null;
     return {
