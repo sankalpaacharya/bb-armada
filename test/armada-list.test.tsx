@@ -318,7 +318,7 @@ describe("Armada thread list", () => {
     expect(stored.has("armada/captain-toggles")).toBe(false);
   });
 
-  it("draws a thread as its title and PR alone, leaves where and when to the tooltip, and shows where it runs once it is open", async () => {
+  it("draws every thread with its project, where it runs and its PR under the title, leaves when to the tooltip, and adds the harness once it is open", async () => {
     vi.useFakeTimers({ toFake: ["Date"], now: NOW });
     const { view } = await render({
       threads: [
@@ -355,7 +355,7 @@ describe("Armada thread list", () => {
     });
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
     const card = within(rowOf(view.container, "plain")!);
-    expect(card.queryByText("Beta")).toBeNull();
+    expect(card.getByText("Beta")).toBeTruthy();
     expect(card.queryByText("1h")).toBeNull();
     expect(card.getByRole("img", { name: "Working" })).toBeTruthy();
     expect(
@@ -366,7 +366,8 @@ describe("Armada thread list", () => {
     expect(
       (await card.findByRole("link", { name: "#42" })).getAttribute("href"),
     ).toBe("https://github.com/acme/app/pull/42");
-    expect(card.queryByText("feat/loose-idea")).toBeNull();
+    expect(card.getByText("feat/loose-idea")).toBeTruthy();
+    expect(card.getByLabelText("Worktree")).toBeTruthy();
 
     expect(anchorOf(view.container, "plain")!.getAttribute("title")).toBe(
       "Beta · Worktree feat/loose-idea · 1h ago",
@@ -398,6 +399,11 @@ describe("Armada thread list", () => {
     expect(open.getByText("feat/loose-idea")).toBeTruthy();
     expect(open.getByLabelText("Worktree")).toBeTruthy();
     expect(open.getByText("Beta")).toBeTruthy();
+    expect(
+      rowOf(opened.view.container, "plain")!.querySelector(
+        '[data-provider-id="claude-code"]',
+      ),
+    ).not.toBeNull();
   });
 
   it("shows only the chosen project's threads, without repeating the project on each card", async () => {

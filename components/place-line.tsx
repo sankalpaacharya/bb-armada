@@ -15,13 +15,15 @@ function ActivityCount({ label, count }: { label: string; count: number }) {
   );
 }
 
-/** The open thread's detail line: where it runs, its activity, PR and harness. */
+/** A thread's detail line: where it runs, its activity and PR, and on the open thread its harness. */
 export function PlaceLine({
   thread,
   project,
+  showProvider = true,
 }: {
   thread: PluginSidebarThread;
   project: string | null;
+  showProvider?: boolean;
 }) {
   const environment = thread.environment;
   const branch = environment?.branchName ?? null;
@@ -34,7 +36,7 @@ export function PlaceLine({
         ? { name: "Laptop", label: "Machine" }
         : null;
   return (
-    <div className="flex h-5 items-center gap-1.5 pr-2 pl-8 text-2xs text-muted-foreground">
+    <div className="flex h-5 items-center gap-1.5 pr-2 pl-6 text-2xs text-muted-foreground">
       {project === null ? null : (
         <span className="max-w-[40%] shrink-0 truncate">{project}</span>
       )}
@@ -62,7 +64,7 @@ export function PlaceLine({
         />
       ) : null}
       <PullRequestNumber environmentId={environment?.id ?? null} />
-      <ProviderGlyph providerId={thread.providerId} />
+      {showProvider ? <ProviderGlyph providerId={thread.providerId} /> : null}
     </div>
   );
 }

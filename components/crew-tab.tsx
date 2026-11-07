@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
+  ThreadChat,
   ThreadTitle,
   useBbNavigate,
   type ExperimentalThreadActionTabProps,
@@ -17,10 +18,41 @@ import { PlaceLine } from "./place-line";
 import { PullRequestNumber } from "./pull-request-number";
 import { Note } from "./section";
 import { StatusGlyph } from "./status-mark";
+import { Icon } from "./ui/icon";
 
 type Open = (threadId: string) => void;
 
 const ROW = `flex w-full cursor-pointer rounded-md text-left hover:bg-accent/60 ${FOCUS_RING}`;
+const HEADER_BUTTON = `flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-2xs text-muted-foreground hover:bg-accent/60 hover:text-foreground ${FOCUS_RING}`;
+
+function WorkerChat({
+  threadId,
+  onBack,
+  onOpenFull,
+}: {
+  threadId: string;
+  onBack: () => void;
+  onOpenFull: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <header className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-2">
+        <button type="button" onClick={onBack} className={HEADER_BUTTON}>
+          <Icon name="ChevronLeft" className="size-3.5" />
+          Crew
+        </button>
+        <span className="min-w-0 flex-1 truncate px-1 text-sm text-foreground">
+          <ThreadTitle threadId={threadId} />
+        </span>
+        <button type="button" onClick={onOpenFull} className={HEADER_BUTTON}>
+          <Icon name="Maximize2" className="size-3.5" />
+          Open
+        </button>
+      </header>
+      <ThreadChat threadId={threadId} variant="compact" className="min-h-0 flex-1" />
+    </div>
+  );
+}
 
 function Group({
   title,
@@ -95,11 +127,13 @@ function CrewView({
   crew,
   currentThreadId,
   onOpen,
+  onOpenCaptain,
   onBack,
 }: {
   crew: Crew;
   currentThreadId: string;
   onOpen: Open;
+  onOpenCaptain: () => void;
   onBack: (() => void) | null;
 }) {
   const { captain } = crew;
@@ -120,7 +154,7 @@ function CrewView({
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <button
             type="button"
-            onClick={() => onOpen(captain.thread.id)}
+            onClick={onOpenCaptain}
             className={cn(
               "cursor-pointer truncate text-left text-sm font-medium text-foreground hover:underline",
               FOCUS_RING,
@@ -213,6 +247,7 @@ export function CrewTab({ threadId }: ExperimentalThreadActionTabProps) {
   const { status, threads, captains, model } = useArmadaModel();
   const navigate = useBbNavigate();
   const [picked, setPicked] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string | null>(null);
   const own = useMemo(
     () => captainIdOf(model, threads, threadId),
     [model, threads, threadId],
@@ -221,7 +256,17 @@ export function CrewTab({ threadId }: ExperimentalThreadActionTabProps) {
     const captainId = own ?? picked;
     return captainId === null ? null : crewOf(model, captainId);
   }, [model, own, picked]);
-  const open: Open = (id) => navigate.toThread(id);
+  if (chatId !== null && chatId !== threadId)
+    return (
+      <WorkerChat
+        threadId={chatId}
+        onBack={() => setChatId(null)}
+        onOpenFull={() => {
+          setChatId(null);
+          navigate.toThread(chatId);
+        }}
+      />
+    );
 
   let body: ReactNode;
   if (status === "loading" || captains.status === "loading")
@@ -233,7 +278,8 @@ export function CrewTab({ threadId }: ExperimentalThreadActionTabProps) {
       <CrewView
         crew={crew}
         currentThreadId={threadId}
-        onOpen={open}
+        onOpen={setChatId}
+        onOpenCaptain={() => navigate.toThread(crew.captain.thread.id)}
         onBack={own === null ? () => setPicked(null) : null}
       />
     );

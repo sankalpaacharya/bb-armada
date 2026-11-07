@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
 import { RowActions } from "./row-actions";
 import { PlaceLine } from "./place-line";
-import { PullRequestNumber } from "./pull-request-number";
 import { StatusGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
@@ -43,9 +42,8 @@ function LeadMark({ entry }: { entry: ThreadEntry }) {
 }
 
 /**
- * A thread as one line: status or origin, the title, and the PR number when
- * there is one. The tooltip carries where it runs and its age, and the open
- * thread shows where it runs below.
+ * A thread as its title, with status or origin before it, over a line with its
+ * project, where it runs and its PR. The tooltip adds its age.
  */
 export function ThreadCard({
   entry,
@@ -96,11 +94,6 @@ export function ThreadCard({
                 <LeadMark entry={entry} />
               </span>
               {title}
-              {active ? null : (
-                <span className="contents text-2xs">
-                  <PullRequestNumber environmentId={environmentId} />
-                </span>
-              )}
               {entry.status === "working" ? (
                 <span className="grid size-4 shrink-0 place-items-center">
                   <StatusGlyph status="working" />
@@ -128,11 +121,13 @@ export function ThreadCard({
                 />
               ) : null}
             </div>
-            {active ? (
-              <div className="pointer-events-none relative -mt-1 pb-1">
-                <PlaceLine thread={entry.thread} project={project} />
-              </div>
-            ) : null}
+            <div className="pointer-events-none relative -mt-1 pb-1">
+              <PlaceLine
+                thread={entry.thread}
+                project={project}
+                showProvider={active}
+              />
+            </div>
           </>
         )}
       </ThreadLink>
