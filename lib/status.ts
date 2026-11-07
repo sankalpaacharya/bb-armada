@@ -48,7 +48,7 @@ export const STATUS: Record<Status, StatusRow> = {
   working: {
     rank: 3,
     word: "Working",
-    tone: "text-timeline-accent",
+    tone: "text-[color:var(--bbb-accent,var(--timeline-accent))]",
     glyph: { kind: "grid" },
     wordOnCard: false,
     live: true,
