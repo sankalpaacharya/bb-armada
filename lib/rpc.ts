@@ -1,11 +1,7 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
-import {
-  captainHomeSchema,
-  homeFileContentSchema,
-  homeFilePathSchema,
-} from "./captain-home";
+import { captainHomeSchema } from "./captain-home";
 import { avatarSchema, captainRecordSchema, idSchema } from "./captains";
 import { parkRecordSchema } from "./lifecycle";
 
@@ -93,11 +89,6 @@ export const rpcContract = defineRpcContract({
   captain_home: {
     input: z.strictObject({ project }),
     output: captainHomeSchema,
-    tags: () => [HOMES_TAG],
-  },
-  captain_home_file: {
-    input: z.strictObject({ project, path: homeFilePathSchema }),
-    output: homeFileContentSchema,
     tags: () => [HOMES_TAG],
   },
   /** Every captain home's supervisor thread. */

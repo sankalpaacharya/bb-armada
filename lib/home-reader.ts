@@ -14,7 +14,6 @@ import { captainSlug } from "./captain-text";
 type ReadFile = Awaited<ReturnType<BbPluginApi["sdk"]["files"]["read"]>>;
 
 const HOMES_ROOT = path.join(os.homedir(), ".bb", "captains");
-const MAX_CONTENT = 200_000;
 const BACKLOG = /^[^/]+\/backlog\.md$/;
 
 const textOf = (file: ReadFile): string =>
@@ -64,15 +63,7 @@ export function createHomeReader(bb: BbPluginApi) {
           }
         }),
     );
-    return { status: "ready", folder, files: listed.flat() };
-  };
-
-  const file = async (project: string, relative: string) => {
-    const text = textOf(await read(rootOf(project), relative));
-    return {
-      content: text.slice(0, MAX_CONTENT),
-      truncated: text.length > MAX_CONTENT,
-    };
+    return { status: "ready", folder, root, files: listed.flat() };
   };
 
   /** Every home's supervisor, from the `Supervisor:` line of its backlog. */
@@ -94,5 +85,5 @@ export function createHomeReader(bb: BbPluginApi) {
     return [...new Set(ids.filter((id) => id !== null))].sort();
   };
 
-  return { home, file, supervisors };
+  return { home, supervisors };
 }

@@ -217,8 +217,6 @@ export default async function plugin(bb: BbPluginApi) {
 
     captain_home: ({ project }) => homes.home(project),
 
-    captain_home_file: ({ project, path }) => homes.file(project, path),
-
     captain_supervisors: () => homes.supervisors(),
   });
 

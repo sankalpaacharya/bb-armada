@@ -921,6 +921,7 @@ describe("captain homes", () => {
     expect(await harness.callRpc("captain_home", { project: "cops" })).toEqual({
       status: "ready",
       folder: "~/.bb/captains/cops",
+      root: path.join(HOMES, "cops"),
       files: [
         { path: "captain.md", sizeBytes: 10, modifiedAt: 1_000 },
         { path: "backlog.md", sizeBytes: 38, modifiedAt: 1_000 },
@@ -941,50 +942,6 @@ describe("captain homes", () => {
     expect(
       await harness.callRpc("captain_home", { project: "Nowhere" }),
     ).toEqual({ status: "missing", folder: "~/.bb/captains/nowhere" });
-  });
-
-  it("reads one file of a home, confined to that home", async () => {
-    const { harness, since } = await load({ homes });
-    expect(
-      await harness.callRpc("captain_home_file", {
-        project: "cops",
-        path: "tasks/fix-login/brief.md",
-      }),
-    ).toEqual({ content: "Fix the login.\n", truncated: false });
-    const [read] = since.calls("files.read");
-    expect(read!.args[0]).toMatchObject({
-      path: path.join(HOMES, "cops/tasks/fix-login/brief.md"),
-      rootPath: path.join(HOMES, "cops"),
-    });
-  });
-
-  it("returns the first 200 KB of a long file and says it cut the rest", async () => {
-    const { harness } = await load({
-      homes: { "cops/archive.md": "x".repeat(250_000) },
-    });
-    const file = (await harness.callRpc("captain_home_file", {
-      project: "cops",
-      path: "archive.md",
-    })) as { content: string; truncated: boolean };
-    expect(file.content).toHaveLength(200_000);
-    expect(file.truncated).toBe(true);
-  });
-
-  it("refuses a path outside the home, an absolute one, a hidden one or one that is not markdown, without reading", async () => {
-    const { harness, since } = await load({ homes });
-    for (const bad of [
-      "../x.md",
-      "tasks/../../x.md",
-      "/etc/x.md",
-      ".secret.md",
-      "x.txt",
-      "a/b/c/d.md",
-    ]) {
-      await expect(
-        harness.callRpc("captain_home_file", { project: "cops", path: bad }),
-      ).rejects.toThrow();
-    }
-    expect(since.calls("files.read")).toEqual([]);
   });
 
   it("names each home's supervisor from its backlog, skipping homes without one", async () => {

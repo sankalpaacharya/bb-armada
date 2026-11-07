@@ -38,16 +38,12 @@ export const captainHomeSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
     folder: z.string(),
+    root: z.string(),
     files: z.array(homeFileSchema),
   }),
 ]);
 
 export type CaptainHome = z.infer<typeof captainHomeSchema>;
-
-export const homeFileContentSchema = z.object({
-  content: z.string(),
-  truncated: z.boolean(),
-});
 
 export type MemoryNode =
   | { kind: "file"; name: string; file: HomeFile }

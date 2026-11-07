@@ -155,7 +155,7 @@ function CrewView({
       />
     ));
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-h-full flex-col gap-5">
       <header className="flex items-center gap-3 px-2">
         <CaptainTile avatar={captain.record.avatar} size="preview" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -204,7 +204,14 @@ function CrewView({
           </Group>
         </>
       )}
-      {projectName === null ? null : <MemorySection project={projectName} />}
+      {projectName === null ? null : (
+        <div className="mt-auto">
+          <MemorySection
+            project={projectName}
+            hostId={captain.thread.host?.id ?? null}
+          />
+        </div>
+      )}
     </div>
   );
 }
