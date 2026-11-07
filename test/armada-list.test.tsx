@@ -137,9 +137,8 @@ describe("Armada thread list", () => {
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
     const workers = screen.getByRole("list", { name: "Workers of Captain Alpha" });
     expect(rowOf(view.container, "cap")!.contains(workers)).toBe(true);
-    expect(
-      screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual(["Captains", "Threads"]);
+    expect(screen.getByRole("heading", { level: 2, name: "Captains" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Threads" })).toBeTruthy();
   });
 
   it("shows the captain's title as it is, with its avatar as a decorative image in the tile", async () => {
@@ -169,23 +168,41 @@ describe("Armada thread list", () => {
     expect(listOf(view.container, "plain")).toBe("Threads");
   });
 
-  it("shows bb's waiting glyph on a captain whose worker needs you", async () => {
+  it("sums up the captain's tree under its name: how many are working and how many need you", async () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
-    expect(
-      rowOf(view.container, "cap")!.querySelector(
-        '[data-thread-status-glyph="waiting-for-input"]',
-      ),
-    ).not.toBeNull();
+    const captain = within(
+      rowOf(view.container, "cap")!.querySelector("div.group\\/row")!,
+    );
+    expect(captain.getByText("2 working")).toBeTruthy();
+    expect(captain.getByText("1 needs you")).toBeTruthy();
+    expect(captain.queryByText("Idle")).toBeNull();
   });
 
-  it("shows the age on an idle captain and no workers toggle", async () => {
+  it("draws the shade grid on a captain whose tree is working and nothing needs you", async () => {
+    const { view } = await render({
+      threads: [
+        thread("cap", { title: "cops" }),
+        thread("w", { title: "Build", parentThreadId: "cap", ...busy }),
+      ],
+    });
+    await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
+    const captain = within(
+      rowOf(view.container, "cap")!.querySelector("div.group\\/row")!,
+    );
+    expect(captain.getByText("1 working")).toBeTruthy();
+    expect(captain.getByRole("img", { name: "Working" })).toBeTruthy();
+  });
+
+  it("says Idle with the age on a quiet captain, and offers no workers toggle", async () => {
     vi.useFakeTimers({ toFake: ["Date"], now: NOW });
     const { view } = await render({
       threads: [thread("cap", { title: "Captain Alpha", projectId: "proj_a" })],
     });
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
-    expect(within(rowOf(view.container, "cap")!).getByText("1h")).toBeTruthy();
+    const row = within(rowOf(view.container, "cap")!);
+    expect(row.getByText("1h")).toBeTruthy();
+    expect(row.getByText("Idle")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /workers/i })).toBeNull();
   });
 

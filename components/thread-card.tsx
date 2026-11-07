@@ -30,7 +30,6 @@ export function ThreadCard({
         <StatusOrAge
           status={entry.status}
           activityAt={entry.activityAt}
-          variant="card"
         />
       )}
     </ParkableSlot>
@@ -48,7 +47,7 @@ export function ThreadCard({
           <>
             {showProject ? (
               <div className="pointer-events-none relative flex h-5 items-center gap-1.5">
-                <span className="min-w-0 flex-1 truncate text-2xs font-medium text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-2xs font-medium text-muted-foreground/80">
                   {entry.projectName}
                 </span>
                 {trailing(shortcut)}

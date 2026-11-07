@@ -9,10 +9,15 @@ export const HEADER_ACTION = `grid size-6 shrink-0 cursor-pointer place-items-ce
 export const LIST_TEXT = "text-[13px]";
 
 export const TILE = {
-  row: "size-[18px] rounded-[5px]",
+  row: "size-7 rounded-[8px]",
   preview: "size-10 rounded-[10px]",
 } as const;
 
-export const TILE_COLUMN = "w-[18px]";
+/** The deck's worker cards start where the captain's name does: padding, avatar, gap. */
+export const DECK_INDENT = "pl-[46px]";
+
+export const SECTION_TITLE = "text-[12px] font-semibold text-foreground/70";
+
+export const DECK_PANEL = "rounded-[10px] bg-foreground/5 p-1";
 
 export const AGE_TEXT = "shrink-0 tabular-nums text-2xs text-muted-foreground";

@@ -30,11 +30,15 @@ export type ThreadEntry = Fold & {
 
 export type ParkedEntry<Kind extends Park> = ThreadEntry & { park: Kind };
 
+export type CaptainCounts = { working: number; needsYou: number };
+
 export type CaptainEntry = Fold & {
   record: CaptainRecord;
   thread: PluginSidebarThread;
   /** Active workers; parked ones sit on the shelves. */
   workers: ThreadEntry[];
+  /** Threads in the captain's tree that are working, and that need you. */
+  counts: CaptainCounts;
 };
 
 export type ArmadaModel = {
@@ -82,6 +86,16 @@ function entryOrder(a: ThreadEntry, b: ThreadEntry): number {
 
 function byActivity(a: Fold, b: Fold): number {
   return b.activityAt - a.activityAt;
+}
+
+function countStatuses(threads: readonly PluginSidebarThread[]): CaptainCounts {
+  const counts = { working: 0, needsYou: 0 };
+  for (const thread of threads) {
+    const status = statusOf(thread);
+    if (status === "working" || status === "queued") counts.working += 1;
+    else if (status === "needs-you" || status === "failed") counts.needsYou += 1;
+  }
+  return counts;
 }
 
 function isSnoozed(entry: ThreadEntry): entry is ParkedEntry<Snooze> {
@@ -168,11 +182,13 @@ export function buildArmada(
         .sort(byActivity);
       for (const worker of workers)
         if (worker.shelf !== "active") parked.push(worker);
+      const tree = [thread, ...subtree];
       return {
         record,
         thread,
         workers: workers.filter((worker) => worker.shelf === "active"),
-        ...fold([thread, ...subtree]),
+        counts: countStatuses(tree),
+        ...fold(tree),
       };
     })
     .sort(

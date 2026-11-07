@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { Age } from "./age";
 import { ShadeGrid } from "./shade-grid";
 
-export type StatusVariant = "card" | "compact";
+type StatusVariant = "card" | "compact";
 
 /**
  * One status, drawn from the status table. "compact" is the glyph alone, for
@@ -34,17 +34,26 @@ function StatusMark({
   );
 }
 
-/** The row's trailing slot: the status when it has something to say, else the age. */
+/** A card's trailing slot: the status when it has something to say, else the age. */
 export function StatusOrAge({
   status,
   activityAt,
-  variant,
 }: {
   status: Status | null;
   activityAt: number;
-  variant: StatusVariant;
 }) {
-  if (status !== null && (variant === "card" || STATUS[status].live))
-    return <StatusMark status={status} variant={variant} />;
+  if (status !== null) return <StatusMark status={status} variant="card" />;
+  return <Age at={activityAt} />;
+}
+
+/** A captain row's trailing slot: the grid while working, else the age. */
+export function WorkingOrAge({
+  status,
+  activityAt,
+}: {
+  status: Status | null;
+  activityAt: number;
+}) {
+  if (status === "working") return <StatusMark status={status} variant="compact" />;
   return <Age at={activityAt} />;
 }

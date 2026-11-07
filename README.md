@@ -93,9 +93,14 @@ twelve more, and picking one stores its seed.
 
 ## Design
 
-Captain rows are one compact line in the style of Capy's sidebar; thread and
-worker cards use t3sidebar's three-line card. Section headers are a `div` with
-an `h2` title and the actions beside it. Every row shares `ThreadLink`, which
+Captains sit on one raised panel, the deck: a 28px Adventurer avatar, the
+name, and a one-line summary of the captain's tree ("2 working" in the
+working tone, "1 needs you" in the attention tone, else "Idle") with the
+shade grid while working or the age at the right. Active workers nest inside
+the deck under their captain as t3sidebar-style cards, indented to the
+captain's name. Threads stay flat on the sidebar background as the same
+three-line cards. Section headers are a `div` with a small semibold `h2`
+title, a muted count, and the actions beside it, with no divider lines. Every row shares `ThreadLink`, which
 owns bb's row contract: the full-bleed anchor, `data-sidebar-thread-id`, split
 on cmd-click, the jump shortcuts, bb's context menu and inline rename. Pickers
 are one `ChoiceList` with listbox semantics. Ages and "wakes in" labels come

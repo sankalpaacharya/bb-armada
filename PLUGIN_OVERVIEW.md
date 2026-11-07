@@ -7,8 +7,9 @@ can filter by project, and quiet shelves for what you have settled or snoozed.
 - **Captains.** A captain is a long-lived thread for a project, named after
   it. It sits at the top of the sidebar with a character avatar of its own.
 - **Workers underneath.** Every thread a captain starts nests under it as a
-  card. The captain's row shows the most urgent thing going on among its
-  workers, and opens by itself when something is going on.
+  card on the captains' deck. The captain's row says how many of them are
+  working and how many need you, and opens by itself when something is going
+  on.
 - **Threads.** Every other thread is a card with its project, status, branch,
   pull request and harness. Sub-threads fold into their parent, which takes on
   the most urgent status among them. Pick a project to see only its threads.
