@@ -10,7 +10,7 @@ on them, not a separate thing.
 Every open user call has one line in `backlog.md` → Waiting on the user:
 
 ```
-- <slug>: <question> — options: <a> / <b> — recommend <a> — gates <task slug or "nothing"> (since YYYY-MM-DD)
+- <slug>: <question>; options: <a> / <b>; recommend <a>; gates <task slug or "nothing"> (since YYYY-MM-DD)
 ```
 
 - Put the line on the work it blocks. A review that raised several questions is

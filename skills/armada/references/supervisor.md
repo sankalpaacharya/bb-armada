@@ -34,7 +34,7 @@ words.
 one line per task you supervise:
 
 ```
-- <slug> — thr_xxx — ship|scout — working|waiting on user|checking|done|failed — last: <what you did, date>
+- <slug>: thr_xxx, ship|scout, working|waiting on user|checking|done|failed; last: <what you did, date>
 ```
 
 ## Your loop
@@ -49,7 +49,7 @@ each blocker. Main also messages you. On every wake:
    task from its In flight line in `backlog.md` or the `<slug>:` at the start
    of its title, read `tasks/<slug>/brief.md`, and add the ledger line. A `TASK` line from main can
    be lost; this step makes it unnecessary. A child with no brief gets the
-   line `- ? — thr_xxx — unknown` and is left alone.
+   line `- ?: thr_xxx, unknown` and is left alone.
 3. **New task from main** (`TASK <slug> thr_xxx`): add its ledger line and read
    its brief, unless step 2 already did.
 4. **Worker question, approval, failure, or stall**: follow `supervision.md`.
