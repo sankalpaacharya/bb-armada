@@ -14,7 +14,7 @@ export function SectionHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex h-8 items-center justify-between gap-2 px-2.5">
+    <div className="relative flex h-8 items-center justify-between gap-2 px-2.5">
       <h2 className={cn("flex items-baseline gap-1.5", SECTION_TITLE)}>
         {title}
         {count === undefined ? null : (

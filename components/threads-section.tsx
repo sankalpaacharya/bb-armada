@@ -1,17 +1,17 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import type {
   PluginSidebarProject,
   PluginSidebarThread,
   PluginSidebarThreadsState,
 } from "@get-bb/plugin-sdk/app";
 
-import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
 import type { ThreadEntry } from "@/lib/model";
 import { countByProject, type ThreadScope } from "@/lib/scope";
 import { HEADER_ACTION, SECTION_TEXT } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { ChoiceList, type Choice } from "./choice-list";
+import type { Choice } from "./choice-list";
+import { Dropdown } from "./dropdown";
 import { makeCaptainItem, parkItems } from "./menu-items";
 import { Note, SectionHeader } from "./section";
 import { ThreadCard } from "./thread-card";
@@ -46,11 +46,6 @@ export function ThreadsSection({
   onOpen: OpenThread;
   onAdopt: (thread: PluginSidebarThread) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const listId = useId();
-  const sectionRef = useRef<HTMLElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
   const counts = useMemo(() => countByProject(entries), [entries]);
   const scopeName =
     projects.find((project) => project.id === scope)?.name ?? null;
@@ -64,74 +59,33 @@ export function ThreadsSection({
     })),
   ];
 
-  const close = () => {
-    setOpen(false);
-    triggerRef.current?.focus();
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !sectionRef.current?.contains(event.target)
-      )
-        setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
-
   return (
-    <section ref={sectionRef} className="relative flex flex-col gap-1">
+    <section className="flex flex-col gap-1">
       <SectionHeader
         title="Threads"
         count={scoped.length}
         actions={
-          <button
-            ref={triggerRef}
-            type="button"
-            aria-haspopup="listbox"
-            aria-expanded={open}
-            aria-controls={open ? listId : undefined}
-            aria-label={`Threads from ${scopeName ?? "All projects"}`}
-            onClick={() => setOpen((current) => !current)}
-            className={cn(
+          <Dropdown
+            label="Show threads from"
+            triggerLabel={`Threads from ${scopeName ?? "All projects"}`}
+            choices={choices}
+            value={scope}
+            onChange={onScope}
+            align="end"
+            triggerClassName={cn(
               HEADER_ACTION,
               "flex h-6 w-auto max-w-[60%] min-w-0 gap-1 px-1.5",
               SECTION_TEXT,
             )}
+            panelClassName="w-56 max-w-[calc(100%-0.5rem)]"
+            listClassName="max-h-64 overflow-y-auto"
           >
             <span className="min-w-0 truncate">
               {scopeName ?? "All projects"}
             </span>
-            <Icon
-              name="ChevronDown"
-              className={cn(
-                "size-3 shrink-0 transition-transform",
-                open && "rotate-180",
-              )}
-            />
-          </button>
+          </Dropdown>
         }
       />
-      {open ? (
-        <div className="absolute top-8 right-1 z-20 w-56 max-w-[calc(100%-0.5rem)] origin-top-right rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none starting:scale-95 starting:opacity-0">
-          <ChoiceList
-            id={listId}
-            label="Show threads from"
-            choices={choices}
-            value={scope}
-            onChange={(next) => {
-              onScope(next);
-              close();
-            }}
-            onClose={close}
-            autoFocus
-            className="max-h-64 overflow-y-auto"
-          />
-        </div>
-      ) : null}
       {status === "loading" || status === "loading-captains" ? (
         <Note>Loading threads…</Note>
       ) : status === "error" && entries.length === 0 ? (
