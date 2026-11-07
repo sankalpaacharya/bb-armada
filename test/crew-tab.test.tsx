@@ -186,14 +186,12 @@ describe("the crew tab's decisions", () => {
     ).toBeTruthy();
   });
 
-  it("opens the captain's thread to answer, from the heading or a decision", async () => {
+  it("opens the captain's thread to answer when a decision is clicked", async () => {
     const { view } = renderCrew(() => waiting("deploy: today or Monday?"));
     fireEvent.click(
-      await screen.findByRole("button", { name: "deploy: today or Monday?" }),
+      (await screen.findByText("deploy: today or Monday?")).closest("button")!,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Needs you/ }));
     expect(view.inspection.navigateCalls).toEqual([
-      { method: "toThread", threadId: "cap", options: undefined },
       { method: "toThread", threadId: "cap", options: undefined },
     ]);
   });

@@ -15,7 +15,6 @@ import { toActionTarget } from "@/lib/action-target";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
 import type { CaptainEntry, ThreadEntry } from "@/lib/model";
 import { rpcContract } from "@/lib/rpc";
-import { STATUS } from "@/lib/status";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age } from "./age";
@@ -99,47 +98,26 @@ function NeedsYou({
     input: { project },
   });
   const items = data?.status === "ready" ? data.needsYou : [];
-  if (items.length === 0) return null;
   return (
-    <section className="flex flex-col gap-1">
-      <h3 className="m-0">
-        <button
-          type="button"
-          onClick={onOpenCaptain}
-          className={cn(
-            PANEL_ROW,
-            "h-7 items-center gap-1.5 px-2",
-            SECTION_TITLE,
-          )}
-        >
-          Needs you
-          <span
-            className={cn(
-              "text-2xs font-normal tabular-nums",
-              STATUS["needs-you"].tone,
-            )}
+    <Group title="Needs you" count={items.length}>
+      {items.map((item, index) => (
+        <li key={`${index}:${item}`} className="list-none">
+          <button
+            type="button"
+            title={item}
+            onClick={onOpenCaptain}
+            className={cn(PANEL_ROW, "items-start gap-2 px-2 py-1.5")}
           >
-            {items.length}
-          </span>
-        </button>
-      </h3>
-      <ul className="m-0 flex flex-col gap-px p-0">
-        {items.map((item, index) => (
-          <li key={`${index}:${item}`} className="list-none">
-            <button
-              type="button"
-              title={item}
-              onClick={onOpenCaptain}
-              className={cn(PANEL_ROW, "px-2 py-1")}
-            >
-              <span className="line-clamp-2 text-sm text-foreground">
-                {item}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
+            <span className="grid h-5 w-4 shrink-0 place-items-center">
+              <StatusGlyph status="needs-you" />
+            </span>
+            <span className="line-clamp-2 min-w-0 flex-1 text-sm text-foreground/85">
+              {item}
+            </span>
+          </button>
+        </li>
+      ))}
+    </Group>
   );
 }
 
@@ -285,7 +263,7 @@ function CrewView({
         <NeedsYou project={projectName} onOpenCaptain={onOpenCaptain} />
       )}
       {workers === 0 ? (
-        <Note>
+        <Note className="px-2">
           No workers yet. Ask the captain for something and its workers show up
           here.
         </Note>
