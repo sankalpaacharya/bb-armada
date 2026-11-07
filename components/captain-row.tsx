@@ -48,7 +48,7 @@ export function CaptainRow({
         active={active}
         inline={inline}
         onOpen={onOpen}
-        className="flex h-11 items-center gap-2.5 rounded-[6px] px-1.5"
+        className="flex h-11 items-center gap-2.5 px-2.5"
         titleClassName="font-medium"
       >
         {({ title, shortcut }) => (

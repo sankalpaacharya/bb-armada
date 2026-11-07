@@ -115,13 +115,13 @@ swatches beside it pick the background.
 
 ## Design
 
-Captains sit on one raised panel, the deck: a 28px portrait, the
+Captains sit flat on the sidebar, one row each: a 28px portrait, the
 name, and a one-line summary of the captain's tree ("2 working" in the
 working tone, "1 needs you" in the attention tone, else "Idle") with the
-shade grid while working or the age at the right. "1 failed" shows in the
-failure tone, apart from "needs you". Until the captains read settles the deck
-says "Loading captains…", and after a failed read "Could not load captains",
-never the first-captain invitation. The deck holds only captain rows. Every
+shade grid at the right while working. "1 failed" shows in the failure tone,
+apart from "needs you". Until the captains read settles the section says
+"Loading captains…", and after a failed read "Could not load captains",
+never the first-captain invitation. Captains holds only captain rows. Every
 thread appears once, as a card in Threads, flat on the sidebar background. A
 worker's first line starts with its captain's avatar in a 14px tile, then the
 captain's name, a muted "·" and the project ("[face] cops · cops" reads

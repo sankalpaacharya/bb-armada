@@ -30,6 +30,4 @@ export const SECTION_TEXT = "text-[12px]";
 
 export const SECTION_TITLE = `${SECTION_TEXT} font-semibold text-foreground/70`;
 
-export const DECK_PANEL = "overflow-hidden rounded-[10px] bg-foreground/5";
-
 export const AGE_TEXT = "shrink-0 tabular-nums text-2xs text-muted-foreground";
