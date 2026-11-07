@@ -5,18 +5,36 @@ import { thread } from "./fixtures";
 
 describe("laneOf", () => {
   it("reads a thread blocked on the user as attention", () => {
-    expect(laneOf(thread("a", { hasPendingInteraction: true }))).toBe("attention");
-    expect(laneOf(thread("b", { indicator: "waiting-for-input" }))).toBe("attention");
+    expect(laneOf(thread("a", { hasPendingInteraction: true }))).toBe(
+      "attention",
+    );
+    expect(laneOf(thread("b", { indicator: "waiting-for-input" }))).toBe(
+      "attention",
+    );
     expect(laneOf(thread("c", { queuedWork: "failed" }))).toBe("attention");
   });
 
   it("reads a running turn or background work as working", () => {
     expect(laneOf(thread("a", { status: "active" }))).toBe("working");
-    expect(laneOf(thread("b", { activity: { workflows: 0, backgroundAgents: 1, backgroundCommands: 0, planMode: 0, goals: 0 } }))).toBe("working");
+    expect(
+      laneOf(
+        thread("b", {
+          activity: {
+            workflows: 0,
+            backgroundAgents: 1,
+            backgroundCommands: 0,
+            planMode: 0,
+            goals: 0,
+          },
+        }),
+      ),
+    ).toBe("working");
   });
 
   it("puts attention above working when both apply", () => {
-    expect(laneOf(thread("a", { status: "active", hasPendingInteraction: true }))).toBe("attention");
+    expect(
+      laneOf(thread("a", { status: "active", hasPendingInteraction: true })),
+    ).toBe("attention");
   });
 
   it("reads an unread success as done and an idle thread as quiet", () => {

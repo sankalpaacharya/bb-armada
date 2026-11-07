@@ -11,7 +11,10 @@ export const COLORS = [
 
 export type ColorId = (typeof COLORS)[number]["id"];
 
-export const COLOR_IDS = COLORS.map((color) => color.id) as [ColorId, ...ColorId[]];
+export const COLOR_IDS = COLORS.map((color) => color.id) as [
+  ColorId,
+  ...ColorId[],
+];
 
 export const DEFAULT_COLOR: ColorId = "indigo";
 

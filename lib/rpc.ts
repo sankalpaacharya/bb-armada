@@ -20,9 +20,16 @@ export const rpcContract = defineRpcContract({
     }),
     output: captainRecordSchema,
   },
-  captains_adopt: { input: z.object({ threadId, logo, color }), output: captainRecordSchema },
+  captains_adopt: {
+    input: z.object({ threadId, logo, color }),
+    output: captainRecordSchema,
+  },
   captains_update: {
-    input: z.object({ threadId, logo: logo.optional(), color: color.optional() }),
+    input: z.object({
+      threadId,
+      logo: logo.optional(),
+      color: color.optional(),
+    }),
     output: captainRecordSchema,
   },
   captains_remove: { input: z.object({ threadId }), output: z.null() },

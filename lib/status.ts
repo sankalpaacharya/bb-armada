@@ -2,9 +2,17 @@ import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
 export type Lane = "attention" | "working" | "done";
 
-export const LANE_RANK: Record<Lane, number> = { attention: 3, working: 2, done: 1 };
+export const LANE_RANK: Record<Lane, number> = {
+  attention: 3,
+  working: 2,
+  done: 1,
+};
 
-const ATTENTION_INDICATORS = new Set<string>(["waiting-for-input", "queued-failed", "unread-error"]);
+const ATTENTION_INDICATORS = new Set<string>([
+  "waiting-for-input",
+  "queued-failed",
+  "unread-error",
+]);
 const WORKING_INDICATORS = new Set<string>([
   "runtime",
   "workflow",
@@ -15,7 +23,13 @@ const WORKING_INDICATORS = new Set<string>([
   "queued-waiting",
   "working-draft",
 ]);
-const BUSY_STATUSES = new Set<string>(["starting", "active", "stopping", "provisioning", "waiting-for-host"]);
+const BUSY_STATUSES = new Set<string>([
+  "starting",
+  "active",
+  "stopping",
+  "provisioning",
+  "waiting-for-host",
+]);
 
 export function laneOf(thread: PluginSidebarThread): Lane | null {
   if (
@@ -30,7 +44,11 @@ export function laneOf(thread: PluginSidebarThread): Lane | null {
     BUSY_STATUSES.has(thread.runtimeStatus) ||
     BUSY_STATUSES.has(thread.status) ||
     WORKING_INDICATORS.has(thread.indicator) ||
-    activity.workflows + activity.backgroundAgents + activity.backgroundCommands + activity.goals > 0
+    activity.workflows +
+      activity.backgroundAgents +
+      activity.backgroundCommands +
+      activity.goals >
+      0
   ) {
     return "working";
   }
@@ -44,7 +62,11 @@ export function strongerLane(a: Lane | null, b: Lane | null): Lane | null {
   return LANE_RANK[b] > LANE_RANK[a] ? b : a;
 }
 
-const LABELS: Record<Lane, string> = { attention: "Needs you", working: "Working", done: "Done" };
+const LABELS: Record<Lane, string> = {
+  attention: "Needs you",
+  working: "Working",
+  done: "Done",
+};
 
 export function statusLabel(lane: Lane): string {
   return LABELS[lane];

@@ -6,8 +6,12 @@ import { COLORS } from "../lib/colors";
 import { LOGOS } from "../lib/logos";
 
 const root = join(import.meta.dirname, "..");
-const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
-  bb: { branding: { icon: string; experimental_icons: Record<string, string> } };
+const manifest = JSON.parse(
+  readFileSync(join(root, "package.json"), "utf8"),
+) as {
+  bb: {
+    branding: { icon: string; experimental_icons: Record<string, string> };
+  };
 };
 const declared = manifest.bb.branding.experimental_icons;
 
@@ -34,6 +38,8 @@ describe("captain logos", () => {
 describe("captain colours", () => {
   it("gives every colour a unique id and class", () => {
     expect(new Set(COLORS.map((color) => color.id)).size).toBe(COLORS.length);
-    expect(new Set(COLORS.map((color) => color.className)).size).toBe(COLORS.length);
+    expect(new Set(COLORS.map((color) => color.className)).size).toBe(
+      COLORS.length,
+    );
   });
 });

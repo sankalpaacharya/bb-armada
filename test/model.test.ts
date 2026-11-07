@@ -7,7 +7,9 @@ import { NOW, project, thread } from "./fixtures";
 
 const projects = [project("proj_a", "Alpha"), project("proj_b", "Beta")];
 
-function registryOf(...ids: [id: string, createdAt?: string][]): CaptainRegistry {
+function registryOf(
+  ...ids: [id: string, createdAt?: string][]
+): CaptainRegistry {
   return {
     version: 1,
     captains: Object.fromEntries(
@@ -20,9 +22,13 @@ function registryOf(...ids: [id: string, createdAt?: string][]): CaptainRegistry
 }
 
 const none = registryOf();
-const idsOf = (list: readonly PluginSidebarThread[]) => list.map((item) => item.id);
+const idsOf = (list: readonly PluginSidebarThread[]) =>
+  list.map((item) => item.id);
 const groupIds = (model: ReturnType<typeof buildArmada>) =>
-  model.groups.map((group) => [group.project.id, group.threads.map((entry) => entry.thread.id)]);
+  model.groups.map((group) => [
+    group.project.id,
+    group.threads.map((entry) => entry.thread.id),
+  ]);
 const busy: Partial<PluginSidebarThread> = { status: "active" };
 const blocked: Partial<PluginSidebarThread> = { hasPendingInteraction: true };
 
@@ -34,13 +40,24 @@ describe("captains and their workers", () => {
       thread("w2", { parentThreadId: "cap", updatedAt: NOW - 1000 }),
       thread("grandchild", { parentThreadId: "w1", updatedAt: NOW - 2000 }),
     ];
-    const [captain] = buildArmada(threads, projects, registryOf(["cap"])).captains;
+    const [captain] = buildArmada(
+      threads,
+      projects,
+      registryOf(["cap"]),
+    ).captains;
     expect(idsOf(captain!.workers)).toEqual(["w2", "grandchild", "w1"]);
   });
 
   it("follows the lifecycle owner when a worker has no parent", () => {
-    const threads = [thread("cap"), thread("w", { lifecycleOwnerThreadId: "cap" })];
-    const [captain] = buildArmada(threads, projects, registryOf(["cap"])).captains;
+    const threads = [
+      thread("cap"),
+      thread("w", { lifecycleOwnerThreadId: "cap" }),
+    ];
+    const [captain] = buildArmada(
+      threads,
+      projects,
+      registryOf(["cap"]),
+    ).captains;
     expect(idsOf(captain!.workers)).toEqual(["w"]);
   });
 
@@ -63,21 +80,34 @@ describe("captains and their workers", () => {
       thread("w3", { parentThreadId: "cap", ...blocked }),
       thread("w4", { parentThreadId: "cap" }),
     ];
-    const [captain] = buildArmada(threads, projects, registryOf(["cap"])).captains;
+    const [captain] = buildArmada(
+      threads,
+      projects,
+      registryOf(["cap"]),
+    ).captains;
     expect(captain!.lane).toBe("attention");
     expect(captain!.counts).toEqual({ attention: 1, working: 2 });
   });
 
   it("counts the captain's own state in its lane but not in the worker counts", () => {
-    const threads = [thread("cap", busy), thread("w", { parentThreadId: "cap" })];
-    const [captain] = buildArmada(threads, projects, registryOf(["cap"])).captains;
+    const threads = [
+      thread("cap", busy),
+      thread("w", { parentThreadId: "cap" }),
+    ];
+    const [captain] = buildArmada(
+      threads,
+      projects,
+      registryOf(["cap"]),
+    ).captains;
     expect(captain!.lane).toBe("working");
     expect(captain!.counts).toEqual({ attention: 0, working: 0 });
   });
 
   it("has no lane while everything is idle", () => {
     const threads = [thread("cap"), thread("w", { parentThreadId: "cap" })];
-    expect(buildArmada(threads, projects, registryOf(["cap"])).captains[0]!.lane).toBeNull();
+    expect(
+      buildArmada(threads, projects, registryOf(["cap"])).captains[0]!.lane,
+    ).toBeNull();
   });
 
   it("ignores records whose thread is gone, archived or hidden", () => {
@@ -85,7 +115,11 @@ describe("captains and their workers", () => {
       thread("archived", { isArchived: true, archivedAt: NOW }),
       thread("hidden", { isHidden: true }),
     ];
-    const model = buildArmada(threads, projects, registryOf(["missing"], ["archived"], ["hidden"]));
+    const model = buildArmada(
+      threads,
+      projects,
+      registryOf(["missing"], ["archived"], ["hidden"]),
+    );
     expect(model.captains).toEqual([]);
     expect(model.groups).toEqual([]);
   });
@@ -93,11 +127,19 @@ describe("captains and their workers", () => {
   it("skips archived and hidden workers", () => {
     const threads = [
       thread("cap"),
-      thread("gone", { parentThreadId: "cap", isArchived: true, archivedAt: NOW }),
+      thread("gone", {
+        parentThreadId: "cap",
+        isArchived: true,
+        archivedAt: NOW,
+      }),
       thread("secret", { parentThreadId: "cap", isHidden: true }),
       thread("w", { parentThreadId: "cap" }),
     ];
-    const [captain] = buildArmada(threads, projects, registryOf(["cap"])).captains;
+    const [captain] = buildArmada(
+      threads,
+      projects,
+      registryOf(["cap"]),
+    ).captains;
     expect(idsOf(captain!.workers)).toEqual(["w"]);
   });
 
@@ -108,11 +150,9 @@ describe("captains and their workers", () => {
       ["early", "2026-01-01T00:00:00.000Z"],
       ["middle", "2026-02-01T00:00:00.000Z"],
     );
-    expect(buildArmada(threads, projects, registry).captains.map((c) => c.thread.id)).toEqual([
-      "early",
-      "middle",
-      "late",
-    ]);
+    expect(
+      buildArmada(threads, projects, registry).captains.map((c) => c.thread.id),
+    ).toEqual(["early", "middle", "late"]);
   });
 
   it("gives a captain under another captain its own entry and keeps its subtree to itself", () => {
@@ -122,7 +162,14 @@ describe("captains and their workers", () => {
       thread("inner-worker", { parentThreadId: "inner" }),
       thread("outer-worker", { parentThreadId: "outer" }),
     ];
-    const model = buildArmada(threads, projects, registryOf(["outer", "2026-01-01T00:00:00.000Z"], ["inner", "2026-02-01T00:00:00.000Z"]));
+    const model = buildArmada(
+      threads,
+      projects,
+      registryOf(
+        ["outer", "2026-01-01T00:00:00.000Z"],
+        ["inner", "2026-02-01T00:00:00.000Z"],
+      ),
+    );
     const [outer, inner] = model.captains;
     expect(idsOf(outer!.workers)).toEqual(["outer-worker"]);
     expect(idsOf(inner!.workers)).toEqual(["inner-worker"]);
@@ -132,12 +179,22 @@ describe("captains and their workers", () => {
 
 describe("project groups", () => {
   it("shows only root threads and folds children into them", () => {
-    const threads = [thread("root"), thread("child", { parentThreadId: "root" }), thread("grandchild", { parentThreadId: "child" })];
-    expect(groupIds(buildArmada(threads, projects, none))).toEqual([["proj_a", ["root"]]]);
+    const threads = [
+      thread("root"),
+      thread("child", { parentThreadId: "root" }),
+      thread("grandchild", { parentThreadId: "child" }),
+    ];
+    expect(groupIds(buildArmada(threads, projects, none))).toEqual([
+      ["proj_a", ["root"]],
+    ]);
   });
 
   it("lifts a root's lane to the most urgent thread in its subtree", () => {
-    const threads = [thread("root"), thread("child", { parentThreadId: "root", ...busy }), thread("deep", { parentThreadId: "child", ...blocked })];
+    const threads = [
+      thread("root"),
+      thread("child", { parentThreadId: "root", ...busy }),
+      thread("deep", { parentThreadId: "child", ...blocked }),
+    ];
     const [group] = buildArmada(threads, projects, none).groups;
     expect(group!.threads[0]!.lane).toBe("attention");
     expect(group!.lane).toBe("attention");
@@ -145,42 +202,77 @@ describe("project groups", () => {
 
   it("treats a thread whose parent is not visible as a root", () => {
     const threads = [thread("orphan", { parentThreadId: "archived-parent" })];
-    expect(groupIds(buildArmada(threads, projects, none))).toEqual([["proj_a", ["orphan"]]]);
+    expect(groupIds(buildArmada(threads, projects, none))).toEqual([
+      ["proj_a", ["orphan"]],
+    ]);
   });
 
   it("orders groups by their latest activity, counting folded children", () => {
     const threads = [
       thread("a-old", { projectId: "proj_a", updatedAt: NOW - 5000 }),
       thread("b-root", { projectId: "proj_b", updatedAt: NOW - 4000 }),
-      thread("a-child", { projectId: "proj_a", parentThreadId: "a-old", updatedAt: NOW - 1000 }),
+      thread("a-child", {
+        projectId: "proj_a",
+        parentThreadId: "a-old",
+        updatedAt: NOW - 1000,
+      }),
     ];
-    expect(buildArmada(threads, projects, none).groups.map((g) => g.project.id)).toEqual(["proj_a", "proj_b"]);
+    expect(
+      buildArmada(threads, projects, none).groups.map((g) => g.project.id),
+    ).toEqual(["proj_a", "proj_b"]);
   });
 
   it("puts pinned threads first in their manual order, then the rest newest first", () => {
     const threads = [
       thread("recent", { updatedAt: NOW - 1000 }),
       thread("older", { updatedAt: NOW - 9000 }),
-      thread("pin-b", { isPinned: true, pinnedAt: NOW, pinSortKey: "b", updatedAt: NOW - 20000 }),
-      thread("pin-a", { isPinned: true, pinnedAt: NOW, pinSortKey: "a", updatedAt: NOW - 30000 }),
+      thread("pin-b", {
+        isPinned: true,
+        pinnedAt: NOW,
+        pinSortKey: "b",
+        updatedAt: NOW - 20000,
+      }),
+      thread("pin-a", {
+        isPinned: true,
+        pinnedAt: NOW,
+        pinSortKey: "a",
+        updatedAt: NOW - 30000,
+      }),
     ];
-    expect(groupIds(buildArmada(threads, projects, none))).toEqual([["proj_a", ["pin-a", "pin-b", "recent", "older"]]]);
+    expect(groupIds(buildArmada(threads, projects, none))).toEqual([
+      ["proj_a", ["pin-a", "pin-b", "recent", "older"]],
+    ]);
   });
 
   it("skips hidden and archived threads", () => {
-    const threads = [thread("shown"), thread("hidden", { isHidden: true }), thread("archived", { isArchived: true, archivedAt: NOW })];
-    expect(groupIds(buildArmada(threads, projects, none))).toEqual([["proj_a", ["shown"]]]);
+    const threads = [
+      thread("shown"),
+      thread("hidden", { isHidden: true }),
+      thread("archived", { isArchived: true, archivedAt: NOW }),
+    ];
+    expect(groupIds(buildArmada(threads, projects, none))).toEqual([
+      ["proj_a", ["shown"]],
+    ]);
   });
 
   it("still lists a thread whose project is not in the project list", () => {
-    const model = buildArmada([thread("lost", { projectId: "proj_unknown" })], projects, none);
+    const model = buildArmada(
+      [thread("lost", { projectId: "proj_unknown" })],
+      projects,
+      none,
+    );
     expect(model.groups.map((g) => g.project.id)).toEqual(["proj_unknown"]);
     expect(groupIds(model)).toEqual([["proj_unknown", ["lost"]]]);
   });
 
   it("still lists every thread when parents form a loop", () => {
-    const threads = [thread("a", { parentThreadId: "b" }), thread("b", { parentThreadId: "a" })];
-    const listed = buildArmada(threads, projects, none).groups.flatMap((g) => g.threads.map((entry) => entry.thread.id));
+    const threads = [
+      thread("a", { parentThreadId: "b" }),
+      thread("b", { parentThreadId: "a" }),
+    ];
+    const listed = buildArmada(threads, projects, none).groups.flatMap((g) =>
+      g.threads.map((entry) => entry.thread.id),
+    );
     expect(listed.sort()).toEqual(["a", "b"]);
   });
 });

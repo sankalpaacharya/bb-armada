@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { EMPTY_REGISTRY, type CaptainRecord, type CaptainRegistry } from "./captains";
+import {
+  EMPTY_REGISTRY,
+  type CaptainRecord,
+  type CaptainRegistry,
+} from "./captains";
 import { COLOR_IDS, DEFAULT_COLOR } from "./colors";
 import { DEFAULT_LOGO, LOGOS } from "./logos";
 
@@ -31,7 +35,8 @@ export function parseRegistry(raw: unknown): CaptainRegistry {
   const captains: CaptainRegistry["captains"] = {};
   for (const [threadId, candidate] of Object.entries(stored.data.captains)) {
     const record = storedRecordSchema.safeParse(candidate);
-    if (record.success && record.data.threadId === threadId) captains[threadId] = record.data;
+    if (record.success && record.data.threadId === threadId)
+      captains[threadId] = record.data;
   }
   return { version: 1, captains };
 }

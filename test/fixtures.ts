@@ -1,8 +1,14 @@
-import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type {
+  PluginSidebarProject,
+  PluginSidebarThread,
+} from "@get-bb/plugin-sdk/app";
 
 export const NOW = new Date(2026, 9, 1, 15, 0).getTime();
 
-export function thread(id: string, overrides: Partial<PluginSidebarThread> = {}): PluginSidebarThread {
+export function thread(
+  id: string,
+  overrides: Partial<PluginSidebarThread> = {},
+): PluginSidebarThread {
   return {
     id,
     projectId: "proj_a",
@@ -21,7 +27,13 @@ export function thread(id: string, overrides: Partial<PluginSidebarThread> = {})
     runtimeStatus: "idle",
     queuedWork: "none",
     hasPendingInteraction: false,
-    activity: { workflows: 0, backgroundAgents: 0, backgroundCommands: 0, planMode: 0, goals: 0 },
+    activity: {
+      workflows: 0,
+      backgroundAgents: 0,
+      backgroundCommands: 0,
+      planMode: 0,
+      goals: 0,
+    },
     indicator: "none",
     indicatorLabel: null,
     isUnread: false,
@@ -42,6 +54,16 @@ export function thread(id: string, overrides: Partial<PluginSidebarThread> = {})
   } as PluginSidebarThread;
 }
 
-export function project(id: string, name: string, isPersonal = false): PluginSidebarProject {
-  return { id, name, isPersonal, href: `/projects/${id}`, settingsHref: `/projects/${id}/settings` };
+export function project(
+  id: string,
+  name: string,
+  isPersonal = false,
+): PluginSidebarProject {
+  return {
+    id,
+    name,
+    isPersonal,
+    href: `/projects/${id}`,
+    settingsHref: `/projects/${id}/settings`,
+  };
 }
