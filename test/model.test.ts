@@ -1,7 +1,7 @@
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { describe, expect, it } from "vitest";
 
-import { avatarFromSeed, type CaptainRecord } from "../lib/captains";
+import type { CaptainRecord } from "../lib/captains";
 import type { ParkRecord } from "../lib/lifecycle";
 import { buildArmada, type ThreadEntry } from "../lib/model";
 import { NOW, project, settledAt, snoozedUntil, thread } from "./fixtures";
@@ -21,7 +21,7 @@ function registryOf(
 ): CaptainRecord[] {
   return ids.map(([id, createdAt = "2026-01-01T00:00:00.000Z"]) => ({
     threadId: id,
-    avatar: avatarFromSeed(id),
+    avatar: { style: "micah", seed: id },
     createdAt,
   }));
 }
@@ -38,7 +38,7 @@ describe("captains and their workers", () => {
   const badge = (id: string, name = id) => ({
     threadId: id,
     name,
-    avatar: avatarFromSeed(id),
+    avatar: { style: "micah", seed: id },
   });
 
   it("lists a captain's children in Threads as cards carrying their captain", () => {

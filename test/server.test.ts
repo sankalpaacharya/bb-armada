@@ -3,11 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import plugin from "../server";
 import {
-  AVATAR_BACKGROUNDS,
-  avatarFromSeed,
   LEGACY_CAPTAINS_BACKUP_KEY,
   LEGACY_CAPTAINS_KEY,
-  PORTRAIT_COUNT,
   type CaptainRecord,
 } from "../lib/captains";
 import type { ParkRecord } from "../lib/lifecycle";
@@ -39,7 +36,7 @@ async function load(options: { seed?: (kv: Kv) => Promise<void> } = {}) {
 
 type Kv = ReturnType<typeof createFakePluginHost>["bb"]["storage"]["kv"];
 
-const avatar = (seed: string) => avatarFromSeed(seed);
+const avatar = (seed: string) => ({ style: "micah", seed });
 const adopt = (
   threadId: string,
   seed = "one",
@@ -255,9 +252,9 @@ describe("captain records", () => {
     expect(await ids()).toEqual(["a", "b", "c", "d"]);
   });
 
-  it("rejects an avatar style it does not draw, the retired DiceBear ones included", async () => {
+  it("rejects an avatar style it does not draw, the retired adventurer included", async () => {
     const { harness } = await load();
-    for (const style of ["pixel-art", "adventurer", "micah"]) {
+    for (const style of ["pixel-art", "adventurer"]) {
       await expect(
         harness.callRpc("captains_adopt", {
           threadId: "thr_x",
@@ -267,48 +264,40 @@ describe("captain records", () => {
     }
   });
 
-  it("reads a stored DiceBear avatar as the portrait its seed picks", async () => {
+  it("reads a stored adventurer avatar as micah with the same seed", async () => {
     const { list } = await load({
-      seed: async (kv) => {
-        await kv.set("captain:old", {
+      seed: (kv) =>
+        kv.set("captain:old", {
           threadId: "old",
           avatar: { style: "adventurer", seed: "thr_xi84gbn3wi" },
           createdAt: "2026-01-01T00:00:00.000Z",
-        });
-        await kv.set("captain:mid", {
-          threadId: "mid",
-          avatar: { style: "micah", seed: "k3v9q0zz1a" },
-          createdAt: "2026-01-01T00:00:00.000Z",
-        });
-      },
+        }),
     });
-    expect(await list()).toEqual(
-      expect.arrayContaining([
-        {
-          threadId: "old",
-          avatar: avatar("thr_xi84gbn3wi"),
-          createdAt: "2026-01-01T00:00:00.000Z",
-        },
-        {
-          threadId: "mid",
-          avatar: avatar("k3v9q0zz1a"),
-          createdAt: "2026-01-01T00:00:00.000Z",
-        },
-      ]),
-    );
+    expect(await list()).toEqual([
+      {
+        threadId: "old",
+        avatar: avatar("thr_xi84gbn3wi"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
   });
 
-  it("picks portraits from seeds the same way every time, across every character and background", () => {
-    expect(avatarFromSeed("thr_abc")).toEqual(avatarFromSeed("thr_abc"));
-    const picked = Array.from({ length: 400 }, (_, index) =>
-      avatarFromSeed(`thr_${index}`),
-    );
-    expect(new Set(picked.map((one) => one.character)).size).toBe(
-      PORTRAIT_COUNT,
-    );
-    expect(new Set(picked.map((one) => one.background)).size).toBe(
-      AVATAR_BACKGROUNDS.length,
-    );
+  it("reads a stored anime portrait as micah seeded by its thread", async () => {
+    const { list } = await load({
+      seed: (kv) =>
+        kv.set("captain:pal", {
+          threadId: "pal",
+          avatar: { style: "anime", character: 3, background: 5 },
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
+    });
+    expect(await list()).toEqual([
+      {
+        threadId: "pal",
+        avatar: avatar("pal"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
   });
 
   it("gives a logo-and-colour record an avatar seeded by its thread, and skips a record it cannot read, with a log line", async () => {
@@ -683,7 +672,7 @@ describe("auto-settle", () => {
       seed: async (kv) => {
         await kv.set("captain:cap", {
           threadId: "cap",
-          avatar: avatar("cap"),
+          avatar: { style: "micah", seed: "cap" },
           createdAt: "2026-01-01T00:00:00.000Z",
         });
       },

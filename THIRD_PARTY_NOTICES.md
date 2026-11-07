@@ -45,12 +45,18 @@ line and pull request colours), the hover park buttons in
 
 Source: <https://github.com/SawyerHood/sawyer-plugins/tree/main/plugins/t3sidebar>
 
-## Captain portraits
+## DiceBear and the Micah style
 
-The portraits in `assets/avatars/` are original characters made for Armada
-with OpenAI's GPT Image 2 (through fal). Their backgrounds were removed with
-Bria RMBG 2.0 (through fal). They are not drawn from any existing anime or
-character.
+Captain avatars are generated with `@dicebear/core` and `@dicebear/micah`.
+
+DiceBear code: MIT License, Copyright (c) 2024 Florian Körner.
+Source: <https://github.com/dicebear/dicebear>
+
+Design "Avatar Illustration System" by Micah Lanier, licensed under CC BY 4.0.
+Remix of the original.
+Source: <https://www.figma.com/community/file/829741575478342595>
+Homepage: <https://dribbble.com/micahlanier>
+License: <https://creativecommons.org/licenses/by/4.0/>
 
 ## Hugeicons
 

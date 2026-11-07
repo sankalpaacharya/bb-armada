@@ -17,13 +17,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { nextCharacter, randomAvatar } from "@/lib/avatar";
+import { randomAvatar } from "@/lib/avatar";
 import { captainTitle } from "@/lib/captain-text";
-import {
-  AVATAR_BACKGROUNDS,
-  type Avatar,
-  type CaptainRecord,
-} from "@/lib/captains";
+import type { Avatar, CaptainRecord } from "@/lib/captains";
 import { rpcContract } from "@/lib/rpc";
 import { FOCUS_RING } from "@/lib/styles";
 import { toastFailure } from "@/lib/toast";
@@ -170,9 +166,7 @@ export function CaptainDialog({
   const trimmedName = name.trim();
   const renamed = currentTitle !== null && trimmedName !== currentTitle;
   const avatarChanged =
-    state.kind === "edit" &&
-    (avatar.character !== state.record.avatar.character ||
-      avatar.background !== state.record.avatar.background);
+    state.kind === "edit" && avatar.seed !== state.record.avatar.seed;
   const canSubmit =
     trimmedName !== "" &&
     (state.kind === "create"
@@ -261,12 +255,12 @@ export function CaptainDialog({
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-4 rounded-lg bg-accent/50 p-3">
+        <div className="flex items-center gap-3 rounded-lg bg-accent/50 p-3">
           <button
             type="button"
-            aria-label="New character"
-            title="New character"
-            onClick={() => setAvatar(nextCharacter(avatar))}
+            aria-label="New avatar"
+            title="New avatar"
+            onClick={() => setAvatar(randomAvatar())}
             className={cn(
               "group/avatar relative shrink-0 cursor-pointer rounded-[10px]",
               FOCUS_RING,
@@ -280,13 +274,9 @@ export function CaptainDialog({
               <Icon name="RotateCcw" className="size-3" />
             </span>
           </button>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <span className="truncate text-sm font-medium">{name}</span>
-            <BackgroundPicker
-              value={avatar.background}
-              onChange={(background) => setAvatar({ ...avatar, background })}
-            />
-          </div>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {name}
+          </span>
         </div>
         <Field label="Name" htmlFor={nameId}>
           <input
@@ -365,57 +355,5 @@ export function CaptainDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function BackgroundPicker({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (background: number) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Background"
-      className="flex gap-1.5"
-      onKeyDown={(event) => {
-        const step =
-          event.key === "ArrowRight" || event.key === "ArrowDown"
-            ? 1
-            : event.key === "ArrowLeft" || event.key === "ArrowUp"
-              ? -1
-              : 0;
-        if (step === 0) return;
-        event.preventDefault();
-        const next =
-          (value + step + AVATAR_BACKGROUNDS.length) % AVATAR_BACKGROUNDS.length;
-        onChange(next);
-        const radios =
-          event.currentTarget.querySelectorAll<HTMLElement>("[role=radio]");
-        radios[next]?.focus();
-      }}
-    >
-      {AVATAR_BACKGROUNDS.map((background, index) => (
-        <button
-          key={background.name}
-          type="button"
-          role="radio"
-          aria-checked={index === value}
-          tabIndex={index === value ? 0 : -1}
-          aria-label={background.name}
-          title={background.name}
-          onClick={() => onChange(index)}
-          style={{ backgroundColor: background.color }}
-          className={cn(
-            "size-4 cursor-pointer rounded-full ring-1 ring-black/10 ring-inset outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring",
-            index === value
-              ? "outline-2 outline-foreground/70"
-              : "hover:outline-1 hover:outline-foreground/30",
-          )}
-        />
-      ))}
-    </div>
   );
 }

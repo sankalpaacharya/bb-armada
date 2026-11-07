@@ -12,7 +12,7 @@ can filter by project, and quiet shelves for what you have settled or snoozed.
   many of its threads are working, need you or failed. Sub-threads fold into their parent, which takes on
   the most urgent status among them. Pick a project to see only its threads.
 - **One click to start.** The **+** next to Captains asks for a name (the
-  project's, unless you type one), a project and an avatar (roll the character, pick the background), then starts a captain thread that sets up
+  project's, unless you type one), a project and an avatar (shuffle until one fits), then starts a captain thread that sets up
   its own notes file.
 - **Settle and snooze.** Hover a finished card for **Settle** and **Snooze until
   tomorrow**, or right-click for the snooze presets. Settled and snoozed

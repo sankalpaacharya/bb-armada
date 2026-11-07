@@ -13,10 +13,9 @@ snoozed onto quiet shelves below it.
 ## How it works
 
 The server keeps one KV record per captain at `captain:<threadId>`: the thread
-id, an avatar (`{ style: "anime", character, background }`), and when it was
-made. A record from before avatars, with a logo and colour, gets the portrait
-and background its thread id picks, and a stored DiceBear avatar (Adventurer
-or Micah) gets the ones its seed picks (`avatarFromSeed`). `captains_list` declares the
+id, an avatar (`{ style: "micah", seed }`), and when it was made. A record
+from before avatars, with a logo and colour, reads as a Micah avatar seeded by
+its thread id, and a stored Adventurer avatar reads as Micah with the same seed. `captains_list` declares the
 `captains` tag and every write calls `bb.rpc.experimental_invalidate`, so the
 sidebar reads through `experimental_useRpcQuery` and refreshes on each write,
 on reconnect, and from any client. Records that cannot be parsed are skipped
@@ -103,15 +102,13 @@ RPC, and `armada/captain-toggles`, from when workers nested in the deck.
 
 ## Avatars
 
-Captain avatars are ten original anime portraits with transparent
-backgrounds, drawn on one of six pastel backgrounds. The record stores the two
-separately, so either can change without the other. The portraits live in
-`assets/avatars/` as 128px WebP; `node scripts/embed-portraits.mjs` writes them
-into `lib/portraits.ts` as data URIs, so the app bundle carries them and the
-server bundle does not. `CaptainTile` is the one owner of avatar rendering: a
-decorative `<img alt="">` on the background colour, in a rounded-square tile.
-In the dialog, clicking the avatar rolls a different character, and the
-swatches beside it pick the background.
+Captain avatars are DiceBear's **Micah** style on a solid pastel background picked by the seed, generated
+locally by `@dicebear/core` and `@dicebear/micah` from the record's seed
+(`lib/avatar.ts`, memoised per style and seed, no network). `CaptainTile` is
+the one owner of avatar rendering: a decorative `<img alt="">` inside a
+rounded-square tile. In the dialog, clicking the avatar rolls a new seed. A
+stored anime avatar from the retired portrait set reads as Micah seeded by its
+thread id.
 
 ## Crew tab
 
@@ -119,13 +116,14 @@ The thread side panel's New tab lists **Crew** under Actions. It shows the
 open thread's captain (the thread itself, or the nearest captain above it) and
 that captain's workers, split into Active, Inactive and Settled like the
 sidebar shelves, each with its status, title, PR, age and where it runs.
-Clicking a row opens that thread. On a thread no captain launched, it lists
-the captains to pick one. It reads the same model as the sidebar through
+Clicking a row opens that thread. On a thread no captain launched it opens
+the newest captain of the thread's project, and only when the project has no
+captain does it list the captains to pick one. It reads the same model as the sidebar through
 `useArmadaModel`.
 
 ## Design
 
-Captains sit flat on the sidebar, one row each: a 28px portrait, the
+Captains sit flat on the sidebar, one row each: a 28px Micah avatar, the
 name, and a one-line summary of the captain's tree ("2 working" in the
 working tone, "1 needs you" in the attention tone, else "Idle") with the
 shade grid at the right while working. "1 failed" shows in the failure tone,

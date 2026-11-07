@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { avatarFromSeed } from "../lib/captains";
 import { captainIdOf, crewOf } from "../lib/crew";
 import { buildArmada } from "../lib/model";
 import { NOW, project, settledAt, thread } from "./fixtures";
 
 const record = (id: string) => ({
   threadId: id,
-  avatar: avatarFromSeed(id),
+  avatar: { style: "micah" as const, seed: id },
   createdAt: "2026-01-01T00:00:00.000Z",
 });
 
