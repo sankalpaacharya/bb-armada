@@ -18,13 +18,14 @@ const threads = [
   thread("old", { parentThreadId: "cap", updatedAt: NOW - 30 * 3_600_000, createdAt: NOW - 30 * 3_600_000 }),
   thread("sub", { parentThreadId: "busy" }),
   thread("solo"),
-  thread("other", { title: "personal" }),
-  thread("theirs", { parentThreadId: "other" }),
+  thread("other", { title: "personal", projectId: "proj_b" }),
+  thread("theirs", { parentThreadId: "other", projectId: "proj_b" }),
+  thread("loose", { projectId: "proj_c" }),
 ];
 
 const model = buildArmada(
   threads,
-  [project("proj_a", "Alpha")],
+  [project("proj_a", "Alpha"), project("proj_b", "Beta"), project("proj_c", "Gamma")],
   [record("cap"), record("other")],
   [settledAt("done", NOW - 1000)],
   NOW,
@@ -39,8 +40,12 @@ describe("a thread's captain", () => {
     expect(captainIdOf(model, threads, "theirs")).toBe("other");
   });
 
-  it("is missing for a thread no captain launched, or one that is gone", () => {
-    expect(captainIdOf(model, threads, "solo")).toBeNull();
+  it("falls back to the captain of the thread's project when no captain launched it", () => {
+    expect(captainIdOf(model, threads, "solo")).toBe("cap");
+  });
+
+  it("is missing for a thread in a project with no captain, or one that is gone", () => {
+    expect(captainIdOf(model, threads, "loose")).toBeNull();
     expect(captainIdOf(model, threads, "nope")).toBeNull();
   });
 });
