@@ -67,7 +67,7 @@ export default async function plugin(bb: BbPluginApi) {
     captains_list: () =>
       listRecords(kv, CAPTAIN_KEY_PREFIX, parseStoredCaptain, bb.log.warn),
 
-    captains_create: async ({ projectId, projectName, logo, color }) => {
+    captains_create: async ({ projectId, projectName, avatar }) => {
       const thread = await bb.sdk.threads.spawn({
         projectId,
         environment: { type: "project-default" },
@@ -76,8 +76,7 @@ export default async function plugin(bb: BbPluginApi) {
       });
       const record: CaptainRecord = {
         threadId: thread.id,
-        logo,
-        color,
+        avatar,
         createdAt: new Date().toISOString(),
       };
       let failure: unknown;
@@ -94,21 +93,17 @@ export default async function plugin(bb: BbPluginApi) {
       );
     },
 
-    captains_adopt: async ({ threadId, logo, color }) => {
+    captains_adopt: async ({ threadId, avatar }) => {
       const createdAt =
         (await findCaptain(threadId))?.createdAt ?? new Date().toISOString();
-      return saveCaptain({ threadId, logo, color, createdAt });
+      return saveCaptain({ threadId, avatar, createdAt });
     },
 
-    captains_update: async ({ threadId, logo, color }) => {
+    captains_update: async ({ threadId, avatar }) => {
       const current = await findCaptain(threadId);
       if (current === null)
         throw new Error(`Thread ${threadId} is not a captain`);
-      return saveCaptain({
-        ...current,
-        logo: logo ?? current.logo,
-        color: color ?? current.color,
-      });
+      return saveCaptain({ ...current, avatar });
     },
 
     captains_remove: async ({ threadId }) => {

@@ -53,7 +53,7 @@ export function CaptainRow({
                 TILE_COLUMN,
               )}
             >
-              <CaptainTile logo={entry.record.logo} color={entry.record.color} />
+              <CaptainTile avatar={entry.record.avatar} />
             </span>
             <span className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-2">
               {titleNode}

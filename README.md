@@ -13,7 +13,9 @@ onto quiet shelves below it.
 ## How it works
 
 The server keeps one KV record per captain at `captain:<threadId>`: the thread
-id, a logo, a colour, and when it was made. `captains_list` declares the
+id, an avatar (`{ style: "adventurer", seed }`), and when it was made. A record
+from before avatars, with a logo and colour, reads as an Adventurer avatar
+seeded by its thread id. `captains_list` declares the
 `captains` tag and every write calls `bb.rpc.experimental_invalidate`, so the
 sidebar reads through `experimental_useRpcQuery` and refreshes on each write,
 on reconnect, and from any client. Records that cannot be parsed are skipped
@@ -52,16 +54,17 @@ Every row reads from the table through `StatusMark`.
 | method            | input                                       | output         |
 | ----------------- | ------------------------------------------- | -------------- |
 | `captains_list`   | none                                        | captain records |
-| `captains_create` | `projectId`, `projectName`, `logo`, `color` | captain record |
-| `captains_adopt`  | `threadId`, `logo`, `color`                 | captain record |
-| `captains_update` | `threadId`, optional `logo`, `color`        | captain record |
+| `captains_create` | `projectId`, `projectName`, `avatar`        | captain record |
+| `captains_adopt`  | `threadId`, `avatar`                        | captain record |
+| `captains_update` | `threadId`, `avatar`                        | captain record |
 | `captains_remove` | `threadId`                                  | none           |
 | `parks_list`      | none                                        | park records   |
 | `parks_settle`    | `threadId`                                  | park record    |
 | `parks_snooze`    | `threadId`, `until` (must be in the future) | park record    |
 | `parks_unpark`    | `threadId` (idempotent)                     | none           |
 
-`captains_create` spawns a thread titled `🧭 Captain · <project>` whose first
+`captains_create` spawns a thread titled after the project (`cops`, not
+`Captain · cops`; the Captains section already says what it is) whose first
 prompt tells the agent to follow the `/captain` skill and keep notes in
 `~/.bb/captains/<project>.md`. The thread is spawned first and recorded after,
 with three attempts; if recording still fails the error names the thread so
@@ -79,11 +82,14 @@ The sidebar remembers three things in `localStorage`: `armada/thread-scope`
 (the project filter), `armada/captain-toggles` (which captains have their
 workers open) and `armada/shelves` (which shelves are open).
 
-## Logos and colours
+## Avatars
 
-Logos are the icons declared under `bb.branding.experimental_icons` in
-`package.json`; `lib/logos.ts` lists the same names, and a test keeps the two
-in step. Colours are the table in `lib/colors.ts`.
+Captain avatars are DiceBear's **Adventurer** style, generated locally by
+`@dicebear/core` and `@dicebear/adventurer` from the record's seed
+(`lib/avatar.ts`, memoised per style and seed, no network). `CaptainTile` is
+the one owner of avatar rendering: a decorative `<img alt="">` inside a
+rounded-square tile. The dialog offers twelve random seeds, **Shuffle** draws
+twelve more, and picking one stores its seed.
 
 ## Design
 
@@ -114,7 +120,7 @@ Then pick **Armada** under Settings, Appearance, Sidebar.
 ```
 app.tsx               registers the thread list
 server.ts             captain records, migration and RPC handlers
-lib/                  model, status table, lifecycle rules, schemas, scope, clock, styles
+lib/                  model, status table, lifecycle rules, schemas, avatar, scope, clock, styles
 hooks/                captains and parks queries, park actions, stored state, arrow-key rows
 components/           sections, shelves, row layouts, ThreadLink, ChoiceList, dialog
 components/ui/        vendored bb components (dialog, button, icon, hooks)

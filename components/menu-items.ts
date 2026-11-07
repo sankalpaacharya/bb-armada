@@ -4,9 +4,7 @@ import {
 } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
-import type { CaptainRecord } from "@/lib/captains";
 import { snoozePresets, type Shelf } from "@/lib/lifecycle";
-import { DEFAULT_LOGO, logoIcon } from "@/lib/logos";
 import type { ThreadEntry } from "@/lib/model";
 import { canPark } from "@/lib/status";
 
@@ -16,26 +14,22 @@ export function makeCaptainItem(
   return {
     key: "make-captain",
     group: GROUPS.organize,
-    action: {
-      label: "Make captain…",
-      icon: logoIcon(DEFAULT_LOGO),
-      run: onSelect,
-    },
+    action: { label: "Make captain…", icon: "Compass", run: onSelect },
   };
 }
 
-export function captainItems(
-  record: CaptainRecord,
-  actions: { changeLogo: () => void; remove: () => void },
-): PluginThreadActionsInlineItem[] {
+export function captainItems(actions: {
+  changeAvatar: () => void;
+  remove: () => void;
+}): PluginThreadActionsInlineItem[] {
   return [
     {
-      key: "change-logo",
+      key: "change-avatar",
       group: GROUPS.organize,
       action: {
-        label: "Change logo…",
-        icon: logoIcon(record.logo),
-        run: actions.changeLogo,
+        label: "Change avatar…",
+        icon: "UserCircle",
+        run: actions.changeAvatar,
       },
     },
     {

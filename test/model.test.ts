@@ -20,8 +20,7 @@ function registryOf(
 ): CaptainRecord[] {
   return ids.map(([id, createdAt = "2026-01-01T00:00:00.000Z"]) => ({
     threadId: id,
-    logo: "compass",
-    color: "indigo",
+    avatar: { style: "adventurer", seed: id },
     createdAt,
   }));
 }

@@ -7,7 +7,7 @@ export default definePluginApp((app) => {
     id: "armada",
     title: "Armada",
     description:
-      "Captain threads with their workers nested under them, and every other thread grouped by project.",
+      "Captain threads with their workers nested under them, every other thread in one list you can filter by project, and shelves for what you settle or snooze.",
     component: ArmadaList,
   });
 });

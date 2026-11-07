@@ -16,13 +16,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { captainTitle, withoutLeadingEmoji } from "@/lib/captain-text";
-import type { CaptainRecord } from "@/lib/captains";
-import { COLORS, DEFAULT_COLOR, type ColorId } from "@/lib/colors";
-import { DEFAULT_LOGO, LOGOS, logoIcon, type LogoId } from "@/lib/logos";
+import { randomAvatar } from "@/lib/avatar";
+import { captainTitle } from "@/lib/captain-text";
+import type { Avatar, CaptainRecord } from "@/lib/captains";
 import { rpcContract } from "@/lib/rpc";
 import { toastFailure } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
 import { ChoiceList } from "./choice-list";
 
@@ -31,13 +29,7 @@ export type CaptainDialogState =
   | { kind: "adopt"; thread: PluginSidebarThread }
   | { kind: "edit"; thread: PluginSidebarThread; record: CaptainRecord };
 
-type CaptainDialogProps = {
-  state: CaptainDialogState;
-  projects: readonly PluginSidebarProject[];
-  activeProjectId: string | null;
-  onClose: () => void;
-  onNavigate: () => void;
-};
+const OFFERED = 12;
 
 function startingProject(
   projects: readonly PluginSidebarProject[],
@@ -47,77 +39,18 @@ function startingProject(
   return (active ?? projects[0])?.id ?? "";
 }
 
+/** A fresh set of offers, with the current avatar kept first so it can be picked again. */
+function offerAvatars(keep: Avatar | null): Avatar[] {
+  const offers = Array.from({ length: OFFERED }, randomAvatar);
+  if (keep !== null) offers[0] = keep;
+  return offers;
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-1.5">
       <span className="text-sm text-muted-foreground">{label}</span>
       {children}
-    </div>
-  );
-}
-
-function LogoGrid({
-  value,
-  onChange,
-}: {
-  value: LogoId;
-  onChange: (logo: LogoId) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-label="Logo" className="grid grid-cols-8 gap-1">
-      {LOGOS.map((logo) => (
-        <button
-          key={logo}
-          type="button"
-          role="radio"
-          aria-checked={logo === value}
-          aria-label={logo.replace("-", " ")}
-          title={logo.replace("-", " ")}
-          onClick={() => onChange(logo)}
-          className={cn(
-            "grid aspect-square cursor-pointer place-items-center rounded-[7px] outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            logo === value
-              ? "bg-accent text-foreground ring-1 ring-foreground/40"
-              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-          )}
-        >
-          <Icon name={logoIcon(logo)} className="size-[18px]" />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ColorSwatches({
-  value,
-  onChange,
-}: {
-  value: ColorId;
-  onChange: (color: ColorId) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-label="Colour" className="flex flex-wrap gap-2">
-      {COLORS.map((color) => (
-        <button
-          key={color.id}
-          type="button"
-          role="radio"
-          aria-checked={color.id === value}
-          aria-label={color.label}
-          title={color.label}
-          onClick={() => onChange(color.id)}
-          className={cn(
-            "grid size-6 cursor-pointer place-items-center rounded-md text-white outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            color.className,
-            color.id === value &&
-              "ring-2 ring-foreground/70 ring-offset-2 ring-offset-background",
-          )}
-        >
-          {color.id === value ? (
-            <Icon name="Check" className="size-3.5" />
-          ) : null}
-        </button>
-      ))}
     </div>
   );
 }
@@ -135,7 +68,7 @@ const COPY = {
     description: "Pin this thread to the top as the captain of its project.",
   },
   edit: {
-    title: "Change logo",
+    title: "Change avatar",
     action: "Save",
     description: "Pick how this captain looks in the sidebar.",
   },
@@ -147,7 +80,13 @@ export function CaptainDialog({
   activeProjectId,
   onClose,
   onNavigate,
-}: CaptainDialogProps) {
+}: {
+  state: CaptainDialogState;
+  projects: readonly PluginSidebarProject[];
+  activeProjectId: string | null;
+  onClose: () => void;
+  onNavigate: () => void;
+}) {
   const create = experimental_useRpcMutation({
     contract: rpcContract,
     method: "captains_create",
@@ -163,19 +102,16 @@ export function CaptainDialog({
       cache.update("captains_list", null, (current) =>
         current.map((record) =>
           record.threadId === input.threadId
-            ? {
-                ...record,
-                logo: input.logo ?? record.logo,
-                color: input.color ?? record.color,
-              }
+            ? { ...record, avatar: input.avatar }
             : record,
         ),
       ),
   });
   const navigate = useBbNavigate();
-  const initial = state.kind === "edit" ? state.record : null;
-  const [logo, setLogo] = useState<LogoId>(initial?.logo ?? DEFAULT_LOGO);
-  const [color, setColor] = useState<ColorId>(initial?.color ?? DEFAULT_COLOR);
+  const [offers, setOffers] = useState(() =>
+    offerAvatars(state.kind === "edit" ? state.record.avatar : null),
+  );
+  const [avatar, setAvatar] = useState<Avatar>(() => offers[0]!);
   const [projectId, setProjectId] = useState(() =>
     startingProject(projects, activeProjectId),
   );
@@ -187,8 +123,14 @@ export function CaptainDialog({
     state.kind === "create"
       ? project === undefined
         ? "Choose a project"
-        : withoutLeadingEmoji(captainTitle(project.name))
-      : withoutLeadingEmoji(state.thread.displayTitle);
+        : captainTitle(project.name)
+      : state.thread.displayTitle;
+
+  const shuffle = () => {
+    const next = offerAvatars(null);
+    setOffers(next);
+    setAvatar(next[0]!);
+  };
 
   const submit = async () => {
     if (pending || !canSubmit) return;
@@ -198,15 +140,14 @@ export function CaptainDialog({
         const created = await create.mutate({
           projectId: project.id,
           projectName: project.name,
-          logo,
-          color,
+          avatar,
         });
         navigate.toThread(created.threadId);
         onNavigate();
       } else if (state.kind === "adopt") {
-        await adopt.mutate({ threadId: state.thread.id, logo, color });
+        await adopt.mutate({ threadId: state.thread.id, avatar });
       } else if (state.kind === "edit") {
-        await update.mutate({ threadId: state.thread.id, logo, color });
+        await update.mutate({ threadId: state.thread.id, avatar });
       }
       onClose();
     } catch (cause) {
@@ -226,7 +167,7 @@ export function CaptainDialog({
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-3 rounded-lg bg-accent/50 p-3">
-          <CaptainTile logo={logo} color={color} size="preview" />
+          <CaptainTile avatar={avatar} size="preview" />
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {previewTitle}
           </span>
@@ -245,11 +186,36 @@ export function CaptainDialog({
             />
           </Field>
         ) : null}
-        <Field label="Logo">
-          <LogoGrid value={logo} onChange={setLogo} />
-        </Field>
-        <Field label="Colour">
-          <ColorSwatches value={color} onChange={setColor} />
+        <Field label="Avatar">
+          <ChoiceList
+            label="Avatar"
+            choices={offers.map((offer, index) => ({
+              id: offer.seed,
+              label: `Avatar ${index + 1}`,
+            }))}
+            value={avatar.seed}
+            onChange={(seed) =>
+              setAvatar(offers.find((offer) => offer.seed === seed) ?? avatar)
+            }
+            className="grid grid-cols-6 gap-1"
+            renderChoice={(choice, selected) => (
+              <CaptainTile
+                avatar={{ style: "adventurer", seed: choice.id }}
+                size="preview"
+                className={selected ? "ring-2 ring-ring" : undefined}
+              />
+            )}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="justify-self-start"
+            onClick={shuffle}
+          >
+            <Icon name="Shuffle" />
+            Shuffle
+          </Button>
         </Field>
         <DialogFooter>
           <Button

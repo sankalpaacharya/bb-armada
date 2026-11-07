@@ -1,34 +1,27 @@
-import { Icon } from "@/components/ui/icon";
-import { colorClass, type ColorId } from "@/lib/colors";
-import { logoIcon, type LogoId } from "@/lib/logos";
+import { avatarDataUri } from "@/lib/avatar";
+import type { Avatar } from "@/lib/captains";
 import { TILE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
+/** The one owner of avatar rendering: a decorative image in a rounded-square tile. */
 export function CaptainTile({
-  logo,
-  color,
+  avatar,
   size = "row",
   className,
 }: {
-  logo: LogoId;
-  color: ColorId;
-  size?: "row" | "preview";
+  avatar: Avatar;
+  size?: keyof typeof TILE;
   className?: string;
 }) {
   return (
     <span
-      aria-hidden="true"
       className={cn(
-        "grid shrink-0 place-items-center text-white",
-        colorClass(color),
+        "block shrink-0 overflow-hidden bg-sidebar-accent",
         TILE[size],
         className,
       )}
     >
-      <Icon
-        name={logoIcon(logo)}
-        className={size === "row" ? "size-3" : "size-6"}
-      />
+      <img alt="" src={avatarDataUri(avatar)} className="size-full" />
     </span>
   );
 }

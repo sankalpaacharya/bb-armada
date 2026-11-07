@@ -1,23 +1,36 @@
 import { z } from "zod";
 
-import { COLOR_IDS, DEFAULT_COLOR } from "./colors";
-import { DEFAULT_LOGO, LOGOS } from "./logos";
-
 export const threadIdSchema = z.string().min(1).max(200);
+
+export const avatarSchema = z.object({
+  style: z.literal("adventurer"),
+  seed: z.string().min(1).max(64),
+});
+
+export type Avatar = z.infer<typeof avatarSchema>;
 
 export const captainRecordSchema = z.object({
   threadId: threadIdSchema,
-  logo: z.enum(LOGOS),
-  color: z.enum(COLOR_IDS),
+  avatar: avatarSchema,
   createdAt: z.string(),
 });
 
 export type CaptainRecord = z.infer<typeof captainRecordSchema>;
 
-const storedCaptainSchema = captainRecordSchema.extend({
-  logo: z.enum(LOGOS).catch(DEFAULT_LOGO),
-  color: z.enum(COLOR_IDS).catch(DEFAULT_COLOR),
-});
+/** Records from before avatars carried a logo and colour; they get an avatar seeded by their thread. */
+const storedCaptainSchema = z
+  .object({
+    threadId: threadIdSchema,
+    avatar: avatarSchema.optional(),
+    createdAt: z.string(),
+  })
+  .transform(
+    ({ threadId, avatar, createdAt }): CaptainRecord => ({
+      threadId,
+      avatar: avatar ?? { style: "adventurer", seed: threadId },
+      createdAt,
+    }),
+  );
 
 export const CAPTAIN_KEY_PREFIX = "captain:";
 export const LEGACY_CAPTAINS_KEY = "captains";

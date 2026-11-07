@@ -4,7 +4,6 @@ import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
 import { useStoredState } from "@/hooks/use-stored-state";
-import { withoutLeadingEmoji } from "@/lib/captain-text";
 import type { CaptainEntry } from "@/lib/model";
 import { rpcContract } from "@/lib/rpc";
 import { isLive } from "@/lib/status";
@@ -86,7 +85,7 @@ export function CaptainsSection({
         <ul aria-label="Captains" className="m-0 flex flex-col gap-px p-0">
           {captains.map((entry) => {
             const { thread, record, workers } = entry;
-            const title = withoutLeadingEmoji(thread.displayTitle);
+            const title = thread.displayTitle;
             const expanded =
               workers.length === 0
                 ? null
@@ -106,8 +105,8 @@ export function CaptainsSection({
                 onToggle={() =>
                   setToggles(pruneToggles(toggles, captains, thread.id, !expanded))
                 }
-                inline={captainItems(record, {
-                  changeLogo: () => onDialog({ kind: "edit", thread, record }),
+                inline={captainItems({
+                  changeAvatar: () => onDialog({ kind: "edit", thread, record }),
                   remove: () =>
                     remove
                       .mutate({ threadId: thread.id })

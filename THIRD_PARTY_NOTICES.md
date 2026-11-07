@@ -45,12 +45,26 @@ line and pull request colours), the hover park buttons in
 
 Source: <https://github.com/SawyerHood/sawyer-plugins/tree/main/plugins/t3sidebar>
 
+## DiceBear and the Adventurer style
+
+Captain avatars are generated with `@dicebear/core` and `@dicebear/adventurer`.
+
+DiceBear code: MIT License, Copyright (c) 2024 Florian Körner.
+Source: <https://github.com/dicebear/dicebear>
+
+Design "Adventurer" by Lisa Wischofsky, licensed under CC BY 4.0. Remix of
+the original.
+Source: <https://www.figma.com/community/file/1184595184137881796>
+Homepage: <https://www.instagram.com/lischi_art/>
+License: <https://creativecommons.org/licenses/by/4.0/>
+
 ## Hugeicons
 
 MIT License, Copyright (c) 2025 Hugeicons.
 
-The captain logos in `assets/icons/` come from `@hugeicons/core-free-icons`,
-the icon family bb draws its own icons with, by way of Chat Sidebar's copies.
+The plugin icon `assets/icons/compass.svg` comes from
+`@hugeicons/core-free-icons`, the icon family bb draws its own icons with, by
+way of Chat Sidebar's copy.
 
 Source: <https://github.com/hugeicons/hugeicons>
 

@@ -42,8 +42,7 @@ const projects = [
 const registry = (...ids: string[]): CaptainRecord[] =>
   ids.map((id) => ({
     threadId: id,
-    logo: "rocket",
-    color: "emerald",
+    avatar: { style: "adventurer", seed: id },
     createdAt: "2026-01-01T00:00:00.000Z",
   }));
 
@@ -143,17 +142,18 @@ describe("Armada thread list", () => {
     ).toEqual(["Captains", "Threads"]);
   });
 
-  it("names the captain without the title's emoji", async () => {
+  it("shows the captain's title as it is, with its avatar as a decorative image in the tile", async () => {
     const { view } = await render({
-      threads: [
-        thread("cap", { title: "🧭 Captain · Alpha", projectId: "proj_a" }),
-      ],
+      threads: [thread("cap", { title: "cops", projectId: "proj_a" })],
     });
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
-    const row = within(rowOf(view.container, "cap")!);
-    expect(row.getByText("Captain · Alpha")).toBeTruthy();
-    expect(row.queryByText(/🧭/)).toBeNull();
-    expect(row.getByRole("link", { name: "Captain · Alpha" })).toBeTruthy();
+    const row = rowOf(view.container, "cap")!;
+    expect(within(row).getByRole("link", { name: "cops" })).toBeTruthy();
+    const image = row.querySelector("img");
+    expect(image?.getAttribute("alt")).toBe("");
+    expect(image?.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
+    expect(image?.parentElement?.className).toContain("rounded-");
+    expect(image?.parentElement?.className).not.toContain("rounded-full");
   });
 
   it("still lists every thread when the captains read fails", async () => {
@@ -449,11 +449,10 @@ describe("Armada thread list", () => {
 });
 
 describe("creating a captain", () => {
-  it("creates it from the dialog with the chosen project, logo and colour, then opens it", async () => {
+  it("creates it from the dialog with the chosen project and avatar, then opens it", async () => {
     const created = {
       threadId: "thr_new",
-      logo: "flag",
-      color: "violet",
+      avatar: { style: "adventurer", seed: "x" },
       createdAt: "2026-02-01T00:00:00.000Z",
     };
     const { view, onNavigate } = await render({
@@ -465,10 +464,24 @@ describe("creating a captain", () => {
     expect(
       dialog.getByRole("option", { name: "Beta" }).getAttribute("aria-selected"),
     ).toBe("true");
-    expect(dialog.getByText("Captain · Beta")).toBeTruthy();
+    const preview = (text: string) =>
+      dialog
+        .getAllByText(text)
+        .filter((element) => element.closest("[role=option]") === null);
+    expect(preview("Beta")).toHaveLength(1);
     fireEvent.click(dialog.getByRole("option", { name: "Alpha" }));
-    fireEvent.click(dialog.getByRole("radio", { name: "flag" }));
-    fireEvent.click(dialog.getByRole("radio", { name: "Violet" }));
+    expect(preview("Alpha")).toHaveLength(1);
+    const avatars = within(dialog.getByRole("listbox", { name: "Avatar" }));
+    const seedsBefore = avatars
+      .getAllByRole("option")
+      .map((option) => option.querySelector("img")?.getAttribute("src"));
+    expect(new Set(seedsBefore).size).toBe(12);
+    fireEvent.click(dialog.getByRole("button", { name: "Shuffle" }));
+    const seedsAfter = avatars
+      .getAllByRole("option")
+      .map((option) => option.querySelector("img")?.getAttribute("src"));
+    expect(seedsAfter).not.toEqual(seedsBefore);
+    fireEvent.click(avatars.getByRole("option", { name: "Avatar 3" }));
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
 
     await waitFor(() =>
@@ -482,8 +495,7 @@ describe("creating a captain", () => {
     ).toEqual({
       projectId: "proj_a",
       projectName: "Alpha",
-      logo: "flag",
-      color: "violet",
+      avatar: { style: "adventurer", seed: expect.stringMatching(/^[a-z0-9]{10}$/) },
     });
     expect(onNavigate).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -492,7 +504,11 @@ describe("creating a captain", () => {
   it("lists personal projects after the others", async () => {
     await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
-    const names = within(await screen.findByRole("dialog"))
+    const names = within(
+      within(await screen.findByRole("dialog")).getByRole("listbox", {
+        name: "Project",
+      }),
+    )
       .getAllByRole("option")
       .map((option) => option.textContent);
     expect(names).toEqual(["Alpha", "Beta", "Personal"]);
@@ -533,7 +549,7 @@ describe("creating a captain", () => {
 describe("thread menu", () => {
   const rightClick = (element: HTMLElement) => fireEvent.contextMenu(element);
 
-  it("offers to make a root thread a captain and adopts it with the picked logo", async () => {
+  it("offers to make a root thread a captain and adopts it with the picked avatar", async () => {
     const { view } = await render();
     await waitFor(() =>
       expect(anchorOf(view.container, "plain")).not.toBeNull(),
@@ -546,18 +562,18 @@ describe("thread menu", () => {
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByText("Loose idea")).toBeTruthy();
     expect(dialog.queryByRole("listbox", { name: "Project" })).toBeNull();
-    fireEvent.click(dialog.getByRole("radio", { name: "crown" }));
+    const picked = dialog.getByRole("option", { name: "Avatar 5" });
+    fireEvent.click(picked);
+    const pickedSrc = picked.querySelector("img")?.getAttribute("src");
     fireEvent.click(dialog.getByRole("button", { name: "Make captain" }));
     await waitFor(() =>
       expect(
         view.inspection.rpcCalls.find(
           (call) => call.method === "captains_adopt",
         )?.input,
-      ).toMatchObject({
-        threadId: "plain",
-        logo: "crown",
-      }),
+      ).toMatchObject({ threadId: "plain", avatar: { style: "adventurer" } }),
     );
+    expect(pickedSrc).toBeTruthy();
   });
 
   it("offers it on a root whose parent is archived", async () => {
@@ -585,7 +601,7 @@ describe("thread menu", () => {
     expect(screen.queryByRole("menuitem", { name: /Make captain/ })).toBeNull();
   });
 
-  it("lets a captain change its logo or be removed without touching the thread", async () => {
+  it("lets a captain change its avatar or be removed without touching the thread", async () => {
     const { view } = await render();
     await waitFor(() => expect(anchorOf(view.container, "cap")).not.toBeNull());
     rightClick(anchorOf(view.container, "cap")!);
@@ -604,23 +620,30 @@ describe("thread menu", () => {
 
     rightClick(anchorOf(view.container, "cap")!);
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Change logo…" }),
+      await screen.findByRole("menuitem", { name: "Change avatar…" }),
     );
     const dialog = within(await screen.findByRole("dialog"));
-    expect(
-      dialog
-        .getByRole("radio", { name: "rocket" })
-        .getAttribute("aria-checked"),
-    ).toBe("true");
-    fireEvent.click(dialog.getByRole("radio", { name: "map" }));
+    const current = dialog.getByRole("option", { name: "Avatar 1" });
+    expect(current.getAttribute("aria-selected")).toBe("true");
+    expect(current.querySelector("img")?.getAttribute("src")).toBe(
+      rowOf(view.container, "cap")!.querySelector("img")?.getAttribute("src"),
+    );
+    fireEvent.click(dialog.getByRole("option", { name: "Avatar 2" }));
     fireEvent.click(dialog.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(
         view.inspection.rpcCalls.find(
           (call) => call.method === "captains_update",
         )?.input,
-      ).toMatchObject({ threadId: "cap", logo: "map" }),
+      ).toMatchObject({ threadId: "cap", avatar: { style: "adventurer" } }),
     );
+    expect(
+      (
+        view.inspection.rpcCalls.find(
+          (call) => call.method === "captains_update",
+        )?.input as { avatar: { seed: string } }
+      ).avatar.seed,
+    ).not.toBe("cap");
   });
 });
 

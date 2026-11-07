@@ -21,11 +21,12 @@ async function load(options: { seed?: (kv: Kv) => Promise<void> } = {}) {
 
 type Kv = ReturnType<typeof createFakePluginHost>["bb"]["storage"]["kv"];
 
-const adopt = (threadId: string, logo = "flag", color = "rose") => ({
+const avatar = (seed: string) => ({ style: "adventurer", seed });
+const adopt = (threadId: string, seed = "one") => ({
   threadId,
-  logo,
-  color,
+  avatar: avatar(seed),
 });
+const create = { projectId: "p", projectName: "P", avatar: avatar("new") };
 
 describe("captain records", () => {
   it("starts empty", async () => {
@@ -36,14 +37,13 @@ describe("captain records", () => {
   it("spawns a captain thread in the project, records it and invalidates the captains read", async () => {
     const { harness, list } = await load();
     const record = (await harness.callRpc("captains_create", {
+      ...create,
       projectId: "proj_a",
       projectName: "Alpha",
-      logo: "rocket",
-      color: "sky",
     })) as CaptainRecord;
     expect(record.threadId).toBe("thr_new");
     expect(await list()).toEqual([
-      expect.objectContaining({ threadId: "thr_new", logo: "rocket" }),
+      expect.objectContaining({ threadId: "thr_new", avatar: avatar("new") }),
     ]);
     expect(harness.experimental_rpcInvalidations).toEqual([["captains"]]);
 
@@ -51,7 +51,7 @@ describe("captain records", () => {
     expect(spawn![0]).toMatchObject({
       projectId: "proj_a",
       environment: { type: "project-default" },
-      title: "🧭 Captain · Alpha",
+      title: "Alpha",
     });
     expect((spawn![0] as { prompt: string }).prompt).toContain(
       "~/.bb/captains/alpha.md",
@@ -63,14 +63,9 @@ describe("captain records", () => {
     harness.sdk.stub("threads.spawn", async () => {
       throw new Error("no host");
     });
-    await expect(
-      harness.callRpc("captains_create", {
-        projectId: "p",
-        projectName: "P",
-        logo: "rocket",
-        color: "sky",
-      }),
-    ).rejects.toThrow("no host");
+    await expect(harness.callRpc("captains_create", create)).rejects.toThrow(
+      "no host",
+    );
     expect(await list()).toEqual([]);
   });
 
@@ -80,26 +75,16 @@ describe("captain records", () => {
     vi.spyOn(bb.storage.kv, "set")
       .mockRejectedValueOnce(new Error("busy"))
       .mockImplementation(set);
-    await harness.callRpc("captains_create", {
-      projectId: "p",
-      projectName: "P",
-      logo: "rocket",
-      color: "sky",
-    });
+    await harness.callRpc("captains_create", create);
     expect(await ids()).toEqual(["thr_new"]);
   });
 
   it("names the spawned thread when it cannot be recorded at all", async () => {
     const { bb, harness, list } = await load();
     vi.spyOn(bb.storage.kv, "set").mockRejectedValue(new Error("disk full"));
-    await expect(
-      harness.callRpc("captains_create", {
-        projectId: "p",
-        projectName: "P",
-        logo: "rocket",
-        color: "sky",
-      }),
-    ).rejects.toThrow(/thr_new.*disk full.*Make captain/);
+    await expect(harness.callRpc("captains_create", create)).rejects.toThrow(
+      /thr_new.*disk full.*Make captain/,
+    );
     expect(await list()).toEqual([]);
   });
 
@@ -107,24 +92,26 @@ describe("captain records", () => {
     const { harness, list } = await load();
     await harness.callRpc("captains_adopt", adopt("thr_x"));
     const [first] = await list();
-    await harness.callRpc("captains_adopt", adopt("thr_x", "crown", "violet"));
+    await harness.callRpc("captains_adopt", adopt("thr_x", "two"));
     expect(await list()).toEqual([
-      { ...first, threadId: "thr_x", logo: "crown", color: "violet" },
+      { ...first, threadId: "thr_x", avatar: avatar("two") },
     ]);
   });
 
-  it("updates only the fields given and refuses a thread that is not a captain", async () => {
+  it("changes the avatar and keeps the date, and refuses a thread that is not a captain", async () => {
     const { harness, list } = await load();
     await harness.callRpc("captains_adopt", adopt("thr_x"));
+    const [first] = await list();
     await harness.callRpc("captains_update", {
       threadId: "thr_x",
-      color: "emerald",
+      avatar: avatar("two"),
     });
-    expect(await list()).toEqual([
-      expect.objectContaining({ logo: "flag", color: "emerald" }),
-    ]);
+    expect(await list()).toEqual([{ ...first, avatar: avatar("two") }]);
     await expect(
-      harness.callRpc("captains_update", { threadId: "nope", logo: "sun" }),
+      harness.callRpc("captains_update", {
+        threadId: "nope",
+        avatar: avatar("x"),
+      }),
     ).rejects.toThrow("not a captain");
   });
 
@@ -140,7 +127,10 @@ describe("captain records", () => {
   it("invalidates the captains read after every write", async () => {
     const { harness } = await load();
     await harness.callRpc("captains_adopt", adopt("thr_x"));
-    await harness.callRpc("captains_update", { threadId: "thr_x", logo: "sun" });
+    await harness.callRpc("captains_update", {
+      threadId: "thr_x",
+      avatar: avatar("two"),
+    });
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
     expect(harness.experimental_rpcInvalidations).toEqual([
       ["captains"],
@@ -159,19 +149,22 @@ describe("captain records", () => {
     expect(await ids()).toEqual(["a", "b", "c", "d"]);
   });
 
-  it("rejects a logo that is not in the registry", async () => {
+  it("rejects an avatar style it does not draw", async () => {
     const { harness } = await load();
     await expect(
-      harness.callRpc("captains_adopt", adopt("thr_x", "not-a-logo")),
+      harness.callRpc("captains_adopt", {
+        threadId: "thr_x",
+        avatar: { style: "pixel-art", seed: "x" },
+      }),
     ).rejects.toThrow();
   });
 
-  it("keeps a captain whose logo was retired and skips a record it cannot read, with a log line", async () => {
+  it("gives a logo-and-colour record an avatar seeded by its thread, and skips a record it cannot read, with a log line", async () => {
     const { harness, list } = await load({
       seed: async (kv) => {
         await kv.set("captain:good", {
           threadId: "good",
-          logo: "retired-logo",
+          logo: "flag",
           color: "rose",
           createdAt: "2026-01-01T00:00:00.000Z",
         });
@@ -179,7 +172,11 @@ describe("captain records", () => {
       },
     });
     expect(await list()).toEqual([
-      expect.objectContaining({ threadId: "good", logo: "compass" }),
+      {
+        threadId: "good",
+        avatar: avatar("good"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
     ]);
     expect(harness.logEntries).toContainEqual({
       level: "warn",
@@ -263,22 +260,29 @@ describe("migration from the single captains key", () => {
     },
   };
 
-  it("moves each record to its own key and deletes the old key", async () => {
+  const migrated = {
+    threadId: "good",
+    avatar: avatar("good"),
+    createdAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  it("moves each record to its own key as an avatar record and deletes the old key", async () => {
     const { bb, list } = await load({
       seed: (kv) => kv.set(LEGACY_CAPTAINS_KEY, legacy),
     });
-    expect(await list()).toEqual([legacy.captains.good]);
+    expect(await list()).toEqual([migrated]);
+    expect(await bb.storage.kv.get("captain:good")).toEqual(migrated);
     expect(await bb.storage.kv.get(LEGACY_CAPTAINS_KEY)).toBeUndefined();
   });
 
   it("converges when a previous run stopped before deleting the old key", async () => {
     const { bb, list } = await load({
       seed: async (kv) => {
-        await kv.set("captain:good", legacy.captains.good);
+        await kv.set("captain:good", migrated);
         await kv.set(LEGACY_CAPTAINS_KEY, legacy);
       },
     });
-    expect(await list()).toEqual([legacy.captains.good]);
+    expect(await list()).toEqual([migrated]);
     expect(await bb.storage.kv.get(LEGACY_CAPTAINS_KEY)).toBeUndefined();
   });
 

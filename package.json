@@ -8,40 +8,16 @@
   },
   "bb": {
     "name": "Armada",
-    "description": "Captain threads with their workers nested underneath, and every other thread grouped by project.",
+    "description": "Captain threads with their workers nested underneath, every other thread in one list you can filter by project, and shelves for what you settle or snooze.",
     "branding": {
-      "icon": "./assets/icons/compass.svg",
-      "experimental_icons": {
-        "airplane": "./assets/icons/airplane.svg",
-        "book": "./assets/icons/book.svg",
-        "briefcase": "./assets/icons/briefcase.svg",
-        "camera": "./assets/icons/camera.svg",
-        "chart-line": "./assets/icons/chart-line.svg",
-        "coins": "./assets/icons/coins.svg",
-        "compass": "./assets/icons/compass.svg",
-        "crown": "./assets/icons/crown.svg",
-        "diamond": "./assets/icons/diamond.svg",
-        "fire": "./assets/icons/fire.svg",
-        "flag": "./assets/icons/flag.svg",
-        "gamepad": "./assets/icons/gamepad.svg",
-        "heart": "./assets/icons/heart.svg",
-        "idea": "./assets/icons/idea.svg",
-        "map": "./assets/icons/map.svg",
-        "mountain": "./assets/icons/mountain.svg",
-        "music": "./assets/icons/music.svg",
-        "paint": "./assets/icons/paint.svg",
-        "plant": "./assets/icons/plant.svg",
-        "rocket": "./assets/icons/rocket.svg",
-        "sun": "./assets/icons/sun.svg",
-        "tent": "./assets/icons/tent.svg",
-        "train": "./assets/icons/train.svg",
-        "trophy": "./assets/icons/trophy.svg"
-      }
+      "icon": "./assets/icons/compass.svg"
     },
     "server": "./server.ts",
     "app": "./app.tsx"
   },
   "dependencies": {
+    "@dicebear/adventurer": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
     "@radix-ui/react-slot": "^1.3.0",
     "zod": "^4.6.5"
   },

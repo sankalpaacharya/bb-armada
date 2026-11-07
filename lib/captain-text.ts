@@ -1,5 +1,6 @@
+/** A captain is named by its project; the Captains section says what it is. */
 export function captainTitle(projectName: string): string {
-  return `🧭 Captain · ${projectName}`;
+  return projectName;
 }
 
 export function captainSlug(projectName: string): string {
@@ -18,12 +19,4 @@ export function captainPrompt(projectName: string): string {
     "If it does not exist, create it from the skill's template using what you can learn quickly from the repo's README, CLAUDE.md/AGENTS.md and recent commits.",
     'Then reply with a 3-line hello: what you understood the project to be, and that the user can now say "hey captain, ..." to give you work.',
   ].join(" ");
-}
-
-const LEADING_EMOJI =
-  /^\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}|\p{Emoji_Modifier})*\s*/u;
-
-export function withoutLeadingEmoji(title: string): string {
-  const stripped = title.replace(LEADING_EMOJI, "");
-  return stripped === "" ? title : stripped;
 }
