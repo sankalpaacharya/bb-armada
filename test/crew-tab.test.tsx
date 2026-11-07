@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 
 import { CrewTab } from "../components/crew-tab";
@@ -29,7 +30,13 @@ const ready = (...paths: string[]): ReadyHome => ({
   needsYou: [],
 });
 
-function renderCrew(home: () => unknown) {
+function renderCrew(
+  home: () => unknown,
+  options: {
+    workers?: PluginSidebarThread[];
+    sdk?: Record<string, unknown>;
+  } = {},
+) {
   const reads: unknown[] = [];
   const view = renderSlot(
     { component: CrewTab },
@@ -42,6 +49,7 @@ function renderCrew(home: () => unknown) {
             title: "cops",
             host: { id: "host_mac", name: "MacBook" },
           }),
+          ...(options.workers ?? []),
         ],
         projects: [project("proj_a", "cops")],
         sections: [],
@@ -61,6 +69,7 @@ function renderCrew(home: () => unknown) {
           return home();
         },
       } as never,
+      sdk: options.sdk as never,
       settings: { inactiveAfterHours: 0 },
     },
   );
@@ -194,5 +203,48 @@ describe("the crew tab's decisions", () => {
     await openMemory();
     await screen.findByText("~/.bb/captains/cops");
     expect(needsYouSection()).toBeNull();
+  });
+});
+
+describe("the crew tab's workers", () => {
+  const workers = [
+    thread("w_fix", { title: "Fix login", parentThreadId: "cap" }),
+    thread("w_owned", {
+      title: "Owned helper",
+      parentThreadId: "cap",
+      lifecycleOwnerThreadId: "cap",
+    }),
+  ];
+  const workerRow = (name: string) =>
+    screen.getByText(name).closest("button")!;
+
+  it("takes a worker out of the crew from its menu, clearing its parent", async () => {
+    const { view } = renderCrew(() => ready(), {
+      workers,
+      sdk: { threads: { update: async () => ({}) } },
+    });
+    await screen.findByText("Fix login");
+    fireEvent.contextMenu(workerRow("Fix login"));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Remove from crew" }),
+    );
+    await waitFor(() =>
+      expect(view.inspection.sdkCalls).toEqual([
+        {
+          method: "threads.update",
+          args: [{ threadId: "w_fix", parentThreadId: null }],
+        },
+      ]),
+    );
+  });
+
+  it("does not offer it for a worker its lifecycle owner would keep in the crew", async () => {
+    renderCrew(() => ready(), { workers });
+    await screen.findByText("Owned helper");
+    fireEvent.contextMenu(workerRow("Owned helper"));
+    await screen.findByRole("menu");
+    expect(
+      screen.queryByRole("menuitem", { name: "Remove from crew" }),
+    ).toBeNull();
   });
 });

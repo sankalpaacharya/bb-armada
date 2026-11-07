@@ -2,13 +2,16 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   ThreadChat,
   ThreadTitle,
+  experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
   experimental_useRpcQuery,
   useBbNavigate,
   type ExperimentalThreadActionTabProps,
 } from "@get-bb/plugin-sdk/app";
 
 import { useArmadaModel } from "@/hooks/use-armada-model";
+import { useCrewActions } from "@/hooks/use-crew-actions";
 import { useProjectLogos } from "@/hooks/use-project-logos";
+import { toActionTarget } from "@/lib/action-target";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
 import type { CaptainEntry, ThreadEntry } from "@/lib/model";
 import { rpcContract } from "@/lib/rpc";
@@ -19,6 +22,7 @@ import { Age } from "./age";
 import { Summary } from "./captain-row";
 import { CaptainTile } from "./captain-tile";
 import { MemorySection } from "./memory-section";
+import { removeFromCrewItems } from "./menu-items";
 import { PlaceLine } from "./place-line";
 import { ProjectLogo } from "./project-logo";
 import { Note } from "./section";
@@ -139,56 +143,66 @@ function WorkerRow({
   entry,
   current,
   onOpen,
+  onRemove,
 }: {
   entry: ThreadEntry;
   current: boolean;
   onOpen: Open;
+  onRemove: (threadId: string) => void;
 }) {
+  const target = useMemo(() => toActionTarget(entry.thread), [entry.thread]);
   return (
     <li className="list-none">
-      <button
-        type="button"
-        aria-current={current ? "page" : undefined}
-        onClick={() => onOpen(entry.thread.id)}
-        className={cn(
-          PANEL_ROW,
-          "flex-col px-2 py-1",
-          current && "bg-accent",
+      <ThreadActionsContextMenu
+        thread={target}
+        inline={removeFromCrewItems(entry.thread, () =>
+          onRemove(entry.thread.id),
         )}
       >
-        <span className="flex h-7 w-full items-center gap-2">
-          <span className="grid size-4 shrink-0 place-items-center">
-            {entry.projectLogo === null ? (
-              <span
-                aria-hidden="true"
-                className="size-1.5 rounded-full bg-muted-foreground/40"
-              />
-            ) : (
-              <ProjectLogo src={entry.projectLogo} />
-            )}
+        <button
+          type="button"
+          aria-current={current ? "page" : undefined}
+          onClick={() => onOpen(entry.thread.id)}
+          className={cn(
+            PANEL_ROW,
+            "flex-col px-2 py-1",
+            current && "bg-accent",
+          )}
+        >
+          <span className="flex h-7 w-full items-center gap-2">
+            <span className="grid size-4 shrink-0 place-items-center">
+              {entry.projectLogo === null ? (
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 rounded-full bg-muted-foreground/40"
+                />
+              ) : (
+                <ProjectLogo src={entry.projectLogo} />
+              )}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+              <ThreadTitle threadId={entry.thread.id} />
+            </span>
           </span>
-          <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-            <ThreadTitle threadId={entry.thread.id} />
+          <span className="w-full">
+            <PlaceLine
+              thread={entry.thread}
+              project={null}
+              className="pr-0"
+              trailing={
+                <>
+                  {entry.status === null ? null : (
+                    <span className="grid h-4 min-w-4 shrink-0 place-items-center">
+                      <StatusGlyph status={entry.status} />
+                    </span>
+                  )}
+                  <Age at={entry.lastActivityAt} />
+                </>
+              }
+            />
           </span>
-        </span>
-        <span className="w-full">
-          <PlaceLine
-            thread={entry.thread}
-            project={null}
-            className="pr-0"
-            trailing={
-              <>
-                {entry.status === null ? null : (
-                  <span className="grid h-4 min-w-4 shrink-0 place-items-center">
-                    <StatusGlyph status={entry.status} />
-                  </span>
-                )}
-                <Age at={entry.lastActivityAt} />
-              </>
-            }
-          />
-        </span>
-      </button>
+        </button>
+      </ThreadActionsContextMenu>
     </li>
   );
 }
@@ -210,6 +224,7 @@ function CrewView({
   onBack: (() => void) | null;
 }) {
   const { captain } = crew;
+  const crewActions = useCrewActions();
   const projectLogo = useProjectLogos()[captain.thread.projectId] ?? null;
   const workers = crew.active.length + crew.inactive.length + crew.parked.length;
   const rows = (entries: readonly ThreadEntry[]) =>
@@ -219,6 +234,7 @@ function CrewView({
         entry={entry}
         current={entry.thread.id === currentThreadId}
         onOpen={onOpen}
+        onRemove={crewActions.remove}
       />
     ));
   return (

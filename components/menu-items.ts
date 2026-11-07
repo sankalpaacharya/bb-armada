@@ -1,5 +1,6 @@
 import {
   experimental_THREAD_ACTION_GROUPS as GROUPS,
+  type PluginSidebarThread,
   type PluginThreadActionsInlineItem,
 } from "@get-bb/plugin-sdk/app";
 
@@ -68,6 +69,25 @@ export function addToCaptainItems(
           if (captain !== undefined) onPick(captain.thread.id);
         },
       },
+    },
+  ];
+}
+
+/**
+ * Clearing the parent link takes a worker out of its captain's crew only when
+ * no lifecycle owner would hold it there instead.
+ */
+export function removeFromCrewItems(
+  thread: Pick<PluginSidebarThread, "parentThreadId" | "lifecycleOwnerThreadId">,
+  onRemove: () => void,
+): PluginThreadActionsInlineItem[] {
+  if (thread.parentThreadId === null || thread.lifecycleOwnerThreadId !== null)
+    return [];
+  return [
+    {
+      key: "remove-from-crew",
+      group: GROUPS.organize,
+      action: { label: "Remove from crew", icon: "X", run: onRemove },
     },
   ];
 }
