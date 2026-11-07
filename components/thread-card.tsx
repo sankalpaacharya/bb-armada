@@ -130,7 +130,7 @@ export function ThreadCard({
               thread={entry.thread}
               project={project}
               detailed={active}
-              className="pointer-events-none relative -mt-1 mb-1 pl-8"
+              className="pointer-events-none relative -mt-1 mb-1 pr-0 pl-8"
             />
           </>
         )}
