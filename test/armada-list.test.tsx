@@ -536,6 +536,29 @@ describe("Armada thread list", () => {
     );
   });
 
+  it("shows a project's logo in the project list, and the folder icon for a project without one", async () => {
+    const logo = "data:image/svg+xml;base64,PHN2Zy8+";
+    const { view } = await render({
+      rpc: { project_logos: () => ({ proj_a: logo }) },
+    });
+    await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
+    fireEvent.click(
+      screen.getByRole("button", { name: "Threads from All projects" }),
+    );
+    const list = screen.getByRole("listbox", { name: "Show threads from" });
+    await waitFor(() =>
+      expect(
+        within(list)
+          .getByRole("option", { name: /^Alpha/ })
+          .querySelector("img")
+          ?.getAttribute("src"),
+      ).toBe(logo),
+    );
+    expect(
+      within(list).getByRole("option", { name: /^Beta/ }).querySelector("img"),
+    ).toBeNull();
+  });
+
   it("moves through the project list with the keyboard and hands focus back on Escape", async () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());

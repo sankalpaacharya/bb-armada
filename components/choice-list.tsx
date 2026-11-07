@@ -3,11 +3,14 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 import { Icon } from "@/components/ui/icon";
 import { FOCUS_RING, LIST_TEXT, rowFill } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { ProjectLogo } from "./project-logo";
 
 export type Choice<Id extends string | null> = {
   id: Id;
   label: string;
   icon?: string;
+  /** An image in place of the icon, such as a project's logo. */
+  image?: string;
   count?: number;
   /** A short muted note after the label, read with it. */
   detail?: string;
@@ -105,7 +108,9 @@ export function ChoiceList<Id extends string | null>({
                 selected && "text-foreground",
               )}
             >
-              {choice.icon === undefined ? null : (
+              {choice.image !== undefined ? (
+                <ProjectLogo src={choice.image} />
+              ) : choice.icon === undefined ? null : (
                 <Icon
                   name={choice.icon}
                   className="size-3.5 shrink-0 text-muted-foreground"

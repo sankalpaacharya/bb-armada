@@ -6,6 +6,7 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
+import { useProjectLogos } from "@/hooks/use-project-logos";
 import type { ThreadEntry } from "@/lib/model";
 import {
   ALL_PROJECTS,
@@ -52,6 +53,7 @@ export function ThreadsSection({
   onAdopt: (thread: PluginSidebarThread) => void;
 }) {
   const counts = useMemo(() => countByProject(entries), [entries]);
+  const logos = useProjectLogos();
   const chosenNames = scope.flatMap((id) => {
     const name = projects.find((project) => project.id === id)?.name;
     return name === undefined ? [] : [name];
@@ -68,6 +70,7 @@ export function ThreadsSection({
       id: project.id,
       label: project.name,
       icon: "Folder",
+      image: logos[project.id],
       count: counts.get(project.id) ?? 0,
     })),
   ];
