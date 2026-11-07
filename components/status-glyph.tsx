@@ -19,11 +19,11 @@ export function StatusWord({ status }: { status: Status }) {
       data-status={status}
       className={cn("flex shrink-0 items-center gap-1.5 text-2xs", className)}
     >
-      {status === "working" ? <ShadeGrid /> : null}
+      {status === "working" ? <ShadeGrid label={word} /> : null}
       {status === "done" ? (
         <ThreadStatusGlyph indicator="unread-success" size="compact" />
       ) : null}
-      {word}
+      {status === "working" ? null : word}
     </span>
   );
 }
