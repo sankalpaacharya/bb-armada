@@ -182,7 +182,7 @@ describe("Armada thread list", () => {
     ).toBeNull();
   });
 
-  it("leads a thread with its project's logo unless a captain launched it, and with a dot when the project has none", async () => {
+  it("leads a captain's worker with its project's logo under the captain's face, a plain thread with the logo, and a thread without one with a dot", async () => {
     const logo = "data:image/svg+xml;base64,PHN2Zy8+";
     const { view } = await render({
       threads: [
@@ -213,6 +213,7 @@ describe("Armada thread list", () => {
         img.getAttribute("src"),
       ),
     ).toEqual([
+      logo,
       rowOf(view.container, "cap")!.querySelector("img")?.getAttribute("src"),
     ]);
     expect(within(worker).getByText("Launched by Captain Alpha")).toBeTruthy();

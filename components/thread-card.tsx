@@ -12,14 +12,23 @@ import { StatusGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
 /**
- * The leading mark: the captain that launched it, else its project's logo,
- * else a quiet dot. The captain stays named for screen readers. Status sits
- * at the row's right end.
+ * The leading mark: the captain that launched it over its project's logo when
+ * there are both, else whichever there is, else a quiet dot. The captain stays
+ * named for screen readers. Status sits at the row's right end.
  */
 function LeadMark({ entry }: { entry: ThreadEntry }) {
   const captain = entry.captain;
   const visual =
-    captain !== null ? (
+    captain !== null && entry.projectLogo !== null ? (
+      <span className="relative h-3.5 w-6">
+        <ProjectLogo src={entry.projectLogo} className="absolute left-0" />
+        <CaptainTile
+          avatar={captain.avatar}
+          size="badge"
+          className="absolute left-2.5 ring-[1.5px] ring-(--row-fill)"
+        />
+      </span>
+    ) : captain !== null ? (
       <CaptainTile avatar={captain.avatar} size="badge" />
     ) : entry.projectLogo !== null ? (
       <ProjectLogo src={entry.projectLogo} />
@@ -89,7 +98,7 @@ export function ThreadCard({
                   "group-focus-within/row:pr-6 group-hover/row:pr-6",
               )}
             >
-              <span className="grid size-4 shrink-0 place-items-center">
+              <span className="grid h-4 w-6 shrink-0 place-items-center">
                 <LeadMark entry={entry} />
               </span>
               {title}
@@ -121,7 +130,7 @@ export function ThreadCard({
               thread={entry.thread}
               project={project}
               detailed={active}
-              className="pointer-events-none relative -mt-1 mb-1"
+              className="pointer-events-none relative -mt-1 mb-1 pl-8"
             />
           </>
         )}
