@@ -29,7 +29,7 @@ export function ShelfSection({
   if (entries.length === 0) return null;
   const label = expanded ? `Hide ${title.toLowerCase()}` : `Show ${title.toLowerCase()}`;
   return (
-    <>
+    <section className="flex flex-col gap-1">
       <SectionHeader
         title={title}
         count={entries.length}
@@ -65,6 +65,6 @@ export function ShelfSection({
           ))}
         </ul>
       ) : null}
-    </>
+    </section>
   );
 }

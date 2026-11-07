@@ -40,7 +40,7 @@ export function CaptainsSection({
   });
 
   return (
-    <>
+    <section className="flex flex-col gap-1">
       <SectionHeader
         title="Captains"
         count={status === "ready" ? captains.length : undefined}
@@ -90,6 +90,6 @@ export function CaptainsSection({
           </ul>
         )}
       </div>
-    </>
+    </section>
   );
 }

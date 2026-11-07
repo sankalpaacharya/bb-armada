@@ -48,7 +48,7 @@ export function ThreadsSection({
 }) {
   const [open, setOpen] = useState(false);
   const listId = useId();
-  const sectionRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const counts = useMemo(() => countByProject(entries), [entries]);
@@ -83,7 +83,7 @@ export function ThreadsSection({
   }, [open]);
 
   return (
-    <div ref={sectionRef} className="contents">
+    <section ref={sectionRef} className="flex flex-col gap-1">
       <SectionHeader
         title="Threads"
         count={scoped.length}
@@ -162,6 +162,6 @@ export function ThreadsSection({
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }
