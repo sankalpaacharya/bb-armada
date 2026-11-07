@@ -30,7 +30,8 @@ Never write main's files. Read them freely: the briefs for what was agreed,
 `captain.md` for preferences, and `backlog.md` → `## Away` for the user's away
 words.
 
-`supervisor.md` keeps one line per task you supervise:
+`supervisor.md` starts with `Owner: <your id>` (`ownership.md`), then keeps
+one line per task you supervise:
 
 ```
 - <slug> — thr_xxx — ship|scout — working|waiting on user|checking|done|failed — last: <what you did, date>
@@ -41,7 +42,8 @@ words.
 bb wakes you for each worker's finished, failed, or interrupted turn and for
 each blocker. Main also messages you. On every wake:
 
-1. Read `supervisor.md`, then work out which task the event belongs to.
+1. Check you are still the home's supervisor (`ownership.md`). Read
+   `supervisor.md`, then work out which task the event belongs to.
 2. **New task from main** (`TASK <slug> thr_xxx`): add its ledger line and read
    its brief.
 3. **Worker question, approval, failure, or stall**: follow `supervision.md`.
@@ -62,10 +64,11 @@ each blocker. Main also messages you. On every wake:
 Send only outcomes the user must hear. Main's chat can compact and lose a
 message, so each report is first a line in `outbox.md`
 (`references/outbox.md`): write the detail file, append the line, then send
-one queued message per outcome so that main is never interrupted mid-reply:
+one queued message per outcome so that main is never interrupted mid-reply.
+`<captain>` is the `Captain:` line in `backlog.md`:
 
 ```sh
-bb thread tell <main-id> --mode queue --message-file - <<'EOF'
+bb thread tell <captain> --mode queue --message-file - <<'EOF'
 [supervisor] <KIND> <slug> (outbox <n>)
 <plain outcome, evidence, consequence; full PR URL if any>
 EOF

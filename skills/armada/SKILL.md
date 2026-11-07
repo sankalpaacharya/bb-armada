@@ -19,6 +19,7 @@ Load these references when their moment comes:
 | --- | --- |
 | Starting or recovering the supervisor | `references/supervisor.md` |
 | Every turn, to read the supervisor's reports | `references/outbox.md` |
+| Every turn, to check this thread owns the home | `references/ownership.md` |
 | A worker event reaches you because no supervisor is running | `references/supervision.md` |
 | Something needs the user's decision, or the user says "ahoy" | `references/captain-calls.md` |
 | The user says "afk", or you are in away mode | `references/afk.md` |
@@ -43,9 +44,15 @@ compacted; the home does not.
   outbox.md      the supervisor's reports, one numbered line each; append-only
 ```
 
-- **Startup memory** is `captain.md`, `learnings.md`, and `backlog.md`. Read all
-  three at the start of every turn and keep them under ~200 lines combined.
-  Read `tasks/` and `archive.md` only when the work needs them.
+- **Startup memory** is `captain.md`, `learnings.md`, and `backlog.md`. Keep
+  them under ~200 lines combined. Read `tasks/` and `archive.md` only when the
+  work needs them.
+- **At the start of every turn:**
+  1. Check the `Captain:` line at the top of `backlog.md`. If another live
+     thread owns the home, stay read-only (`references/ownership.md`).
+  2. Read the three startup files.
+  3. Handle the outbox lines past `Outbox acked through:`
+     (`references/outbox.md`).
 - If the home is missing, create it. If a legacy single file
   `~/.bb/captains/<project>.md` exists, split it into the new files, then add it
   verbatim to the end of `archive.md`.
@@ -93,8 +100,8 @@ which answers worker questions, recovers stuck workers, checks finished work,
 and sends you only what the user must hear. That keeps you free for the
 user.
 
-- `backlog.md` starts with `Supervisor: thr_xxx`. Before you spawn work, check
-  that thread is alive with `bb thread show`.
+- `backlog.md` names it on its `Supervisor:` line. Before you spawn work, check
+  that thread is live (`references/ownership.md`).
 - If there is none, or it is gone, start one in your own environment:
 
   ```sh
@@ -107,13 +114,11 @@ user.
   EOF
   ```
 
-  Record its id. If you replaced a dead supervisor, move live workers to the new
+  Record its id on the `Supervisor:` line. If you replaced a dead supervisor, move live workers to the new
   one with `bb thread update <worker> --parent-thread <new>` and send it a `TASK`
   line for each.
 - Its reports (`READY`, `FINDINGS`, `CALL`, `FAILED`, `LESSON`) are lines in
-  `outbox.md`. A `[supervisor]` message only says one arrived. At the start of
-  every turn, handle the lines past `Outbox acked through:` in `backlog.md` and
-  advance it, as `references/outbox.md` says.
+  `outbox.md`. A `[supervisor]` message only says one arrived; handle the line.
 
   When the user answers a call, send
   `bb thread tell <supervisor> --mode queue 'ANSWER <slug>: "<their words>"'`.
