@@ -7,14 +7,48 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  PluginThreadActionsContextMenuProps,
+  PluginThreadActionsInlineItem,
+} from "@get-bb/plugin-sdk/app";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import { toast } from "sonner";
 
 import app from "../app";
 import { avatarDataUri } from "../lib/avatar";
 import type { CaptainRecord } from "../lib/captains";
 import type { ParkRecord } from "../lib/lifecycle";
 import { NOW, project, settledAt, snoozedUntil, thread } from "./fixtures";
+
+/**
+ * The fake thread menu runs an item without a value, so a test picks a choice
+ * by running the row's item itself, as bb's submenu does.
+ */
+const menuItems = vi.hoisted(
+  () => new Map<string, readonly PluginThreadActionsInlineItem[]>(),
+);
+vi.mock("@get-bb/plugin-sdk/app", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@get-bb/plugin-sdk/app")>();
+  const Menu = actual.experimental_ThreadActionsContextMenu;
+  return {
+    ...actual,
+    experimental_ThreadActionsContextMenu: (
+      props: PluginThreadActionsContextMenuProps,
+    ) => {
+      menuItems.set(props.thread.id, props.inline ?? []);
+      return createElement(Menu, props);
+    },
+  };
+});
+
+const pick = (threadId: string, key: string, value: string) =>
+  act(async () => {
+    const item = menuItems.get(threadId)?.find((each) => each.key === key);
+    if (item === undefined) throw new Error(`no ${key} item on ${threadId}`);
+    await item.action.run({ value, requestRename: () => {} });
+  });
 
 const stored = new Map<string, string>();
 vi.stubGlobal("localStorage", {
@@ -982,6 +1016,90 @@ describe("thread menu", () => {
         (call) => call.method === "captains_update",
       ),
     ).toBe(false);
+  });
+
+  const crewThreads = [
+    thread("cap", { title: "Captain Alpha", projectId: "proj_a" }),
+    thread("cap2", { title: "Captain Two", projectId: "proj_a" }),
+    thread("capB", { title: "Captain Beta", projectId: "proj_b" }),
+    thread("loose", { title: "Loose idea", projectId: "proj_a" }),
+    thread("solo", { title: "Solo", projectId: "proj_me" }),
+  ];
+
+  it("adds a thread to a captain of its own project, which becomes its parent", async () => {
+    const { view } = await render({
+      threads: crewThreads,
+      registry: registry("cap", "cap2", "capB"),
+      sdk: { threads: { update: async () => ({}) } },
+    });
+    await waitFor(() =>
+      expect(anchorOf(view.container, "loose")).not.toBeNull(),
+    );
+    rightClick(anchorOf(view.container, "loose")!);
+    expect(
+      await screen.findByRole("menuitem", { name: "Add to captain" }),
+    ).toBeTruthy();
+    const item = menuItems
+      .get("loose")
+      ?.find((each) => each.key === "add-to-captain");
+    expect(item?.action.choices?.items.map((choice) => choice.label)).toEqual([
+      "Captain Alpha",
+      "Captain Two",
+    ]);
+    await pick("loose", "add-to-captain", "cap2");
+    expect(view.inspection.sdkCalls).toEqual([
+      {
+        method: "threads.update",
+        args: [{ threadId: "loose", parentThreadId: "cap2" }],
+      },
+    ]);
+  });
+
+  it("does not offer it when no captain runs the thread's project", async () => {
+    const { view } = await render({
+      threads: crewThreads,
+      registry: registry("cap", "cap2", "capB"),
+    });
+    await waitFor(() =>
+      expect(anchorOf(view.container, "solo")).not.toBeNull(),
+    );
+    rightClick(anchorOf(view.container, "solo")!);
+    await screen.findByRole("menuitem", { name: /Make captain/ });
+    expect(
+      screen.queryByRole("menuitem", { name: "Add to captain" }),
+    ).toBeNull();
+  });
+
+  it("says so when adding a thread to a captain fails", async () => {
+    const failed = vi.spyOn(toast, "error").mockImplementation(() => 0);
+    const { view } = await render({
+      threads: crewThreads,
+      registry: registry("cap"),
+      sdk: {
+        threads: {
+          update: async () => {
+            throw new Error("offline");
+          },
+        },
+      },
+    });
+    await waitFor(() =>
+      expect(anchorOf(view.container, "loose")).not.toBeNull(),
+    );
+    await pick("loose", "add-to-captain", "cap");
+    expect(view.inspection.sdkCalls).toEqual([
+      {
+        method: "threads.update",
+        args: [{ threadId: "loose", parentThreadId: "cap" }],
+      },
+    ]);
+    await waitFor(() =>
+      expect(failed).toHaveBeenCalledWith(
+        "Could not add the thread to the captain",
+        { description: "offline" },
+      ),
+    );
+    failed.mockRestore();
   });
 
   it("keeps the edit open when the rename fails", async () => {

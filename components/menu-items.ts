@@ -5,7 +5,7 @@ import {
 
 import type { ParkActions } from "@/hooks/use-park-actions";
 import { snoozePresets } from "@/lib/lifecycle";
-import type { ThreadEntry } from "@/lib/model";
+import type { CaptainEntry, ThreadEntry } from "@/lib/model";
 
 export function makeCaptainItem(
   onSelect: () => void,
@@ -31,6 +31,43 @@ export function captainItems(actions: {
       key: "remove-captain",
       group: GROUPS.organize,
       action: { label: "Remove from captains", icon: "X", run: actions.remove },
+    },
+  ];
+}
+
+/** A crew thread must be in its captain's project, so only those captains are offered. */
+export function addToCaptainItems(
+  entry: Pick<ThreadEntry, "thread" | "captain">,
+  captains: readonly CaptainEntry[],
+  onPick: (captainId: string) => void,
+): PluginThreadActionsInlineItem[] {
+  if (entry.captain !== null) return [];
+  const offered = captains.filter(
+    (captain) =>
+      captain.thread.projectId === entry.thread.projectId &&
+      captain.thread.id !== entry.thread.id,
+  );
+  if (offered.length === 0) return [];
+  return [
+    {
+      key: "add-to-captain",
+      group: GROUPS.organize,
+      action: {
+        label: "Add to captain",
+        icon: "Layers",
+        choices: {
+          items: offered.map((captain) => ({
+            id: captain.thread.id,
+            label: captain.thread.displayTitle,
+          })),
+        },
+        run: ({ value }) => {
+          const captain = offered.find(
+            (candidate) => candidate.thread.id === value,
+          );
+          if (captain !== undefined) onPick(captain.thread.id);
+        },
+      },
     },
   ];
 }

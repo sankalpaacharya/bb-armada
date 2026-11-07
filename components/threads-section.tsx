@@ -5,9 +5,10 @@ import type {
   PluginSidebarThreadsState,
 } from "@get-bb/plugin-sdk/app";
 
+import type { CrewActions } from "@/hooks/use-crew-actions";
 import type { ParkActions } from "@/hooks/use-park-actions";
 import { useProjectLogos } from "@/hooks/use-project-logos";
-import type { ThreadEntry } from "@/lib/model";
+import type { CaptainEntry, ThreadEntry } from "@/lib/model";
 import {
   ALL_PROJECTS,
   countByProject,
@@ -18,7 +19,7 @@ import { HEADER_ACTION, SECTION_TEXT } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import type { Choice } from "./choice-list";
 import { Dropdown } from "./dropdown";
-import { makeCaptainItem, parkItems } from "./menu-items";
+import { addToCaptainItems, makeCaptainItem, parkItems } from "./menu-items";
 import { Note, SectionHeader } from "./section";
 import { ThreadCard } from "./thread-card";
 import type { OpenThread } from "./thread-link";
@@ -33,6 +34,8 @@ export function ThreadsSection({
   status,
   activeThreadId,
   parkActions,
+  captains,
+  crewActions,
   onOpen,
   onAdopt,
 }: {
@@ -49,6 +52,9 @@ export function ThreadsSection({
   status: PluginSidebarThreadsState["status"] | "loading-captains";
   activeThreadId: string | null;
   parkActions: ParkActions;
+  /** The captains a thread can join. */
+  captains: readonly CaptainEntry[];
+  crewActions: CrewActions;
   onOpen: OpenThread;
   onAdopt: (thread: PluginSidebarThread) => void;
 }) {
@@ -135,6 +141,9 @@ export function ThreadsSection({
                 ...(entry.adoptable
                   ? [makeCaptainItem(() => onAdopt(entry.thread))]
                   : []),
+                ...addToCaptainItems(entry, captains, (captainId) =>
+                  crewActions.add(entry.thread.id, captainId),
+                ),
                 ...parkItems(entry, parkActions),
               ]}
               onOpen={onOpen}

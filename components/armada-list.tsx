@@ -6,6 +6,7 @@ import {
 
 import { useArrowKeyRows } from "@/hooks/use-arrow-key-rows";
 import { useArmadaModel } from "@/hooks/use-armada-model";
+import { useCrewActions } from "@/hooks/use-crew-actions";
 import {
   useAutoSettleOnMount,
   useParkActions,
@@ -42,6 +43,7 @@ export function ArmadaList({
 }: PluginThreadListProps) {
   const { status, projects, captains, model } = useArmadaModel();
   const parkActions = useParkActions();
+  const crewActions = useCrewActions();
   const navigate = useBbNavigate();
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
   const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, ALL_PROJECTS);
@@ -118,6 +120,8 @@ export function ArmadaList({
           status={captains.status === "loading" ? "loading-captains" : status}
           activeThreadId={activeThreadId}
           parkActions={parkActions}
+          captains={model.captains}
+          crewActions={crewActions}
           onOpen={openThread}
           onAdopt={(thread) => setDialog({ kind: "adopt", thread })}
         />
