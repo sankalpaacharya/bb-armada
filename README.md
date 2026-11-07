@@ -145,7 +145,7 @@ so a tick re-renders only those leaves. The model is built from a separate
 wake time (`useWakeTime`) that moves only when the next snooze is due, so a
 snoozed thread returns on time without the list rebuilding every tick. A
 wake label rounds up and never reads "now" while the thread is still hidden. Shelf rows are one line in t3sidebar's style, and a
-parkable card swaps its status for Snooze and Settle buttons on hover.
+parkable card swaps its status for a Settle button on hover; Snooze is in the thread menu.
 
 ## Develop
 

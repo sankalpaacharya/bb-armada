@@ -1135,7 +1135,7 @@ describe("shelves", () => {
     ).toEqual({ threadId: "done", at: expect.any(Number) });
   });
 
-  it("shows no age on a card at rest, and keeps its park actions reachable by keyboard in a strip of their own", async () => {
+  it("shows no age on a card at rest, and keeps Settle, its only hover action, reachable by keyboard", async () => {
     vi.useFakeTimers({ toFake: ["Date"], now: NOW });
     const { view } = await render({
       threads: [thread("a", { title: "First", projectId: "proj_b" })],
@@ -1144,32 +1144,21 @@ describe("shelves", () => {
     const row = rowOf(view.container, "a")!;
     const card = within(row);
     expect(card.queryByText(/^(now|\d+[a-z]+)$/)).toBeNull();
-    const snooze = card.getByRole("button", { name: "Snooze until tomorrow" });
+    expect(card.queryByRole("button", { name: /Snooze/ })).toBeNull();
     const settle = card.getByRole("button", { name: "Settle" });
     const strip = settle.parentElement!;
-    expect(Array.from(strip.children)).toEqual([snooze, settle]);
+    expect(Array.from(strip.children)).toEqual([settle]);
     expect(strip.textContent).toBe("");
-
-    for (const button of [snooze, settle]) {
-      button.focus();
-      expect(document.activeElement).toBe(button);
-      expect(
-        button.closest("[hidden], [inert], [aria-hidden=true]"),
-      ).toBeNull();
-    }
+    settle.focus();
+    expect(document.activeElement).toBe(settle);
+    expect(settle.closest("[hidden], [inert], [aria-hidden=true]")).toBeNull();
   });
 
-  it("moves a settled or snoozed card off the list before the server answers", async () => {
+  it("moves a settled card off the list before the server answers", async () => {
     openAllShelves();
     const { view } = await render({
-      threads: [
-        thread("a", { title: "First", projectId: "proj_b" }),
-        thread("b", { title: "Second", projectId: "proj_b" }),
-      ],
-      rpc: {
-        parks_settle: () => new Promise(() => {}),
-        parks_snooze: () => new Promise(() => {}),
-      },
+      threads: [thread("a", { title: "First", projectId: "proj_b" })],
+      rpc: { parks_settle: () => new Promise(() => {}) },
     });
     await waitFor(() => expect(rowOf(view.container, "a")).not.toBeNull());
     fireEvent.click(
@@ -1177,15 +1166,8 @@ describe("shelves", () => {
         name: "Settle",
       }),
     );
-    fireEvent.click(
-      within(rowOf(view.container, "b")!).getByRole("button", {
-        name: "Snooze until tomorrow",
-      }),
-    );
     await waitFor(() => expect(listOf(view.container, "a")).toBe("Settled"));
-    expect(listOf(view.container, "b")).toBe("Snoozed");
     expect(screen.getByRole("region", { name: "Settled" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Snoozed" })).toBeTruthy();
   });
 
   it("offers no park buttons on a working card, and keeps a stored settle from hiding it", async () => {

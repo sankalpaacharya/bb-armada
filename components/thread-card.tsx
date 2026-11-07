@@ -1,7 +1,6 @@
 import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
-import { tomorrowMorning } from "@/lib/lifecycle";
 import type { ThreadEntry } from "@/lib/model";
 import { STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -87,7 +86,7 @@ export function ThreadCard({
                 "pointer-events-none relative flex h-8 items-center gap-2",
                 entry.parkable &&
                   !badge &&
-                  "group-focus-within/row:pr-11 group-hover/row:pr-11",
+                  "group-focus-within/row:pr-6 group-hover/row:pr-6",
               )}
             >
               <span className="grid size-4 shrink-0 place-items-center">
@@ -109,15 +108,6 @@ export function ThreadCard({
               {entry.parkable ? (
                 <RowActions
                   actions={[
-                    {
-                      label: "Snooze until tomorrow",
-                      icon: "Clock",
-                      run: () =>
-                        parkActions.snooze(
-                          threadId,
-                          tomorrowMorning(new Date()),
-                        ),
-                    },
                     {
                       label: "Settle",
                       icon: "Check",
