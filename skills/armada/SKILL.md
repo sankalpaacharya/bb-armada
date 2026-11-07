@@ -44,9 +44,10 @@ compacted; the home does not.
   outbox.md      the supervisor's reports, one numbered line each; append-only
 ```
 
-- **Startup memory** is `captain.md`, `learnings.md`, and `backlog.md`. Keep
-  them under ~200 lines combined. Read `tasks/` and `archive.md` only when the
-  work needs them.
+- **Startup memory** is `captain.md`, `learnings.md`, and `backlog.md`. Its
+  budget is 20 KB combined, measured in the home with
+  `wc -c captain.md learnings.md backlog.md` (about 6,700 tokens at bytes / 3).
+  Read `tasks/` and `archive.md` only when the work needs them.
 - **At the start of every turn:**
   1. Check the `Captain:` line at the top of `backlog.md`. If another live
      thread owns the home, stay read-only (`references/ownership.md`).
@@ -212,11 +213,27 @@ one is still the user's. When unsure, treat it as the user's.
 
 ## Stow
 
+Adapted from firstmate's `stow` and its startup-memory budget.
+
 Before ending any turn where something changed, and whenever the user says
-"stow": go through this conversation for durable knowledge that exists only in
-chat (a decision, a stated preference, a learned fact, the real state of a task)
-and put each item in its home. Then apply aging, and trim startup memory back
-under budget by moving the least useful material to `archive.md`.
+"stow":
+
+1. Measure startup memory with `wc -c` as above.
+2. Go through this conversation for durable knowledge that exists only in chat
+   (a decision, a stated preference, a learned fact, the real state of a task)
+   and put each item in its home.
+3. Apply aging.
+4. If the total is over 20 KB, move the least useful material to
+   `archive.md`: old Done entries, then stale or narrow learnings, then
+   consolidate what is left.
+5. Measure again.
+
+Never end a stow over budget. If the only way under is to archive something
+the user may still want (a `captain.md` preference, an open call, In flight
+work), add a call to Waiting on the user naming the shortfall and the entries
+you would archive, and ask. When the user said "stow", report the total before
+and after in one line; otherwise mention it only when you archived something or
+are still over.
 
 ## Bearings
 
