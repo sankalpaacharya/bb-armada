@@ -17,7 +17,8 @@ never shows as a row. A new supervisor appears within 5 minutes.
 Armada ships the armada skill in `skills/armada/`, and bb loads every
 `skills/<name>/SKILL.md` in a plugin into agent threads. So installing Armada
 installs the skill, and nothing else is needed for a captain to work. A new
-captain's first prompt tells it to follow `/armada` and keep its home at
+captain's first prompt starts with `/armada`, which invokes the skill, and
+points it at its home at
 `~/.bb/captains/<project>/` (`lib/captain-text.ts`). The skill is adapted from
 [kunchenguid/firstmate](https://github.com/kunchenguid/firstmate).
 

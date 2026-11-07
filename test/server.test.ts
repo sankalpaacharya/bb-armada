@@ -143,7 +143,7 @@ describe("captain records", () => {
       title: "Fleet",
     });
     const prompt = (spawn![0] as { prompt: string }).prompt;
-    expect(prompt).toContain("/armada");
+    expect(prompt.startsWith("/armada ")).toBe(true);
     expect(prompt).toContain("~/.bb/captains/alpha/");
   });
 

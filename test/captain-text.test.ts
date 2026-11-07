@@ -13,10 +13,10 @@ describe("captain text", () => {
     expect(captainSlug("!!!")).toBe("project");
   });
 
-  it("points the captain at the armada skill and its own home folder", () => {
+  it("invokes the armada skill and points it at its own home folder", () => {
     const prompt = captainPrompt("My App");
+    expect(prompt.startsWith("/armada ")).toBe(true);
     expect(prompt).toContain('first mate for the bb project "My App"');
-    expect(prompt).toContain("/armada");
     expect(prompt).toContain("~/.bb/captains/my-app/");
   });
 });

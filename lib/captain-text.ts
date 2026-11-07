@@ -13,8 +13,7 @@ export function captainSlug(projectName: string): string {
 
 export function captainPrompt(projectName: string): string {
   return [
-    `You are the first mate for the bb project "${projectName}".`,
-    "Use the armada skill (/armada) and follow it for this whole thread.",
+    `/armada You are the first mate for the bb project "${projectName}".`,
     `Your home is ~/.bb/captains/${captainSlug(projectName)}/.`,
     "If it does not exist, create it as the skill describes, using what you can learn quickly from the repo's README, CLAUDE.md/AGENTS.md and recent commits.",
     "Then reply with a 3-line hello: what you understood the project to be, and that the user can now tell you what they need.",
