@@ -185,3 +185,15 @@ Captains stay exactly as in this plan (Capy compact rows). The **Threads** secti
 - Child threads still fold into their root card (lane lifts), as the model does today.
 - **Workers under a captain** use the same three-line card, indented `pl-[26px]`, minus the project line (their project is the captain's): two lines, title + branch, status word or age at the right of the title line.
 - Captain rows' right slot uses the same status words in compact form: the loader alone for working, the bb waiting glyph for attention, else age.
+
+## Revision 3: project scope picker on Threads (user)
+
+The user: "there should be a select if I want to see the threads from all the projects or just this one single one".
+
+- In the **Threads** section header, right side, a compact select (ghost trigger, `text-[12px] text-muted-foreground`, label + `size-3` chevron, no border at rest, `bg-sidebar-accent/60` on hover/open) whose options are **All projects** first, then every project (non-personal first, then personal), each with the same small folder icon used on cards.
+- Selecting a project filters the Threads list to that project's threads; **All projects** shows everything. Captains are not filtered (they are the cross-project overview).
+- When one project is selected, thread cards drop their project line (it would repeat the picker) and become two lines: title + status/age, then branch · environment + provider glyph.
+- Persist the choice in localStorage (`armada/thread-scope`); if the stored project no longer exists, fall back to All projects.
+- Empty filtered list: one muted line "No threads in <project> yet."
+- Reuse the vendored popover/select primitive if one exists in `components/ui/`; otherwise port t3sidebar's `src/components/Select.tsx` (MIT, credit already added) rather than inventing one. Keyboard accessible.
+- Filtering is a pure function (`scopeThreads(entries, scope)` or a parameter to the model) with a unit test.
