@@ -789,7 +789,7 @@ describe("auto-settle", () => {
     expect(await parks()).toEqual([]);
   });
 
-  it("refreshes the homes reads at start, then on the schedule only when a supervisor changed", async () => {
+  it("refreshes the homes reads at start, then on the schedule only when a supervisor or a decision changed", async () => {
     const { harness, setHomes } = await loadAuto({
       homes: { "cops/backlog.md": "Supervisor: (none yet)\n" },
     });
@@ -806,6 +806,18 @@ describe("auto-settle", () => {
     expect(await harness.callRpc("captain_supervisors", null)).toEqual([
       "thr_new",
     ]);
+    setHomes({
+      "cops/backlog.md":
+        "Supervisor: thr_new\n\n## Done\n- login\n\n## Now\n- docs\n",
+    });
+    await harness.runSchedule("auto-settle");
+    expect(homesRefreshes()).toBe(2);
+    setHomes({
+      "cops/backlog.md":
+        "Supervisor: thr_new\n\n## Waiting on the user\n- deploy: today?\n",
+    });
+    await harness.runSchedule("auto-settle");
+    expect(homesRefreshes()).toBe(3);
   });
 
   it("holds pinned, waiting and queued cards, and skips hidden and archived threads", async () => {
@@ -915,7 +927,19 @@ describe("auto-settle", () => {
 describe("captain homes", () => {
   const homes = {
     "cops/captain.md": "# Captain\n",
-    "cops/backlog.md": "# Backlog: cops\n\nSupervisor: thr_sup1\n",
+    "cops/backlog.md": [
+      "# Backlog: cops",
+      "",
+      "Supervisor: thr_sup1",
+      "",
+      "## Waiting on the user",
+      "- deploy: today or Monday? — recommend Monday (since 2026-11-01)",
+      "- (none)",
+      "",
+      "## Done",
+      "- login",
+      "",
+    ].join("\n"),
     "cops/tasks/fix-login/brief.md": "Fix the login.\n",
     "cops/notes.txt": "not memory",
     "personal/backlog.md": "Supervisor: (none yet; started on first task)\n",
@@ -931,17 +955,37 @@ describe("captain homes", () => {
       root: path.join(HOMES, "cops"),
       files: [
         { path: "captain.md", sizeBytes: 10, modifiedAt: 1_000 },
-        { path: "backlog.md", sizeBytes: 38, modifiedAt: 1_000 },
+        {
+          path: "backlog.md",
+          sizeBytes: homes["cops/backlog.md"].length,
+          modifiedAt: 1_000,
+        },
         {
           path: "tasks/fix-login/brief.md",
           sizeBytes: 15,
           modifiedAt: 1_000,
         },
       ],
+      needsYou: [
+        "deploy: today or Monday? — recommend Monday (since 2026-11-01)",
+      ],
     });
     expect(
       await harness.callRpc("captain_home", { project: "My App" }),
-    ).toMatchObject({ status: "ready", folder: "~/.bb/captains/my-app" });
+    ).toMatchObject({
+      status: "ready",
+      folder: "~/.bb/captains/my-app",
+      needsYou: [],
+    });
+  });
+
+  it("has nothing waiting on the user when a home has no backlog", async () => {
+    const { harness } = await load({
+      homes: { "cops/captain.md": "# Captain\n" },
+    });
+    expect(
+      await harness.callRpc("captain_home", { project: "cops" }),
+    ).toMatchObject({ status: "ready", needsYou: [] });
   });
 
   it("calls a home with no folder missing, not an error", async () => {

@@ -24,6 +24,7 @@ const ready = (...paths: string[]): CaptainHome => ({
     sizeBytes: 100,
     modifiedAt: Date.now() - 3_600_000,
   })),
+  needsYou: [],
 });
 
 function renderCrew(home: () => unknown) {

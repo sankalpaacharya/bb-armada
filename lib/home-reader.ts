@@ -6,6 +6,7 @@ import {
   homeFilePathSchema,
   homeFolder,
   supervisorIdOf,
+  waitingOnUser,
   type CaptainHome,
   type HomeFile,
 } from "./captain-home";
@@ -15,6 +16,22 @@ type ReadFile = Awaited<ReturnType<BbPluginApi["sdk"]["files"]["read"]>>;
 
 const HOMES_ROOT = path.join(os.homedir(), ".bb", "captains");
 const BACKLOG = /^[^/]+\/backlog\.md$/;
+
+/** What one home's backlog tells the sidebar. */
+export type Backlog = {
+  home: string;
+  supervisorId: string | null;
+  needsYou: string[];
+};
+
+export const supervisorIdsOf = (backlogs: readonly Backlog[]): string[] =>
+  [
+    ...new Set(
+      backlogs.flatMap(({ supervisorId }) =>
+        supervisorId === null ? [] : [supervisorId],
+      ),
+    ),
+  ].sort();
 
 const textOf = (file: ReadFile): string =>
   file.contentEncoding === "base64"
@@ -41,20 +58,13 @@ export function createHomeReader(bb: BbPluginApi) {
       includeHidden: false,
     });
     if (paths.length === 0) return { status: "missing", folder };
-    const listed = await Promise.all(
+    const reads = await Promise.all(
       paths
         .map((entry) => entry.path)
         .filter((relative) => homeFilePathSchema.safeParse(relative).success)
-        .map(async (relative): Promise<HomeFile[]> => {
+        .map(async (relative) => {
           try {
-            const file = await read(root, relative);
-            return [
-              {
-                path: relative,
-                sizeBytes: file.sizeBytes,
-                modifiedAt: file.modifiedAtMs ?? null,
-              },
-            ];
+            return [{ relative, file: await read(root, relative) }];
           } catch (cause) {
             bb.log.warn(
               `could not read ${folder}/${relative}: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -63,11 +73,25 @@ export function createHomeReader(bb: BbPluginApi) {
           }
         }),
     );
-    return { status: "ready", folder, root, files: listed.flat() };
+    const found = reads.flat();
+    const backlog = found.find(({ relative }) => relative === "backlog.md");
+    return {
+      status: "ready",
+      folder,
+      root,
+      files: found.map(
+        ({ relative, file }): HomeFile => ({
+          path: relative,
+          sizeBytes: file.sizeBytes,
+          modifiedAt: file.modifiedAtMs ?? null,
+        }),
+      ),
+      needsYou: backlog === undefined ? [] : waitingOnUser(textOf(backlog.file)),
+    };
   };
 
-  /** Every home's supervisor, from the `Supervisor:` line of its backlog. */
-  const supervisors = async (): Promise<string[]> => {
+  /** Every home's backlog, in home order. */
+  const backlogs = async (): Promise<Backlog[]> => {
     const { paths } = await bb.sdk.files.listPaths({
       path: HOMES_ROOT,
       includeFiles: true,
@@ -75,15 +99,20 @@ export function createHomeReader(bb: BbPluginApi) {
       includeHidden: false,
       excludeNames: ["tasks"],
     });
-    const ids = await Promise.all(
+    const found = await Promise.all(
       paths
         .filter((entry) => BACKLOG.test(entry.path))
-        .map(async (entry) =>
-          supervisorIdOf(textOf(await read(HOMES_ROOT, entry.path))),
-        ),
+        .map(async (entry): Promise<Backlog> => {
+          const text = textOf(await read(HOMES_ROOT, entry.path));
+          return {
+            home: path.dirname(entry.path),
+            supervisorId: supervisorIdOf(text),
+            needsYou: waitingOnUser(text),
+          };
+        }),
     );
-    return [...new Set(ids.filter((id) => id !== null))].sort();
+    return found.sort((a, b) => a.home.localeCompare(b.home));
   };
 
-  return { home, supervisors };
+  return { home, backlogs };
 }

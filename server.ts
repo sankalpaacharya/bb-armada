@@ -11,7 +11,7 @@ import {
   parseStoredCaptain,
   type CaptainRecord,
 } from "./lib/captains";
-import { createHomeReader } from "./lib/home-reader";
+import { createHomeReader, supervisorIdsOf } from "./lib/home-reader";
 import { listRecords, queueByKey } from "./lib/kv-records";
 import {
   PARK_KEY_PREFIX,
@@ -102,18 +102,18 @@ export default async function plugin(bb: BbPluginApi) {
 
   /**
    * Every auto-settle pass, the first one at start included, reads the
-   * supervisors afresh and refreshes the homes reads when they changed, so a
-   * new supervisor reaches the sidebar within one schedule.
+   * backlogs afresh and refreshes the homes reads when they changed, so a new
+   * supervisor or decision reaches the sidebar within one schedule.
    */
-  let supervisorsSeen: string | null = null;
+  let backlogsSeen: string | null = null;
   const readSupervisors = async (): Promise<ReadonlySet<string>> => {
-    const ids = await homes.supervisors();
-    const seen = ids.join(" ");
-    if (seen !== supervisorsSeen) {
-      supervisorsSeen = seen;
+    const backlogs = await homes.backlogs();
+    const seen = JSON.stringify(backlogs);
+    if (seen !== backlogsSeen) {
+      backlogsSeen = seen;
       bb.rpc.experimental_invalidate([HOMES_TAG]);
     }
-    return new Set(ids);
+    return new Set(supervisorIdsOf(backlogs));
   };
 
   const { evaluate, reevaluate } = createAutoSettle(bb, {
@@ -222,7 +222,7 @@ export default async function plugin(bb: BbPluginApi) {
 
     captain_home: ({ project }) => homes.home(project),
 
-    captain_supervisors: () => homes.supervisors(),
+    captain_supervisors: async () => supervisorIdsOf(await homes.backlogs()),
 
     project_logos: () => logos.logos(),
   });

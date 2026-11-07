@@ -60,6 +60,8 @@ export const captainHomeSchema = z.discriminatedUnion("status", [
     folder: z.string(),
     root: z.string(),
     files: z.array(homeFileSchema),
+    /** The backlog's open decisions for the user, from {@link waitingOnUser}. */
+    needsYou: z.array(z.string()),
   }),
 ]);
 
