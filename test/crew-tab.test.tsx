@@ -15,7 +15,9 @@ import { project, thread } from "./fixtures";
 
 afterEach(cleanup);
 
-const ready = (...paths: string[]): CaptainHome => ({
+type ReadyHome = Extract<CaptainHome, { status: "ready" }>;
+
+const ready = (...paths: string[]): ReadyHome => ({
   status: "ready",
   folder: "~/.bb/captains/cops",
   root: "/home/me/.bb/captains/cops",
@@ -138,5 +140,59 @@ describe("the crew tab's memory", () => {
     }));
     await openMemory();
     await screen.findByText("No memory folder yet at ~/.bb/captains/cops.");
+  });
+});
+
+const waiting = (...needsYou: string[]): CaptainHome => ({
+  ...ready("backlog.md"),
+  needsYou,
+});
+
+const needsYouSection = () =>
+  screen.queryByRole("heading", { name: /^Needs you/ })?.closest("section") ??
+  null;
+
+describe("the crew tab's decisions", () => {
+  it("lists what the captain is waiting on the user for, above its threads", async () => {
+    renderCrew(() =>
+      waiting(
+        "deploy: today or Monday? — options: today / Monday — recommend Monday",
+        "pricing: which tier is default?",
+      ),
+    );
+    const heading = await screen.findByRole("heading", { name: /^Needs you/ });
+    expect(heading.textContent).toBe("Needs you2");
+    const section = needsYouSection()!;
+    expect(
+      within(section)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "deploy: today or Monday? — options: today / Monday — recommend Monday",
+      "pricing: which tier is default?",
+    ]);
+    expect(
+      section.compareDocumentPosition(screen.getByText(/^No workers yet/)) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("opens the captain's thread to answer, from the heading or a decision", async () => {
+    const { view } = renderCrew(() => waiting("deploy: today or Monday?"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "deploy: today or Monday?" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Needs you/ }));
+    expect(view.inspection.navigateCalls).toEqual([
+      { method: "toThread", threadId: "cap", options: undefined },
+      { method: "toThread", threadId: "cap", options: undefined },
+    ]);
+  });
+
+  it("shows nothing when no decision is waiting", async () => {
+    renderCrew(() => waiting());
+    await openMemory();
+    await screen.findByText("~/.bb/captains/cops");
+    expect(needsYouSection()).toBeNull();
   });
 });
