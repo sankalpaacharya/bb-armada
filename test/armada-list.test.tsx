@@ -142,7 +142,6 @@ describe("Armada thread list", () => {
     expect(
       card.getByText("Launched by Captain Alpha"),
     ).toBeTruthy();
-    expect(card.getByText("Alpha")).toBeTruthy();
     const face = rowOf(view.container, "w_wait")!.querySelector("img");
     expect(face?.getAttribute("alt")).toBe("");
     expect(face?.getAttribute("src")).toBe(
@@ -329,7 +328,7 @@ describe("Armada thread list", () => {
     });
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
     const card = within(rowOf(view.container, "plain")!);
-    expect(card.getByText("Beta")).toBeTruthy();
+    expect(card.queryByText("Beta")).toBeNull();
     expect(card.getByRole("img", { name: "Working" })).toBeTruthy();
     expect(
       rowOf(view.container, "plain")!.querySelector(
@@ -365,6 +364,7 @@ describe("Armada thread list", () => {
     );
     const open = within(rowOf(opened.view.container, "plain")!);
     expect(open.getByText("feat/loose-idea")).toBeTruthy();
+    expect(open.getByText("Beta")).toBeTruthy();
     expect(open.getByLabelText("Worktree")).toBeTruthy();
   });
 
@@ -467,7 +467,7 @@ describe("Armada thread list", () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
     expect(
-      within(rowOf(view.container, "plain")!).getByText("Beta"),
+      screen.getByRole("button", { name: "Threads from All projects" }),
     ).toBeTruthy();
   });
 
