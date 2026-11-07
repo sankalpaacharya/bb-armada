@@ -151,16 +151,25 @@ user.
      on scope." Then "Report what changed, how you verified it, and anything
      left open."
    - For a bug, the evidence that `references/diagnostic-reasoning.md` asks for.
-5. **Spawn the worker under the supervisor**, then hand it over. Add
-   `thread: <id>` to the top of the brief and a line to In flight
-   (`<slug> — thr_xxx — ship|scout`). Live status is in `supervisor.md`.
+5. **Spawn the worker under the supervisor**, in this order so a crash at any
+   step leaves a record:
+   1. Add `- <slug>: starting, ship|scout` to In flight.
+   2. Spawn. The title starts with the slug so the worker can be found again.
+   3. Put the id on the In flight line (`- <slug>: thr_xxx, ship|scout`) and
+      add `thread: <id>` to the top of the brief.
+   4. Send the supervisor the `TASK` line.
 
    ```sh
-   bb thread spawn --project "$BB_PROJECT_ID" --parent-thread <supervisor> \
-     --new-environment worktree --title "<short task>" \
+   bb thread spawn --json --project "$BB_PROJECT_ID" --parent-thread <supervisor> \
+     --new-environment worktree --title "<slug>: <short task>" \
      --prompt-file ~/.bb/captains/<project>/tasks/<slug>/brief.md
    bb thread tell <supervisor> --mode queue 'TASK <slug> <worker id>'
    ```
+
+   A line still `starting` on a later turn: look in
+   `bb thread list --parent-thread <supervisor>` for a `<slug>:` title. Record
+   it and send `TASK` if it is there; spawn again if not. Live status is in
+   `supervisor.md`.
 
 6. **Let the supervisor supervise.** Don't answer workers yourself while a
    supervisor is running; one owner per task. If no supervisor can run, parent

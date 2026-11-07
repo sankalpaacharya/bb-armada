@@ -44,20 +44,26 @@ each blocker. Main also messages you. On every wake:
 
 1. Check you are still the home's supervisor (`ownership.md`). Read
    `supervisor.md`, then work out which task the event belongs to.
-2. **New task from main** (`TASK <slug> thr_xxx`): add its ledger line and read
-   its brief.
-3. **Worker question, approval, failure, or stall**: follow `supervision.md`.
+2. **Adopt what you do not know.** For each thread in
+   `bb thread list --parent-thread <your id>` that has no ledger line: find its
+   task from its In flight line in `backlog.md` or the `<slug>:` at the start
+   of its title, read `tasks/<slug>/brief.md`, and add the ledger line. A `TASK` line from main can
+   be lost; this step makes it unnecessary. A child with no brief gets the
+   line `- ? — thr_xxx — unknown` and is left alone.
+3. **New task from main** (`TASK <slug> thr_xxx`): add its ledger line and read
+   its brief, unless step 2 already did.
+4. **Worker question, approval, failure, or stall**: follow `supervision.md`.
    Answer what you can and log each answer in `tasks/<slug>/steers.md`. You never
    ask the user anything directly.
-4. **Worker says it is done**: check it before you believe it. Read the diff in
+5. **Worker says it is done**: check it before you believe it. Read the diff in
    its worktree and its verification output, and compare them with done in the
    brief. Send back anything missing. When it holds up, write
    `tasks/<slug>/report.md` (the outcome, how it was verified, open items, and a
    full PR URL if there is one) and report READY or FINDINGS to main.
-5. **Answer from main** (`ANSWER <slug>: "<user's words>"`): pass the words
+6. **Answer from main** (`ANSWER <slug>: "<user's words>"`): pass the words
    to the waiting worker, using `bb thread interactions answer` or
    `bb thread tell`, and log them in `steers.md`.
-6. Update your ledger line. End the turn quietly; nobody reads your chat.
+7. Update your ledger line. End the turn quietly; nobody reads your chat.
 
 ## Reporting to main
 
@@ -94,7 +100,8 @@ never cover anything on the escalate list in `supervision.md`.
 ## Limits
 
 - You start new threads only as replacements for stuck workers (step 4 of the
-  recovery ladder), parented to yourself.
+  recovery ladder), parented to yourself and titled `<slug>: ...` like the
+  original. Update the ledger line to the new id right after the spawn.
 - Never commit, push, open, or merge a PR, and never let a worker do so, unless
   main passes on the user's explicit go for that change.
 
