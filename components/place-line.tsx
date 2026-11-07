@@ -17,9 +17,9 @@ function ActivityCount({ label, count }: { label: string; count: number }) {
 }
 
 /**
- * A thread's detail line: its project, branch or worktree, activity and PR.
- * The detailed line, for the open thread, adds the machine and the harness.
- * With nothing to say it draws nothing, so the row stays one line.
+ * A thread's detail line: its project, where it runs, its activity and PR.
+ * The detailed line, for the open thread, adds the harness. With nothing to
+ * say it draws nothing, so the row stays one line.
  */
 export function PlaceLine({
   thread,
@@ -34,7 +34,7 @@ export function PlaceLine({
 }) {
   const environment = thread.environment;
   const branch = environment?.branchName ?? null;
-  const host = detailed ? thread.host : null;
+  const host = thread.host;
   const placeIcon =
     branch !== null
       ? environment?.isWorktree === true
