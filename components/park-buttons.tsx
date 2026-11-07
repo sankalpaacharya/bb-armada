@@ -27,11 +27,11 @@ function ParkButton({
         onActivate();
       }}
       className={cn(
-        "grid size-5 cursor-pointer place-items-center rounded text-muted-foreground hover:bg-state-hover hover:text-foreground",
+        "grid size-4 cursor-pointer place-items-center rounded text-muted-foreground hover:bg-state-hover hover:text-foreground",
         FOCUS_RING,
       )}
     >
-      <Icon name={icon} className="size-3.5" />
+      <Icon name={icon} className="size-3" />
     </button>
   );
 }
@@ -68,7 +68,7 @@ export function ParkableSlot({
       <span
         className={cn(
           LAYER,
-          "pointer-events-none flex gap-0.5 opacity-0 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100",
+          "pointer-events-none flex gap-px opacity-0 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100",
           "group-hover/row:pointer-events-auto group-hover/row:opacity-100",
         )}
       >
