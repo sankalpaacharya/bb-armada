@@ -2,7 +2,7 @@ import { experimental_ThreadStatusGlyph as ThreadStatusGlyph } from "@get-bb/plu
 
 import type { Status } from "@/lib/status";
 import { cn } from "@/lib/utils";
-import { SquareGrid } from "./square-grid";
+import { ShadeGrid } from "./shade-grid";
 
 const WORDS: Record<Status, { word: string; className: string }> = {
   working: { word: "Working", className: "text-timeline-accent" },
@@ -19,7 +19,7 @@ export function StatusWord({ status }: { status: Status }) {
       data-status={status}
       className={cn("flex shrink-0 items-center gap-1.5 text-2xs", className)}
     >
-      {status === "working" ? <SquareGrid /> : null}
+      {status === "working" ? <ShadeGrid /> : null}
       {status === "done" ? (
         <ThreadStatusGlyph indicator="unread-success" size="compact" />
       ) : null}
@@ -33,7 +33,7 @@ export function StatusGlyph({ status }: { status: Status }) {
     case "working":
     case "queued":
       return (
-        <SquareGrid
+        <ShadeGrid
           label={WORDS[status].word}
           className="text-timeline-accent"
         />

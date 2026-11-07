@@ -19,6 +19,12 @@ vi.stubGlobal("localStorage", {
   setItem: (key: string, value: string) => void stored.set(key, value),
 });
 
+vi.stubGlobal("matchMedia", () => ({
+  matches: false,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+}));
+
 beforeEach(() => stored.clear());
 afterEach(() => {
   cleanup();

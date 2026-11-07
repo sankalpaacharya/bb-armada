@@ -42,14 +42,6 @@ are adapted from t3sidebar.
 
 Source: <https://github.com/SawyerHood/sawyer-plugins/tree/main/plugins/t3sidebar>
 
-## loading-ui Square Grid
-
-`components/square-grid.tsx` adapts the Square Grid loader from loading-ui,
-whose animation is credited to shaah1d (<https://x.com/shaah1d>). The source
-page states no licence.
-
-Source: <https://www.loading-ui.com/docs/components/square-grid>
-
 ## Hugeicons
 
 MIT License, Copyright (c) 2025 Hugeicons.
