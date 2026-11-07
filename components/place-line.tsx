@@ -7,7 +7,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { PullRequestNumber } from "./pull-request-number";
 
-function ProviderGlyph({ providerId }: { providerId: string }) {
+export function ProviderGlyph({ providerId }: { providerId: string }) {
   const { providers } = experimental_useProviders();
   const provider = providers.find((candidate) => candidate.id === providerId);
   return (
@@ -33,7 +33,7 @@ function ActivityCount({ label, count }: { label: string; count: number }) {
   );
 }
 
-/** A card's third line: where the thread runs, its activity, PR and harness. */
+/** The open thread's detail line: where it runs, its activity, PR and harness. */
 export function PlaceLine({ thread }: { thread: PluginSidebarThread }) {
   const environment = thread.environment;
   const branch = environment?.branchName ?? null;
@@ -46,7 +46,7 @@ export function PlaceLine({ thread }: { thread: PluginSidebarThread }) {
         ? { name: "Laptop", label: "Machine" }
         : null;
   return (
-    <div className="pointer-events-none relative mt-0.5 flex h-4 items-center gap-1.5 text-2xs text-muted-foreground">
+    <div className="flex h-5 items-center gap-1.5 pr-2 pl-8 text-2xs text-muted-foreground">
       {placeIcon === null ? null : (
         <Icon
           name={placeIcon.name}

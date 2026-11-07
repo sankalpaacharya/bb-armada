@@ -123,20 +123,24 @@ describe("Armada thread list", () => {
     }
     expect(anchorOf(view.container, "w_deep")).toBeNull();
     const deck = within(screen.getByRole("list", { name: "Captains" }));
-    expect(deck.getAllByRole("link").map((link) => link.getAttribute("aria-label"))).toEqual([
-      "Captain Alpha",
-    ]);
+    expect(
+      deck.getAllByRole("link").map((link) => link.getAttribute("aria-label")),
+    ).toEqual(["Captain Alpha"]);
     expect(screen.queryByRole("button", { name: /workers/i })).toBeNull();
-    expect(screen.getByRole("heading", { level: 2, name: "Captains" })).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "Threads" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Captains" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Threads" }),
+    ).toBeTruthy();
   });
 
-  it("starts a worker's card with its captain's face and name, then the project", async () => {
+  it("marks a worker with its captain's face and names the captain for screen readers", async () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "w_wait")).not.toBeNull());
     const card = within(rowOf(view.container, "w_wait")!);
     expect(
-      card.getByText((_, element) => element?.textContent === "Launched by Captain Alpha"),
+      card.getByText("Launched by Captain Alpha"),
     ).toBeTruthy();
     expect(card.getByText("Alpha")).toBeTruthy();
     const face = rowOf(view.container, "w_wait")!.querySelector("img");
@@ -144,18 +148,26 @@ describe("Armada thread list", () => {
     expect(face?.getAttribute("src")).toBe(
       rowOf(view.container, "cap")!.querySelector("img")?.getAttribute("src"),
     );
-    expect(within(rowOf(view.container, "plain")!).queryByText(/Launched by/)).toBeNull();
+    expect(
+      within(rowOf(view.container, "plain")!).queryByText(/Launched by/),
+    ).toBeNull();
   });
 
   it("names the captain once when it is named like its project", async () => {
     const { view } = await render({
       threads: [
         thread("cap", { title: "Alpha", projectId: "proj_a" }),
-        thread("w", { title: "Build", parentThreadId: "cap", projectId: "proj_a" }),
+        thread("w", {
+          title: "Build",
+          parentThreadId: "cap",
+          projectId: "proj_a",
+        }),
       ],
     });
     await waitFor(() => expect(rowOf(view.container, "w")).not.toBeNull());
-    expect(within(rowOf(view.container, "w")!).getAllByText(/Alpha/)).toHaveLength(1);
+    expect(
+      within(rowOf(view.container, "w")!).getAllByText(/Alpha/),
+    ).toHaveLength(1);
   });
 
   it("keeps the captain on a worker's card when the scope hides the project", async () => {
@@ -230,7 +242,11 @@ describe("Armada thread list", () => {
     const { view } = await render({
       threads: [
         thread("cap", { title: "cops" }),
-        thread("w", { title: "Broke", parentThreadId: "cap", indicator: "unread-error" }),
+        thread("w", {
+          title: "Broke",
+          parentThreadId: "cap",
+          indicator: "unread-error",
+        }),
       ],
     });
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
@@ -277,7 +293,7 @@ describe("Armada thread list", () => {
     expect(stored.has("armada/captain-toggles")).toBe(false);
   });
 
-  it("draws a thread as a card with its project, status, branch, pull request and harness", async () => {
+  it("draws a thread on one line, and adds where it runs only once it is open", async () => {
     const { view } = await render({
       threads: [
         thread("plain", {
@@ -315,8 +331,6 @@ describe("Armada thread list", () => {
     const card = within(rowOf(view.container, "plain")!);
     expect(card.getByText("Beta")).toBeTruthy();
     expect(card.getByRole("img", { name: "Working" })).toBeTruthy();
-    expect(card.getByText("feat/loose-idea")).toBeTruthy();
-    expect(card.getByLabelText("Worktree")).toBeTruthy();
     expect(
       rowOf(view.container, "plain")!.querySelector(
         '[data-provider-id="claude-code"]',
@@ -325,6 +339,33 @@ describe("Armada thread list", () => {
     expect(
       (await card.findByRole("link", { name: "#42" })).getAttribute("href"),
     ).toBe("https://github.com/acme/app/pull/42");
+    expect(card.queryByText("feat/loose-idea")).toBeNull();
+
+    cleanup();
+    const opened = await render({
+      activeThreadId: "plain",
+      threads: [
+        thread("plain", {
+          title: "Loose idea",
+          projectId: "proj_b",
+          environment: {
+            id: "env_1",
+            name: "loose-idea",
+            branchName: "feat/loose-idea",
+            path: null,
+            isWorktree: true,
+            providerId: null,
+            workspaceDisplayKind: null,
+          },
+        }),
+      ],
+    });
+    await waitFor(() =>
+      expect(rowOf(opened.view.container, "plain")).not.toBeNull(),
+    );
+    const open = within(rowOf(opened.view.container, "plain")!);
+    expect(open.getByText("feat/loose-idea")).toBeTruthy();
+    expect(open.getByLabelText("Worktree")).toBeTruthy();
   });
 
   it("shows only the chosen project's threads, without repeating the project on each card", async () => {
@@ -410,7 +451,9 @@ describe("Armada thread list", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Threads from All projects" }),
     );
-    expect(screen.getByRole("listbox", { name: "Show threads from" })).toBeTruthy();
+    expect(
+      screen.getByRole("listbox", { name: "Show threads from" }),
+    ).toBeTruthy();
     fireEvent.pointerDown(document.body);
     await waitFor(() =>
       expect(
@@ -502,19 +545,25 @@ describe("creating a captain", () => {
       createdAt: "2026-02-01T00:00:00.000Z",
     };
     const { view, onNavigate } = await render({
-      rpc: { captains_create: () => ({ outcome: "recorded", record: created }) },
+      rpc: {
+        captains_create: () => ({ outcome: "recorded", record: created }),
+      },
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
 
     const dialog = within(await screen.findByRole("dialog"));
     expect(
-      dialog.getByRole("option", { name: "Beta" }).getAttribute("aria-selected"),
+      dialog
+        .getByRole("option", { name: "Beta" })
+        .getAttribute("aria-selected"),
     ).toBe("true");
     const preview = (text: string) =>
       dialog
         .getAllByText(text)
         .filter((element) => element.closest("[role=option]") === null);
-    const name = dialog.getByRole("textbox", { name: "Name" }) as HTMLInputElement;
+    const name = dialog.getByRole("textbox", {
+      name: "Name",
+    }) as HTMLInputElement;
     expect(preview("Beta")).toHaveLength(1);
     expect(name.value).toBe("Beta");
     fireEvent.click(dialog.getByRole("option", { name: "Alpha" }));
@@ -584,7 +633,9 @@ describe("creating a captain", () => {
     fireEvent.keyDown(name, { key: "Enter" });
     fireEvent.click(button);
     expect(
-      view.inspection.rpcCalls.some((call) => call.method === "captains_create"),
+      view.inspection.rpcCalls.some(
+        (call) => call.method === "captains_create",
+      ),
     ).toBe(false);
   });
 
@@ -625,7 +676,9 @@ describe("creating a captain", () => {
       ]),
     );
     const calls = view.inspection.rpcCalls.map((call) => call.method);
-    expect(calls.filter((method) => method === "captains_create")).toHaveLength(1);
+    expect(calls.filter((method) => method === "captains_create")).toHaveLength(
+      1,
+    );
     expect(
       view.inspection.rpcCalls.find((call) => call.method === "captains_adopt")
         ?.input,
@@ -710,7 +763,9 @@ describe("thread menu", () => {
       await screen.findByRole("menuitem", { name: /Make captain/ }),
     );
     const dialog = within(await screen.findByRole("dialog"));
-    const name = dialog.getByRole("textbox", { name: "Name" }) as HTMLInputElement;
+    const name = dialog.getByRole("textbox", {
+      name: "Name",
+    }) as HTMLInputElement;
     expect(name.value).toBe("Loose idea");
     fireEvent.change(name, { target: { value: "Idea captain" } });
     fireEvent.click(dialog.getByRole("button", { name: "Make captain" }));
@@ -844,10 +899,15 @@ describe("thread menu", () => {
     fireEvent.keyDown(name, { key: "Enter" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(view.inspection.sdkCalls).toEqual([
-      { method: "threads.update", args: [{ threadId: "cap", title: "Flagship" }] },
+      {
+        method: "threads.update",
+        args: [{ threadId: "cap", title: "Flagship" }],
+      },
     ]);
     expect(
-      view.inspection.rpcCalls.some((call) => call.method === "captains_update"),
+      view.inspection.rpcCalls.some(
+        (call) => call.method === "captains_update",
+      ),
     ).toBe(false);
   });
 
@@ -933,7 +993,9 @@ describe("shelves", () => {
     });
     await waitFor(() => expect(rowOf(view.container, "a")).not.toBeNull());
     fireEvent.click(
-      within(rowOf(view.container, "a")!).getByRole("button", { name: "Settle" }),
+      within(rowOf(view.container, "a")!).getByRole("button", {
+        name: "Settle",
+      }),
     );
     fireEvent.click(
       within(rowOf(view.container, "b")!).getByRole("button", {
@@ -972,7 +1034,11 @@ describe("shelves", () => {
     await waitFor(() => expect(rowOf(view.container, "root")).not.toBeNull());
     expect(listOf(view.container, "root")).toBe("Threads");
     const card = within(rowOf(view.container, "root")!);
-    expect(card.getByText("Failed")).toBeTruthy();
+    expect(
+      rowOf(view.container, "root")!.querySelector(
+        '[data-thread-status-glyph="unread-error"]',
+      ),
+    ).not.toBeNull();
     expect(card.queryByRole("button", { name: "Settle" })).toBeNull();
     fireEvent.contextMenu(anchorOf(view.container, "root")!);
     await screen.findByRole("menu");
@@ -1009,11 +1075,15 @@ describe("shelves", () => {
       expect(screen.getByRole("button", { name: "Show snoozed" })).toBeTruthy(),
     );
     expect(
-      screen.getByText("Nothing active. Settled and snoozed threads are below."),
+      screen.getByText(
+        "Nothing active. Settled and snoozed threads are below.",
+      ),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show snoozed" }));
     expect(listOf(view.container, "later")).toBe("Snoozed");
-    expect(within(rowOf(view.container, "later")!).getByText("2h")).toBeTruthy();
+    expect(
+      within(rowOf(view.container, "later")!).getByText("2h"),
+    ).toBeTruthy();
 
     await act(async () => {
       vi.advanceTimersByTime(2 * HOUR + 100);
@@ -1029,9 +1099,13 @@ describe("shelves", () => {
       ],
       parks: [settledAt("parked", NOW)],
     });
-    await waitFor(() => expect(anchorOf(view.container, "quiet")).not.toBeNull());
+    await waitFor(() =>
+      expect(anchorOf(view.container, "quiet")).not.toBeNull(),
+    );
     fireEvent.contextMenu(anchorOf(view.container, "quiet")!);
-    expect(await screen.findByRole("menuitem", { name: "Settle" })).toBeTruthy();
+    expect(
+      await screen.findByRole("menuitem", { name: "Settle" }),
+    ).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /Snooze/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "Settle" }));
     await waitFor(() =>
