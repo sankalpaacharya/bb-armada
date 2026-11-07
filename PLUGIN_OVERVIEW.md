@@ -13,8 +13,8 @@ can filter by project, and quiet shelves for what you have settled or snoozed.
 - **Threads.** Every other thread is a card with its project, status, branch,
   pull request and harness. Sub-threads fold into their parent, which takes on
   the most urgent status among them. Pick a project to see only its threads.
-- **One click to start.** The **+** next to Captains asks for a project and an
-  avatar (shuffle until one fits), then starts a captain thread that sets up
+- **One click to start.** The **+** next to Captains asks for a name (the
+  project's, unless you type one), a project and an avatar (shuffle until one fits), then starts a captain thread that sets up
   its own notes file.
 - **Settle and snooze.** Hover a finished card for **Settle** and **Snooze until
   tomorrow**, or right-click for the snooze presets. Settled and snoozed
@@ -25,7 +25,8 @@ can filter by project, and quiet shelves for what you have settled or snoozed.
 ## Make a captain from any thread
 
 Right-click a thread and choose **Make captain…**. A captain's menu has
-**Change avatar…** and **Remove from captains**. Removing only forgets the
+**Edit captain…** (rename it or change its avatar) and **Remove from
+captains**. Removing only forgets the
 captain; the thread stays. A shelved thread's menu has **Move to active**.
 
 ## Good to know

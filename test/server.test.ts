@@ -26,7 +26,12 @@ const adopt = (threadId: string, seed = "one") => ({
   threadId,
   avatar: avatar(seed),
 });
-const create = { projectId: "p", projectName: "P", avatar: avatar("new") };
+const create = {
+  projectId: "p",
+  projectName: "P",
+  name: "P",
+  avatar: avatar("new"),
+};
 
 describe("captain records", () => {
   it("starts empty", async () => {
@@ -34,12 +39,13 @@ describe("captain records", () => {
     expect(await list()).toEqual([]);
   });
 
-  it("spawns a captain thread in the project, records it and invalidates the captains read", async () => {
+  it("spawns a captain thread titled with its name in the project, records it and invalidates the captains read", async () => {
     const { harness, list } = await load();
     const record = (await harness.callRpc("captains_create", {
       ...create,
       projectId: "proj_a",
       projectName: "Alpha",
+      name: "  Fleet ",
     })) as CaptainRecord;
     expect(record.threadId).toBe("thr_new");
     expect(await list()).toEqual([
@@ -51,11 +57,20 @@ describe("captain records", () => {
     expect(spawn![0]).toMatchObject({
       projectId: "proj_a",
       environment: { type: "project-default" },
-      title: "Alpha",
+      title: "Fleet",
     });
     expect((spawn![0] as { prompt: string }).prompt).toContain(
       "~/.bb/captains/alpha.md",
     );
+  });
+
+  it("refuses a blank name without spawning a thread", async () => {
+    const { harness, list } = await load();
+    await expect(
+      harness.callRpc("captains_create", { ...create, name: "   " }),
+    ).rejects.toThrow();
+    expect(harness.sdk.callsTo("threads.spawn")).toEqual([]);
+    expect(await list()).toEqual([]);
   });
 
   it("does not record a captain when the thread cannot be spawned", async () => {

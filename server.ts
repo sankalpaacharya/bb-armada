@@ -1,7 +1,7 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
-import { captainPrompt, captainTitle } from "./lib/captain-text";
+import { captainPrompt } from "./lib/captain-text";
 import {
   CAPTAIN_KEY_PREFIX,
   LEGACY_CAPTAINS_KEY,
@@ -67,11 +67,11 @@ export default async function plugin(bb: BbPluginApi) {
     captains_list: () =>
       listRecords(kv, CAPTAIN_KEY_PREFIX, parseStoredCaptain, bb.log.warn),
 
-    captains_create: async ({ projectId, projectName, avatar }) => {
+    captains_create: async ({ projectId, projectName, name, avatar }) => {
       const thread = await bb.sdk.threads.spawn({
         projectId,
         environment: { type: "project-default" },
-        title: captainTitle(projectName),
+        title: name,
         prompt: captainPrompt(projectName),
       });
       const record: CaptainRecord = {

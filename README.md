@@ -54,7 +54,7 @@ Every row reads from the table through `StatusMark`.
 | method            | input                                       | output         |
 | ----------------- | ------------------------------------------- | -------------- |
 | `captains_list`   | none                                        | captain records |
-| `captains_create` | `projectId`, `projectName`, `avatar`        | captain record |
+| `captains_create` | `projectId`, `projectName`, `name`, `avatar` | captain record |
 | `captains_adopt`  | `threadId`, `avatar`                        | captain record |
 | `captains_update` | `threadId`, `avatar`                        | captain record |
 | `captains_remove` | `threadId`                                  | none           |
@@ -63,9 +63,10 @@ Every row reads from the table through `StatusMark`.
 | `parks_snooze`    | `threadId`, `until` (must be in the future) | park record    |
 | `parks_unpark`    | `threadId` (idempotent)                     | none           |
 
-`captains_create` spawns a thread titled after the project (`cops`, not
-`Captain · cops`; the Captains section already says what it is) whose first
-prompt tells the agent to follow the `/captain` skill and keep notes in
+`captains_create` spawns a thread titled with the name from the dialog, which
+starts as the project's name (`cops`, not `Captain · cops`; the Captains
+section already says what it is). The title is the captain's only name; the
+record keeps just the avatar. The thread's first prompt tells the agent to follow the `/captain` skill and keep notes in
 `~/.bb/captains/<project>.md`. The thread is spawned first and recorded after,
 with three attempts; if recording still fails the error names the thread so
 you can adopt it with **Make captain…**.

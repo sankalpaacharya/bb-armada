@@ -68,6 +68,7 @@ async function render(
     threads?: typeof threads;
     activeThreadId?: string | null;
     rpc?: Record<string, (input: never) => unknown>;
+    sdk?: Record<string, unknown>;
   } = {},
 ) {
   const loaded = await loadPluginApp(app);
@@ -96,6 +97,7 @@ async function render(
         parks_list: () => options.parks ?? [],
         ...options.rpc,
       } as never,
+      sdk: options.sdk as never,
     },
   );
   return { view, onNavigate };
@@ -466,7 +468,7 @@ describe("Armada thread list", () => {
 });
 
 describe("creating a captain", () => {
-  it("creates it from the dialog with the chosen project and avatar, then opens it", async () => {
+  it("creates it from the dialog with the typed name, chosen project and avatar, then opens it", async () => {
     const created = {
       threadId: "thr_new",
       avatar: { style: "adventurer", seed: "x" },
@@ -485,9 +487,17 @@ describe("creating a captain", () => {
       dialog
         .getAllByText(text)
         .filter((element) => element.closest("[role=option]") === null);
+    const name = dialog.getByRole("textbox", { name: "Name" }) as HTMLInputElement;
     expect(preview("Beta")).toHaveLength(1);
+    expect(name.value).toBe("Beta");
     fireEvent.click(dialog.getByRole("option", { name: "Alpha" }));
     expect(preview("Alpha")).toHaveLength(1);
+    expect(name.value).toBe("Alpha");
+    fireEvent.change(name, { target: { value: "  Fleet " } });
+    fireEvent.click(dialog.getByRole("option", { name: "Beta" }));
+    fireEvent.click(dialog.getByRole("option", { name: "Alpha" }));
+    expect(name.value).toBe("  Fleet ");
+    expect(dialog.getByText("Fleet")).toBeTruthy();
     const avatars = within(dialog.getByRole("listbox", { name: "Avatar" }));
     const seedsBefore = avatars
       .getAllByRole("option")
@@ -499,7 +509,7 @@ describe("creating a captain", () => {
       .map((option) => option.querySelector("img")?.getAttribute("src"));
     expect(seedsAfter).not.toEqual(seedsBefore);
     fireEvent.click(avatars.getByRole("option", { name: "Avatar 3" }));
-    fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
+    fireEvent.keyDown(name, { key: "Enter" });
 
     await waitFor(() =>
       expect(view.inspection.navigateCalls).toEqual([
@@ -512,10 +522,28 @@ describe("creating a captain", () => {
     ).toEqual({
       projectId: "proj_a",
       projectName: "Alpha",
+      name: "Fleet",
       avatar: { style: "adventurer", seed: expect.stringMatching(/^[a-z0-9]{10}$/) },
     });
     expect(onNavigate).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("will not create a captain without a name", async () => {
+    const { view } = await render();
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    const name = dialog.getByRole("textbox", { name: "Name" });
+    fireEvent.change(name, { target: { value: "   " } });
+    const button = dialog.getByRole("button", {
+      name: "Create captain",
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.keyDown(name, { key: "Enter" });
+    fireEvent.click(button);
+    expect(
+      view.inspection.rpcCalls.some((call) => call.method === "captains_create"),
+    ).toBe(false);
   });
 
   it("lists personal projects after the others", async () => {
@@ -566,7 +594,7 @@ describe("creating a captain", () => {
 describe("thread menu", () => {
   const rightClick = (element: HTMLElement) => fireEvent.contextMenu(element);
 
-  it("offers to make a root thread a captain and adopts it with the picked avatar", async () => {
+  it("offers to make a root thread a captain and adopts it with the picked avatar, keeping its title", async () => {
     const { view } = await render();
     await waitFor(() =>
       expect(anchorOf(view.container, "plain")).not.toBeNull(),
@@ -591,6 +619,37 @@ describe("thread menu", () => {
       ).toMatchObject({ threadId: "plain", avatar: { style: "adventurer" } }),
     );
     expect(pickedSrc).toBeTruthy();
+    expect(view.inspection.sdkCalls).toEqual([]);
+  });
+
+  it("renames the thread it adopts when the name was changed", async () => {
+    const { view } = await render({
+      sdk: { threads: { update: async () => ({}) } },
+      rpc: { captains_adopt: () => registry("plain")[0] },
+    });
+    await waitFor(() =>
+      expect(anchorOf(view.container, "plain")).not.toBeNull(),
+    );
+    rightClick(anchorOf(view.container, "plain")!);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Make captain/ }),
+    );
+    const dialog = within(await screen.findByRole("dialog"));
+    const name = dialog.getByRole("textbox", { name: "Name" }) as HTMLInputElement;
+    expect(name.value).toBe("Loose idea");
+    fireEvent.change(name, { target: { value: "Idea captain" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Make captain" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(view.inspection.sdkCalls).toEqual([
+      {
+        method: "threads.update",
+        args: [{ threadId: "plain", title: "Idea captain" }],
+      },
+    ]);
+    expect(
+      view.inspection.rpcCalls.find((call) => call.method === "captains_adopt")
+        ?.input,
+    ).toMatchObject({ threadId: "plain" });
   });
 
   it("offers it on a root whose parent is archived", async () => {
@@ -618,8 +677,10 @@ describe("thread menu", () => {
     expect(screen.queryByRole("menuitem", { name: /Make captain/ })).toBeNull();
   });
 
-  it("lets a captain change its avatar or be removed without touching the thread", async () => {
-    const { view } = await render();
+  it("lets a captain change only its avatar or be removed without touching the thread", async () => {
+    const { view } = await render({
+      rpc: { captains_update: () => registry("cap")[0] },
+    });
     await waitFor(() => expect(anchorOf(view.container, "cap")).not.toBeNull());
     rightClick(anchorOf(view.container, "cap")!);
     expect(screen.queryByRole("menuitem", { name: /Make captain/ })).toBeNull();
@@ -637,16 +698,27 @@ describe("thread menu", () => {
 
     rightClick(anchorOf(view.container, "cap")!);
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Change avatar…" }),
+      await screen.findByRole("menuitem", { name: "Edit captain…" }),
     );
     const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByRole("heading", { name: "Edit captain" })).toBeTruthy();
+    expect(
+      (dialog.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value,
+    ).toBe("Captain Alpha");
+    expect(dialog.getByText("Alpha")).toBeTruthy();
+    expect(dialog.queryByRole("listbox", { name: "Project" })).toBeNull();
+    const save = dialog.getByRole("button", {
+      name: "Save changes",
+    }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
     const current = dialog.getByRole("option", { name: "Avatar 1" });
     expect(current.getAttribute("aria-selected")).toBe("true");
     expect(current.querySelector("img")?.getAttribute("src")).toBe(
       rowOf(view.container, "cap")!.querySelector("img")?.getAttribute("src"),
     );
     fireEvent.click(dialog.getByRole("option", { name: "Avatar 2" }));
-    fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
     await waitFor(() =>
       expect(
         view.inspection.rpcCalls.find(
@@ -661,6 +733,61 @@ describe("thread menu", () => {
         )?.input as { avatar: { seed: string } }
       ).avatar.seed,
     ).not.toBe("cap");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(view.inspection.sdkCalls).toEqual([]);
+  });
+
+  const editCaptain = async (sdk: Record<string, unknown>) => {
+    const rendered = await render({ sdk });
+    await waitFor(() =>
+      expect(anchorOf(rendered.view.container, "cap")).not.toBeNull(),
+    );
+    rightClick(anchorOf(rendered.view.container, "cap")!);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Edit captain…" }),
+    );
+    const dialog = within(await screen.findByRole("dialog"));
+    return {
+      ...rendered,
+      dialog,
+      name: dialog.getByRole("textbox", { name: "Name" }),
+      save: dialog.getByRole("button", {
+        name: "Save changes",
+      }) as HTMLButtonElement,
+    };
+  };
+
+  it("renames a captain's thread without touching its avatar", async () => {
+    const { view, name, save } = await editCaptain({
+      threads: { update: async () => ({}) },
+    });
+    fireEvent.change(name, { target: { value: " Captain Alpha " } });
+    expect(save.disabled).toBe(true);
+    fireEvent.change(name, { target: { value: "" } });
+    expect(save.disabled).toBe(true);
+    fireEvent.change(name, { target: { value: "Flagship" } });
+    fireEvent.keyDown(name, { key: "Enter" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(view.inspection.sdkCalls).toEqual([
+      { method: "threads.update", args: [{ threadId: "cap", title: "Flagship" }] },
+    ]);
+    expect(
+      view.inspection.rpcCalls.some((call) => call.method === "captains_update"),
+    ).toBe(false);
+  });
+
+  it("keeps the edit open when the rename fails", async () => {
+    const { name, save } = await editCaptain({
+      threads: {
+        update: async () => {
+          throw new Error("offline");
+        },
+      },
+    });
+    fireEvent.change(name, { target: { value: "Flagship" } });
+    fireEvent.click(save);
+    await waitFor(() => expect(save.disabled).toBe(false));
+    expect(screen.getByRole("dialog")).toBeTruthy();
   });
 });
 

@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import {
   experimental_useRpcMutation,
   useBbNavigate,
+  useSdk,
   type PluginSidebarProject,
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
@@ -20,6 +21,7 @@ import { randomAvatar } from "@/lib/avatar";
 import { captainTitle } from "@/lib/captain-text";
 import type { Avatar, CaptainRecord } from "@/lib/captains";
 import { rpcContract } from "@/lib/rpc";
+import { FOCUS_RING } from "@/lib/styles";
 import { toastFailure } from "@/lib/toast";
 import { CaptainTile } from "./captain-tile";
 import { ChoiceList } from "./choice-list";
@@ -30,6 +32,7 @@ export type CaptainDialogState =
   | { kind: "edit"; thread: PluginSidebarThread; record: CaptainRecord };
 
 const OFFERED = 12;
+const NAME_MAX = 80;
 
 function startingProject(
   projects: readonly PluginSidebarProject[],
@@ -46,10 +49,21 @@ function offerAvatars(keep: Avatar | null): Avatar[] {
   return offers;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  const Label = htmlFor === undefined ? "span" : "label";
   return (
     <div className="grid gap-1.5">
-      <span className="text-sm text-muted-foreground">{label}</span>
+      <Label htmlFor={htmlFor} className="text-sm text-muted-foreground">
+        {label}
+      </Label>
       {children}
     </div>
   );
@@ -68,9 +82,9 @@ const COPY = {
     description: "Pin this thread to the top as the captain of its project.",
   },
   edit: {
-    title: "Change avatar",
-    action: "Save",
-    description: "Pick how this captain looks in the sidebar.",
+    title: "Edit captain",
+    action: "Save changes",
+    description: "Rename this captain or change how it looks in the sidebar.",
   },
 } as const;
 
@@ -108,6 +122,8 @@ export function CaptainDialog({
       ),
   });
   const navigate = useBbNavigate();
+  const sdk = useSdk();
+  const nameId = useId();
   const [offers, setOffers] = useState(() =>
     offerAvatars(state.kind === "edit" ? state.record.avatar : null),
   );
@@ -115,16 +131,28 @@ export function CaptainDialog({
   const [projectId, setProjectId] = useState(() =>
     startingProject(projects, activeProjectId),
   );
+  const [typedName, setTypedName] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const project = projects.find((candidate) => candidate.id === projectId);
   const copy = COPY[state.kind];
-  const canSubmit = state.kind !== "create" || project !== undefined;
-  const previewTitle =
-    state.kind === "create"
-      ? project === undefined
-        ? "Choose a project"
-        : captainTitle(project.name)
-      : state.thread.displayTitle;
+  const currentTitle =
+    state.kind === "create" ? null : (state.thread.title ?? state.thread.displayTitle);
+  const defaultName =
+    currentTitle ?? (project === undefined ? "" : captainTitle(project.name));
+  const name = typedName ?? defaultName;
+  const trimmedName = name.trim();
+  const renamed = currentTitle !== null && trimmedName !== currentTitle;
+  const avatarChanged =
+    state.kind === "edit" && avatar.seed !== state.record.avatar.seed;
+  const canSubmit =
+    trimmedName !== "" &&
+    (state.kind === "create"
+      ? project !== undefined
+      : state.kind === "adopt" || renamed || avatarChanged);
+  const editedProject =
+    state.kind === "edit"
+      ? projects.find((candidate) => candidate.id === state.thread.projectId)
+      : undefined;
 
   const shuffle = () => {
     const next = offerAvatars(null);
@@ -140,14 +168,23 @@ export function CaptainDialog({
         const created = await create.mutate({
           projectId: project.id,
           projectName: project.name,
+          name: trimmedName,
           avatar,
         });
         navigate.toThread(created.threadId);
         onNavigate();
-      } else if (state.kind === "adopt") {
-        await adopt.mutate({ threadId: state.thread.id, avatar });
-      } else if (state.kind === "edit") {
-        await update.mutate({ threadId: state.thread.id, avatar });
+      } else if (state.kind !== "create") {
+        const threadId = state.thread.id;
+        await Promise.all([
+          renamed
+            ? sdk.threads.update({ threadId, title: trimmedName })
+            : null,
+          state.kind === "adopt"
+            ? adopt.mutate({ threadId, avatar })
+            : avatarChanged
+              ? update.mutate({ threadId, avatar })
+              : null,
+        ]);
       }
       onClose();
     } catch (cause) {
@@ -169,9 +206,30 @@ export function CaptainDialog({
         <div className="flex items-center gap-3 rounded-lg bg-accent/50 p-3">
           <CaptainTile avatar={avatar} size="preview" />
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
-            {previewTitle}
+            {name}
           </span>
         </div>
+        <Field label="Name" htmlFor={nameId}>
+          <input
+            id={nameId}
+            value={name}
+            maxLength={NAME_MAX}
+            autoComplete="off"
+            onChange={(event) => setTypedName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+            className={`h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground ${FOCUS_RING}`}
+          />
+        </Field>
+        {editedProject === undefined ? null : (
+          <Field label="Project">
+            <span className="text-sm">{editedProject.name}</span>
+          </Field>
+        )}
         {state.kind === "create" ? (
           <Field label="Project">
             <ChoiceList

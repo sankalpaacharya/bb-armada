@@ -107,7 +107,7 @@ export function CaptainsSection({
                     )
                   }
                   inline={captainItems({
-                    changeAvatar: () =>
+                    edit: () =>
                       onDialog({ kind: "edit", thread, record: entry.record }),
                     remove: () =>
                       remove

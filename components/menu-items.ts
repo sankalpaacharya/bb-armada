@@ -19,18 +19,14 @@ export function makeCaptainItem(
 }
 
 export function captainItems(actions: {
-  changeAvatar: () => void;
+  edit: () => void;
   remove: () => void;
 }): PluginThreadActionsInlineItem[] {
   return [
     {
-      key: "change-avatar",
+      key: "edit-captain",
       group: GROUPS.organize,
-      action: {
-        label: "Change avatar…",
-        icon: "Edit",
-        run: actions.changeAvatar,
-      },
+      action: { label: "Edit captain…", icon: "Edit", run: actions.edit },
     },
     {
       key: "remove-captain",

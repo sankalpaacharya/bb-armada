@@ -20,6 +20,7 @@ export const rpcContract = defineRpcContract({
     input: z.object({
       projectId: z.string().min(1).max(200),
       projectName: z.string().min(1).max(200),
+      name: z.string().trim().min(1).max(80),
       avatar,
     }),
     output: captainRecordSchema,
