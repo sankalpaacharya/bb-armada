@@ -170,3 +170,18 @@ The user asked for loading-ui's Square Grid loader (https://www.loading-ui.com/d
    - Respect `prefers-reduced-motion`: show the static track with one solid block.
    - Add a `THIRD_PARTY_NOTICES.md` credit for loading-ui Square Grid and shaah1d.
    - Verify: crisp, about 10px, smooth, and centred in the leading column.
+
+## Revision 2: thread cards show their project, like T3 Code (user, supersedes Revision 1 and Change 2)
+
+Reference: `.audit/shot/t3code-ref.png` (T3 Code's own sidebar). The user: "it shows a project as well, we gotta use like this".
+Captains stay exactly as in this plan (Capy compact rows). The **Threads** section changes:
+
+- **No project group rows.** Threads is one flat list ordered as the model already orders entries (pinned first, then latest activity). Delete the project group UI and its collapse state; keep `buildArmada`'s grouping only if something else needs it, otherwise flatten it in the model with tests updated.
+- **Each thread is a three-line card** (`rounded-md px-2 py-2`, active `bg-sidebar-accent`, hover `bg-sidebar-accent/60`, `gap-px` between cards):
+  1. `h-5 flex items-center gap-1.5 text-[12px] text-muted-foreground`: small folder icon (`size-3`, muted) + project name (truncate) + right: a **status word** when the thread has something to say, else the age.
+     Words and colours: `Working` (bb's info/blue token, e.g. `text-info-foreground` or whatever blue token bb's sidebar uses; find the real token, no hex) preceded by the tiny square-grid loader; `Approval` / `Needs you` for waiting-for-input (bb's warning/amber token); `Failed` for unread-error and queued-failed (`text-destructive-text`); `Queued` for queued-waiting (muted); `Done` with bb's unread dot for unread-success. Age: `text-[12px] tabular-nums text-muted-foreground`.
+  2. Title: `mt-0.5 text-[13px] leading-5 truncate text-foreground/90`, unread `font-medium text-foreground`.
+  3. `mt-0.5 h-4 flex items-center gap-1.5 text-[11px] text-muted-foreground`: branch in `font-mono truncate` (or host name when no branch), then the environment name when it differs from the branch, separated by a muted `·` exactly as T3 Code does (this is the one place a middle dot carries meaning), then the provider glyph pinned to the right edge (`experimental_ProviderIcon` from the SDK if it exists, else omit).
+- Child threads still fold into their root card (lane lifts), as the model does today.
+- **Workers under a captain** use the same three-line card, indented `pl-[26px]`, minus the project line (their project is the captain's): two lines, title + branch, status word or age at the right of the title line.
+- Captain rows' right slot uses the same status words in compact form: the loader alone for working, the bb waiting glyph for attention, else age.
