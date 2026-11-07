@@ -11,12 +11,10 @@ export const HEADER_ACTION = `grid size-6 shrink-0 cursor-pointer place-items-ce
 export const LIST_TEXT = "text-[13px]";
 
 export const TILE = {
+  badge: "size-3.5 rounded-[4px]",
   row: "size-7 rounded-[8px]",
   preview: "size-10 rounded-[10px]",
 } as const;
-
-/** The deck's worker cards start where the captain's name does: padding, avatar, gap. */
-export const DECK_INDENT = "pl-[46px]";
 
 export const SECTION_TEXT = "text-[12px]";
 

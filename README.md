@@ -1,9 +1,9 @@
 # bb-plugin-armada
 
 A sidebar for people who run many bb threads. Long-lived **captain** threads sit
-at the top with their workers nested underneath, every other thread sits in one
-list you can filter by project, and finished threads can be settled or snoozed
-onto quiet shelves below it.
+at the top, every thread appears once in one list you can filter by project
+(a captain's workers carry its face), and finished threads can be settled or
+snoozed onto quiet shelves below it.
 
 - `app.tsx` registers the thread list (`app.slots.experimental_threadList`).
 - `server.ts` owns the captain and park records in plugin KV and exposes them
@@ -35,22 +35,25 @@ park the thread had, and adopting or removing a captain clears its park.
 `lib/model.ts` turns the sidebar's threads, projects, captain records and
 parks into what the list draws. It is pure and unit-tested.
 
-- A captain's workers are its children, through `parentThreadId` or
-  `lifecycleOwnerThreadId`. Each worker folds its own descendants, the same way
-  a root card folds its subtree. A captain nested under another captain keeps
-  its own workers.
-- Every entry carries a folded status, the newest activity and the newest
-  attention time of its subtree. A captain folds itself and all its workers.
-- Root cards can be made captains; workers cannot.
-- Each root card and each worker resolves a shelf from its park and its fold
+- One tree policy, through `parentThreadId` or `lifecycleOwnerThreadId`: a
+  card's root is reached by climbing parents until there are none or the next
+  is a captain. So a captain's children are cards of their own (its
+  workers), each folding its own descendants, and each carries `captain`, the
+  captain's thread id, name and avatar. Every other root has `captain: null`.
+  A captain nested under another captain keeps its own workers.
+- Every card carries a folded status, the newest activity and the newest
+  attention time of its subtree. A captain row folds itself and every
+  descendant below it, stopping at nested captains, for its summary counts.
+- Cards without a captain can be made captains; workers cannot.
+- Each card resolves a shelf from its park and its fold
   (`lib/lifecycle.ts`). The fold is parkable only when no thread in it is
   working, queued or needs you. That is read from every signal of every
   thread, not from the folded status, because a failure outranks work still
   running beside it. So a tree with live work or a raised hand is always
   active, and it offers no Settle or Snooze. A snooze wakes on its timer or on
-  attention after it was set, and a settle returns on new attention. Captains are never parked. A parked worker
-  leaves its captain's list for the shelf. Snoozed is ordered by soonest wake,
-  Settled by newest settle.
+  attention after it was set, and a settle returns on new attention. Captains are
+  never parked; workers park like any card. Snoozed is ordered by soonest
+  wake, Settled by newest settle.
 - Records and parks whose thread is archived, hidden or gone are ignored. They
   stay in KV until you remove them. A park that can never apply again, because
   attention came after it or its snooze passed, is listed by the model as
@@ -92,11 +95,10 @@ Nothing shows when that plugin is absent.
 
 ### Local state
 
-The sidebar remembers three things in `localStorage`: `armada/thread-scope`
-(the project filter), `armada/captain-toggles` (which captains have their
-workers open) and `armada/shelves` (which shelves are open). It removes
+The sidebar remembers two things in `localStorage`: `armada/thread-scope`
+(the project filter) and `armada/shelves` (which shelves are open). It removes
 `armada/captains`, the registry cache from before captains were read through
-RPC.
+RPC, and `armada/captain-toggles`, from when workers nested in the deck.
 
 ## Avatars
 
@@ -115,10 +117,12 @@ working tone, "1 needs you" in the attention tone, else "Idle") with the
 shade grid while working or the age at the right. "1 failed" shows in the
 failure tone, apart from "needs you". Until the captains read settles the deck
 says "Loading captains…", and after a failed read "Could not load captains",
-never the first-captain invitation. Active workers nest inside
-the deck under their captain as t3sidebar-style cards, indented to the
-captain's name. Threads stay flat on the sidebar background as the same
-three-line cards. Section headers are a `div` with a small semibold `h2`
+never the first-captain invitation. The deck holds only captain rows. Every
+thread appears once, as a card in Threads, flat on the sidebar background. A
+worker's first line starts with its captain's avatar in a 14px tile, then the
+captain's name, a muted "·" and the project ("[face] cops · cops" reads
+"[face] cops" when the names match). When the scope hides the project the
+face and name stay. Screen readers hear "Launched by <captain>". Section headers are a `div` with a small semibold `h2`
 title, a muted count, and the actions beside it, with no divider lines. Every row shares `ThreadLink`, which
 owns bb's row contract: the full-bleed anchor, `data-sidebar-thread-id`, split
 on cmd-click, the jump shortcuts, bb's context menu and inline rename. Pickers

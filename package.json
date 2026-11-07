@@ -8,7 +8,7 @@
   },
   "bb": {
     "name": "Armada",
-    "description": "Captain threads with their workers nested underneath, every other thread in one list you can filter by project, and shelves for what you settle or snooze.",
+    "description": "Captain threads on top, every thread once in one list you can filter by project with its captain's face, and shelves for what you settle or snooze.",
     "branding": {
       "icon": "./assets/icons/compass.svg"
     },

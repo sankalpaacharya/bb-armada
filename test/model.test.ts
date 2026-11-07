@@ -34,27 +34,54 @@ const busy: Partial<PluginSidebarThread> = { status: "active" };
 const blocked: Partial<PluginSidebarThread> = { hasPendingInteraction: true };
 
 describe("captains and their workers", () => {
-  it("lists the captain's children as workers, each folding its own subtree, newest activity first", () => {
+  const badge = (id: string, name = id) => ({
+    threadId: id,
+    name,
+    avatar: { style: "micah", seed: id },
+  });
+
+  it("lists a captain's children in Threads as cards carrying their captain", () => {
     const threads = [
-      thread("cap"),
+      thread("cap", { title: "cops" }),
       thread("w1", { parentThreadId: "cap", updatedAt: NOW - 3000 }),
       thread("w2", { parentThreadId: "cap", updatedAt: NOW - 2000 }),
+      thread("plain", { updatedAt: NOW - 1000 }),
+    ];
+    const model = build(threads, registryOf(["cap"]));
+    expect(threadIds(model)).toEqual(["plain", "w2", "w1"]);
+    expect(model.threads.find((entry) => entry.thread.id === "w1")).toMatchObject({
+      captain: badge("cap", "cops"),
+      adoptable: false,
+    });
+    expect(model.captains.map((captain) => captain.thread.id)).toEqual(["cap"]);
+  });
+
+  it("folds a grandchild into its worker's card, which carries the captain", () => {
+    const threads = [
+      thread("cap"),
+      thread("w", { parentThreadId: "cap", updatedAt: NOW - 3000 }),
       thread("grandchild", {
-        parentThreadId: "w1",
+        parentThreadId: "w",
         updatedAt: NOW - 1000,
         ...blocked,
       }),
     ];
-    const [captain] = build(threads, registryOf(["cap"]),
-    ).captains;
-    expect(idsOf(captain!.workers)).toEqual(["w1", "w2"]);
-    expect(captain!.workers[0]).toMatchObject({
+    const model = build(threads, registryOf(["cap"]));
+    expect(threadIds(model)).toEqual(["w"]);
+    expect(model.threads[0]).toMatchObject({
+      captain: badge("cap"),
       status: "needs-you",
       activityAt: NOW - 1000,
-      adoptable: false,
     });
-    expect(captain!.status).toBe("needs-you");
-    expect(captain!.activityAt).toBe(NOW - 1000);
+  });
+
+  it("gives a thread with no captain above it no captain, and lets it become one", () => {
+    const threads = [
+      thread("root"),
+      thread("child", { parentThreadId: "root" }),
+    ];
+    const [entry] = build(threads, none).threads;
+    expect(entry).toMatchObject({ captain: null, adoptable: true });
   });
 
   it("follows the lifecycle owner when a worker has no parent", () => {
@@ -62,32 +89,21 @@ describe("captains and their workers", () => {
       thread("cap"),
       thread("w", { lifecycleOwnerThreadId: "cap" }),
     ];
-    const [captain] = build(threads, registryOf(["cap"]),
-    ).captains;
-    expect(idsOf(captain!.workers)).toEqual(["w"]);
+    const [entry] = build(threads, registryOf(["cap"])).threads;
+    expect(entry).toMatchObject({ captain: badge("cap") });
   });
 
-  it("keeps captains and their workers out of the thread list", () => {
-    const threads = [
-      thread("cap"),
-      thread("w", { parentThreadId: "cap" }),
-      thread("deep", { parentThreadId: "w" }),
-      thread("plain"),
-    ];
-    const model = build(threads, registryOf(["cap"]));
-    expect(threadIds(model)).toEqual(["plain"]);
-  });
-
-  it("lifts the captain's status to its most urgent worker", () => {
+  it("still counts the workers in the captain's summary and status", () => {
     const threads = [
       thread("cap"),
       thread("w1", { parentThreadId: "cap", ...busy }),
       thread("w2", { parentThreadId: "cap", ...busy }),
       thread("w3", { parentThreadId: "cap", ...blocked }),
+      thread("deep", { parentThreadId: "w3", indicator: "unread-error" }),
       thread("w4", { parentThreadId: "cap" }),
     ];
-    const [captain] = build(threads, registryOf(["cap"]),
-    ).captains;
+    const [captain] = build(threads, registryOf(["cap"])).captains;
+    expect(captain!.counts).toEqual({ working: 2, needsYou: 1, failed: 1 });
     expect(captain!.status).toBe("needs-you");
   });
 
@@ -96,16 +112,13 @@ describe("captains and their workers", () => {
       thread("cap", busy),
       thread("w", { parentThreadId: "cap" }),
     ];
-    const [captain] = build(threads, registryOf(["cap"]),
-    ).captains;
+    const [captain] = build(threads, registryOf(["cap"])).captains;
     expect(captain!.status).toBe("working");
   });
 
   it("has no status while everything is idle", () => {
     const threads = [thread("cap"), thread("w", { parentThreadId: "cap" })];
-    expect(
-      build(threads, registryOf(["cap"])).captains[0]!.status,
-    ).toBeNull();
+    expect(build(threads, registryOf(["cap"])).captains[0]!.status).toBeNull();
   });
 
   it("ignores records whose thread is gone, archived or hidden", () => {
@@ -113,7 +126,9 @@ describe("captains and their workers", () => {
       thread("archived", { isArchived: true, archivedAt: NOW }),
       thread("hidden", { isHidden: true }),
     ];
-    const model = build(threads, registryOf(["missing"], ["archived"], ["hidden"]),
+    const model = build(
+      threads,
+      registryOf(["missing"], ["archived"], ["hidden"]),
     );
     expect(model.captains).toEqual([]);
     expect(model.threads).toEqual([]);
@@ -130,9 +145,7 @@ describe("captains and their workers", () => {
       thread("secret", { parentThreadId: "cap", isHidden: true }),
       thread("w", { parentThreadId: "cap" }),
     ];
-    const [captain] = build(threads, registryOf(["cap"]),
-    ).captains;
-    expect(idsOf(captain!.workers)).toEqual(["w"]);
+    expect(threadIds(build(threads, registryOf(["cap"])))).toEqual(["w"]);
   });
 
   it("orders captains by when they were made one", () => {
@@ -142,27 +155,34 @@ describe("captains and their workers", () => {
       ["early", "2026-01-01T00:00:00.000Z"],
       ["middle", "2026-02-01T00:00:00.000Z"],
     );
-    expect(
-      build(threads, registry).captains.map((c) => c.thread.id),
-    ).toEqual(["early", "middle", "late"]);
+    expect(build(threads, registry).captains.map((c) => c.thread.id)).toEqual([
+      "early",
+      "middle",
+      "late",
+    ]);
   });
 
-  it("gives a captain under another captain its own entry and keeps its subtree to itself", () => {
+  it("gives a captain under another captain its own row, and its workers its badge", () => {
     const threads = [
       thread("outer"),
       thread("inner", { parentThreadId: "outer" }),
-      thread("inner-worker", { parentThreadId: "inner" }),
+      thread("inner-worker", { parentThreadId: "inner", ...busy }),
       thread("outer-worker", { parentThreadId: "outer" }),
     ];
-    const model = build(threads, registryOf(
+    const model = build(
+      threads,
+      registryOf(
         ["outer", "2026-01-01T00:00:00.000Z"],
         ["inner", "2026-02-01T00:00:00.000Z"],
       ),
     );
-    const [outer, inner] = model.captains;
-    expect(idsOf(outer!.workers)).toEqual(["outer-worker"]);
-    expect(idsOf(inner!.workers)).toEqual(["inner-worker"]);
-    expect(model.threads).toEqual([]);
+    expect(model.captains.map((c) => c.thread.id)).toEqual(["outer", "inner"]);
+    const captainOf = (id: string) =>
+      model.threads.find((entry) => entry.thread.id === id)?.captain?.threadId;
+    expect(captainOf("inner-worker")).toBe("inner");
+    expect(captainOf("outer-worker")).toBe("outer");
+    expect(model.captains[0]!.counts.working).toBe(0);
+    expect(model.captains[1]!.counts.working).toBe(1);
   });
 });
 
@@ -334,8 +354,8 @@ describe("shelves", () => {
     const model = build(threads, registryOf(["cap"]), [
       settledAt("w", NOW - HOUR),
     ]);
-    expect(idsOf(model.captains[0]!.workers)).toEqual(["w"]);
-    expect(model.captains[0]!.workers[0]!.parkable).toBe(false);
+    expect(threadIds(model)).toEqual(["w"]);
+    expect(model.threads[0]!.parkable).toBe(false);
     expect(model.settled).toEqual([]);
   });
 
@@ -368,7 +388,7 @@ describe("shelves", () => {
     expect(threadIds(model)).toEqual(["root"]);
   });
 
-  it("takes a parked worker off its captain and onto the shelf", () => {
+  it("parks a worker onto the same shelves as any card", () => {
     const threads = [
       thread("cap"),
       thread("w1", { parentThreadId: "cap" }),
@@ -377,8 +397,9 @@ describe("shelves", () => {
     const model = build(threads, registryOf(["cap"]), [
       settledAt("w1", NOW - HOUR),
     ]);
-    expect(idsOf(model.captains[0]!.workers)).toEqual(["w2"]);
+    expect(threadIds(model)).toEqual(["w2"]);
     expect(idsOf(model.settled)).toEqual(["w1"]);
+    expect(model.settled[0]!.captain?.threadId).toBe("cap");
   });
 
   it("never parks a captain", () => {

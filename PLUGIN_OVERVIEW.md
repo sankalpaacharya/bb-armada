@@ -1,17 +1,15 @@
 Run many threads without losing the long-lived ones. Armada replaces the
-sidebar thread list with captains on top, every other thread in one list you
+sidebar thread list with captains on top, every thread in one list you
 can filter by project, and quiet shelves for what you have settled or snoozed.
 
 ## What you get
 
 - **Captains.** A captain is a long-lived thread for a project, named after
   it. It sits at the top of the sidebar with a character avatar of its own.
-- **Workers underneath.** Every thread a captain starts nests under it as a
-  card on the captains' deck. The captain's row says how many of them are
-  working and how many need you, and opens by itself when something is going
-  on.
-- **Threads.** Every other thread is a card with its project, status, branch,
-  pull request and harness. Sub-threads fold into their parent, which takes on
+- **Threads, each once.** Every thread is a card with its project, status,
+  branch, pull request and harness. A thread a captain started shows that
+  captain's face and name before its project, and the captain's row says how
+  many of its threads are working, need you or failed. Sub-threads fold into their parent, which takes on
   the most urgent status among them. Pick a project to see only its threads.
 - **One click to start.** The **+** next to Captains asks for a name (the
   project's, unless you type one), a project and an avatar (shuffle until one fits), then starts a captain thread that sets up

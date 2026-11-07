@@ -29,8 +29,8 @@ import { ThreadsSection } from "./threads-section";
 
 const SCOPE_KEY = "armada/thread-scope";
 const SHELVES_KEY = "armada/shelves";
-/** The old registry cache, from before captains were read through RPC. */
-const RETIRED_KEYS = ["armada/captains"];
+/** The registry cache from before captains were read through RPC, and the deck's old worker toggles. */
+const RETIRED_KEYS = ["armada/captains", "armada/captain-toggles"];
 const NO_CAPTAINS: readonly CaptainRecord[] = [];
 
 export function ArmadaList({
@@ -85,7 +85,6 @@ export function ArmadaList({
         status={captains.status}
         captains={model.captains}
         activeThreadId={activeThreadId}
-        parkActions={parkActions}
         onOpen={open}
         onDialog={setDialog}
       />
