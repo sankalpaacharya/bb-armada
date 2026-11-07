@@ -13,6 +13,26 @@ export function supervisorIdOf(backlog: string): string | null {
   return SUPERVISOR_LINE.exec(backlog)?.[1] ?? null;
 }
 
+/** Older homes call the section "Waiting on captain". */
+const WAITING_HEADING = /^##\s+Waiting on (?:the user|captain)\s*$/i;
+const HEADING = /^#{1,6}\s/;
+const BULLET = /^[-*]\s+(.*\S)\s*$/;
+const PLACEHOLDER = /^\(.*\)$/;
+
+/** The decisions a backlog's Waiting on the user section holds, one per top-level bullet. */
+export function waitingOnUser(backlog: string): string[] {
+  const lines = backlog.split(/\r?\n/);
+  const start = lines.findIndex((line) => WAITING_HEADING.test(line));
+  if (start === -1) return [];
+  const items: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (HEADING.test(line)) break;
+    const text = BULLET.exec(line)?.[1];
+    if (text !== undefined && !PLACEHOLDER.test(text)) items.push(text);
+  }
+  return items;
+}
+
 /**
  * A markdown file at most three folders deep, named relative to its home. A
  * segment cannot start with a dot, which rules out `..` and hidden files.
