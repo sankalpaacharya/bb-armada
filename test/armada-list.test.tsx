@@ -1006,6 +1006,28 @@ describe("shelves", () => {
     ).toEqual({ threadId: "done" });
   });
 
+  it("keeps the age and the park actions mounted in one trailing slot, and the actions reachable by keyboard", async () => {
+    const { view } = await render({
+      threads: [thread("a", { title: "First", projectId: "proj_b" })],
+    });
+    await waitFor(() => expect(rowOf(view.container, "a")).not.toBeNull());
+    const card = within(rowOf(view.container, "a")!);
+    const settle = card.getByRole("button", { name: "Settle" });
+    const snooze = card.getByRole("button", { name: "Snooze until tomorrow" });
+    const age = card.getByText(/^(now|\d+[a-z]+)$/);
+    const slot = settle.parentElement!.parentElement!;
+    expect(slot.contains(age)).toBe(true);
+    expect(slot.contains(snooze)).toBe(true);
+
+    for (const button of [snooze, settle]) {
+      button.focus();
+      expect(document.activeElement).toBe(button);
+      expect(
+        button.closest("[hidden], [inert], [aria-hidden=true]"),
+      ).toBeNull();
+    }
+  });
+
   it("moves a settled or snoozed card off the list before the server answers", async () => {
     const { view } = await render({
       threads: [
