@@ -35,21 +35,24 @@ export function captainItems(actions: {
   ];
 }
 
-/** Settle and the snooze presets for a parkable thread; Move to active for a parked one. */
+/**
+ * Settle and the snooze presets for a parkable thread, inactive ones
+ * included; Move to active for a snoozed or settled one.
+ */
 export function parkItems(
   entry: Pick<ThreadEntry, "thread" | "parkable" | "shelf">,
   actions: ParkActions,
 ): PluginThreadActionsInlineItem[] {
   const { id } = entry.thread;
-  if (entry.shelf !== "active") {
+  if (entry.shelf === "snoozed" || entry.shelf === "settled") {
     return [
       {
-        key: "unpark",
+        key: "keep",
         group: GROUPS.lifecycle,
         action: {
           label: "Move to active",
           icon: "ArrowTurnBackward",
-          run: () => actions.unpark(id),
+          run: () => actions.keep(id),
         },
       },
     ];

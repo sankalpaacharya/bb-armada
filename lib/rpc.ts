@@ -71,4 +71,14 @@ export const rpcContract = defineRpcContract({
     output: parkRecordSchema,
   },
   parks_unpark: { input: z.strictObject({ threadId }), output: z.null() },
+  /** "Move to active": a user override that auto-settle never undoes. */
+  parks_keep: {
+    input: z.strictObject({ threadId, at: time }),
+    output: parkRecordSchema,
+  },
+  /** Runs auto-settle now; the threads whose park it wrote. */
+  parks_evaluate: {
+    input: z.null(),
+    output: z.object({ changed: z.array(threadId) }),
+  },
 });

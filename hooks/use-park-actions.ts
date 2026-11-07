@@ -8,7 +8,7 @@ import { toastFailure } from "@/lib/toast";
 export type ParkActions = {
   settle: (threadId: string) => void;
   snooze: (threadId: string, until: number) => void;
-  unpark: (threadId: string) => void;
+  keep: (threadId: string) => void;
 };
 
 /** A thread has one park at most; a new one replaces it. */
@@ -24,7 +24,11 @@ export function useParkActions(): ParkActions {
     contract: rpcContract,
     method: "parks_settle",
     optimistic: ({ threadId, at }, cache) =>
-      cache.update("parks_list", null, withPark({ threadId, kind: "settled", at })),
+      cache.update(
+        "parks_list",
+        null,
+        withPark({ threadId, kind: "settled", at, by: "user" }),
+      ),
   });
   const snooze = experimental_useRpcMutation({
     contract: rpcContract,
@@ -36,12 +40,14 @@ export function useParkActions(): ParkActions {
         withPark({ threadId, kind: "snoozed", at, until }),
       ),
   });
-  const unpark = experimental_useRpcMutation({
+  const keep = experimental_useRpcMutation({
     contract: rpcContract,
-    method: "parks_unpark",
-    optimistic: ({ threadId }, cache) =>
-      cache.update("parks_list", null, (current) =>
-        current.filter((record) => record.threadId !== threadId),
+    method: "parks_keep",
+    optimistic: ({ threadId, at }, cache) =>
+      cache.update(
+        "parks_list",
+        null,
+        withPark({ threadId, kind: "kept", at }),
       ),
   });
   return {
@@ -55,9 +61,9 @@ export function useParkActions(): ParkActions {
         .mutate({ threadId, at: Date.now(), until })
         .catch((cause: unknown) => toastFailure("Could not snooze", cause));
     },
-    unpark: (threadId) => {
-      unpark
-        .mutate({ threadId })
+    keep: (threadId) => {
+      keep
+        .mutate({ threadId, at: Date.now() })
         .catch((cause: unknown) =>
           toastFailure("Could not move to active", cause),
         );
@@ -83,4 +89,17 @@ export function usePruneParks(expired: readonly string[]): void {
       mutate({ threadId }).catch(() => undefined);
     }
   }, [expired, mutate]);
+}
+
+export function useAutoSettleOnMount(): void {
+  const { mutate } = experimental_useRpcMutation({
+    contract: rpcContract,
+    method: "parks_evaluate",
+  });
+  const ran = useRef(false);
+  useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+    mutate(null).catch(() => undefined);
+  }, [mutate]);
 }

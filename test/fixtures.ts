@@ -70,11 +70,11 @@ export function project(
   };
 }
 
-export const settledAt = (threadId: string, at: number): ParkRecord => ({
-  threadId,
-  kind: "settled",
-  at,
-});
+export const settledAt = (
+  threadId: string,
+  at: number,
+  by: "user" | "auto" = "user",
+): ParkRecord => ({ threadId, kind: "settled", at, by });
 
 export const snoozedUntil = (
   threadId: string,
