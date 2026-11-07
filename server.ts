@@ -11,6 +11,7 @@ import {
   parseStoredCaptain,
   type CaptainRecord,
 } from "./lib/captains";
+import { createHomeReader } from "./lib/home-reader";
 import { listRecords, queueByKey } from "./lib/kv-records";
 import {
   PARK_KEY_PREFIX,
@@ -75,6 +76,7 @@ export default async function plugin(bb: BbPluginApi) {
   }
   const queue = queueByKey();
   const settings = bb.settings.define(SETTINGS);
+  const homes = createHomeReader(bb);
 
   const findCaptain = async (threadId: string): Promise<CaptainRecord | null> =>
     parseStoredCaptain(await kv.get<unknown>(captainKey(threadId)));
@@ -194,6 +196,12 @@ export default async function plugin(bb: BbPluginApi) {
     parks_keep: ({ threadId, at }) => savePark({ threadId, kind: "kept", at }),
 
     parks_evaluate: async () => ({ changed: await evaluate() }),
+
+    captain_home: ({ project }) => homes.home(project),
+
+    captain_home_file: ({ project, path }) => homes.file(project, path),
+
+    captain_supervisors: () => homes.supervisors(),
   });
 
   bb.background.schedule("auto-settle", "*/5 * * * *", async () => {

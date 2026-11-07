@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -15,7 +17,54 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function load(options: { seed?: (kv: Kv) => Promise<void> } = {}) {
+const HOMES = path.join(os.homedir(), ".bb", "captains");
+
+/** bb's host files over captain homes, keyed by their path under `~/.bb/captains`. */
+function homeFiles(homes: Record<string, string>) {
+  const keyOf = (file: string) => path.relative(HOMES, file);
+  return {
+    listPaths: async ({
+      path: folder,
+      excludeNames = [],
+    }: {
+      path: string;
+      excludeNames?: string[];
+    }) => ({
+      paths: Object.keys(homes)
+        .map((key) => path.relative(folder, path.join(HOMES, key)))
+        .filter(
+          (relative) =>
+            !relative.startsWith("..") &&
+            !relative.split("/").some((name) => excludeNames.includes(name)),
+        )
+        .map((relative) => ({
+          kind: "file",
+          name: path.basename(relative),
+          path: relative,
+        })),
+      truncated: false,
+    }),
+    read: async ({ path: file }: { path: string }) => {
+      const content = homes[keyOf(file)];
+      if (content === undefined) throw new Error(`ENOENT: ${file}`);
+      return {
+        path: file,
+        content,
+        contentEncoding: "utf8",
+        sizeBytes: content.length,
+        modifiedAtMs: 1_000,
+        sha256: "sha",
+      };
+    },
+  };
+}
+
+async function load(
+  options: {
+    seed?: (kv: Kv) => Promise<void>;
+    homes?: Record<string, string>;
+  } = {},
+) {
   const { bb, harness } = createFakePluginHost({
     pluginId: "armada",
     sdk: {
@@ -23,6 +72,7 @@ async function load(options: { seed?: (kv: Kv) => Promise<void> } = {}) {
         spawn: async () => ({ id: "thr_new" }) as never,
         list: async () => [],
       },
+      files: homeFiles(options.homes ?? {}),
     },
   });
   await options.seed?.(bb.storage.kv);
@@ -779,6 +829,97 @@ describe("auto-settle", () => {
     await harness.callRpc("parks_settle", { threadId: "old", at: 3000 });
     expect(await parks()).toEqual([
       { threadId: "old", kind: "settled", at: 3000, by: "user" },
+    ]);
+  });
+});
+
+describe("captain homes", () => {
+  const homes = {
+    "cops/captain.md": "# Captain\n",
+    "cops/backlog.md": "# Backlog: cops\n\nSupervisor: thr_sup1\n",
+    "cops/tasks/fix-login/brief.md": "Fix the login.\n",
+    "cops/notes.txt": "not memory",
+    "personal/backlog.md": "Supervisor: (none yet; started on first task)\n",
+    "my-app/backlog.md": "# Backlog\nSupervisor: thr_sup2 (since Monday)\n",
+    "my-app/tasks/old/backlog.md": "Supervisor: thr_stale\n",
+  };
+
+  it("lists the markdown in a project's home by its name, with each file's size and age", async () => {
+    const { harness } = await load({ homes });
+    expect(await harness.callRpc("captain_home", { project: "cops" })).toEqual({
+      status: "ready",
+      folder: "~/.bb/captains/cops",
+      files: [
+        { path: "captain.md", sizeBytes: 10, modifiedAt: 1_000 },
+        { path: "backlog.md", sizeBytes: 38, modifiedAt: 1_000 },
+        {
+          path: "tasks/fix-login/brief.md",
+          sizeBytes: 15,
+          modifiedAt: 1_000,
+        },
+      ],
+    });
+    expect(
+      await harness.callRpc("captain_home", { project: "My App" }),
+    ).toMatchObject({ status: "ready", folder: "~/.bb/captains/my-app" });
+  });
+
+  it("calls a home with no folder missing, not an error", async () => {
+    const { harness } = await load({ homes });
+    expect(
+      await harness.callRpc("captain_home", { project: "Nowhere" }),
+    ).toEqual({ status: "missing", folder: "~/.bb/captains/nowhere" });
+  });
+
+  it("reads one file of a home, confined to that home", async () => {
+    const { harness } = await load({ homes });
+    expect(
+      await harness.callRpc("captain_home_file", {
+        project: "cops",
+        path: "tasks/fix-login/brief.md",
+      }),
+    ).toEqual({ content: "Fix the login.\n", truncated: false });
+    const [read] = harness.sdk.callsTo("files.read");
+    expect(read![0]).toMatchObject({
+      path: path.join(HOMES, "cops/tasks/fix-login/brief.md"),
+      rootPath: path.join(HOMES, "cops"),
+    });
+  });
+
+  it("returns the first 200 KB of a long file and says it cut the rest", async () => {
+    const { harness } = await load({
+      homes: { "cops/archive.md": "x".repeat(250_000) },
+    });
+    const file = (await harness.callRpc("captain_home_file", {
+      project: "cops",
+      path: "archive.md",
+    })) as { content: string; truncated: boolean };
+    expect(file.content).toHaveLength(200_000);
+    expect(file.truncated).toBe(true);
+  });
+
+  it("refuses a path outside the home, an absolute one, a hidden one or one that is not markdown, without reading", async () => {
+    const { harness } = await load({ homes });
+    for (const bad of [
+      "../x.md",
+      "tasks/../../x.md",
+      "/etc/x.md",
+      ".secret.md",
+      "x.txt",
+      "a/b/c/d.md",
+    ]) {
+      await expect(
+        harness.callRpc("captain_home_file", { project: "cops", path: bad }),
+      ).rejects.toThrow();
+    }
+    expect(harness.sdk.callsTo("files.read")).toEqual([]);
+  });
+
+  it("names each home's supervisor from its backlog, skipping homes without one", async () => {
+    const { harness } = await load({ homes });
+    expect(await harness.callRpc("captain_supervisors", null)).toEqual([
+      "thr_sup1",
+      "thr_sup2",
     ]);
   });
 });

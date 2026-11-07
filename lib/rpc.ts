@@ -1,14 +1,22 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
+import {
+  captainHomeSchema,
+  homeFileContentSchema,
+  homeFilePathSchema,
+} from "./captain-home";
 import { avatarSchema, captainRecordSchema, idSchema } from "./captains";
 import { parkRecordSchema } from "./lifecycle";
 
 export const CAPTAINS_TAG = "captains";
 export const PARKS_TAG = "parks";
+export const HOMES_TAG = "homes";
 
 const threadId = idSchema;
 const avatar = avatarSchema;
+/** A project by name, which names its captain's home. */
+const project = z.string().min(1).max(200);
 /**
  * Park and adopt writes carry the time the user acted, stamped once by the
  * client, so the optimistic prediction and the stored record agree.
@@ -80,5 +88,22 @@ export const rpcContract = defineRpcContract({
   parks_evaluate: {
     input: z.null(),
     output: z.object({ changed: z.array(threadId) }),
+  },
+
+  captain_home: {
+    input: z.strictObject({ project }),
+    output: captainHomeSchema,
+    tags: () => [HOMES_TAG],
+  },
+  captain_home_file: {
+    input: z.strictObject({ project, path: homeFilePathSchema }),
+    output: homeFileContentSchema,
+    tags: () => [HOMES_TAG],
+  },
+  /** Every captain home's supervisor thread. */
+  captain_supervisors: {
+    input: z.null(),
+    output: z.array(threadId),
+    tags: () => [HOMES_TAG],
   },
 });
