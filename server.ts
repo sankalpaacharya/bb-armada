@@ -162,7 +162,7 @@ export default async function plugin(bb: BbPluginApi) {
       listRecords(kv, PARK_KEY_PREFIX, parseStoredPark, bb.log.warn),
 
     parks_settle: ({ threadId, at }) =>
-      savePark({ threadId, kind: "settled", at }),
+      savePark({ threadId, kind: "settled", at, by: "user" }),
 
     parks_snooze: ({ threadId, at, until }) => {
       if (until <= at) throw new Error("A snooze must end after it starts");

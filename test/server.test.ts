@@ -333,7 +333,12 @@ describe("parks", () => {
       threadId: "t",
       at: 1000,
     })) as ParkRecord;
-    expect(settled).toEqual({ threadId: "t", kind: "settled", at: 1000 });
+    expect(settled).toEqual({
+      threadId: "t",
+      kind: "settled",
+      at: 1000,
+      by: "user",
+    });
     expect(await list(harness)).toEqual([settled]);
 
     const snoozed = (await harness.callRpc("parks_snooze", {
@@ -368,7 +373,7 @@ describe("parks", () => {
     expect(await list(harness)).toEqual([]);
   });
 
-  it("skips a park it cannot read, with a log line", async () => {
+  it("reads a settle stored before auto-settle as the user's, and skips a park it cannot read, with a log line", async () => {
     const { harness } = await load({
       seed: async (kv) => {
         await kv.set("park:good", { threadId: "good", kind: "settled", at: 5 });
@@ -376,7 +381,7 @@ describe("parks", () => {
       },
     });
     expect(await list(harness)).toEqual([
-      { threadId: "good", kind: "settled", at: 5 },
+      { threadId: "good", kind: "settled", at: 5, by: "user" },
     ]);
     expect(harness.logEntries).toContainEqual({
       level: "warn",

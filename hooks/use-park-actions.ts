@@ -24,7 +24,7 @@ export function useParkActions(): ParkActions {
     contract: rpcContract,
     method: "parks_settle",
     optimistic: ({ threadId, at }, cache) =>
-      cache.update("parks_list", null, withPark({ threadId, kind: "settled", at })),
+      cache.update("parks_list", null, withPark({ threadId, kind: "settled", at, by: "user" })),
   });
   const snooze = experimental_useRpcMutation({
     contract: rpcContract,

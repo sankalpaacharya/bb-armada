@@ -5,28 +5,47 @@ import { formatDuration } from "./time";
 
 const time = z.number().int().positive();
 
-const parkSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("settled"), at: time }),
-  z.object({ kind: z.literal("snoozed"), at: time, until: time }),
-]);
+const settledBy = z.enum(["user", "auto"]);
 
-export type Park = z.infer<typeof parkSchema>;
-export type Snooze = Extract<Park, { kind: "snoozed" }>;
+/**
+ * `kept` is the user's "Move to active": it holds no shelf, and it stops the
+ * auto-settle job from settling the thread again.
+ */
+const parkVariants = [
+  z.object({ kind: z.literal("settled"), at: time, by: settledBy }),
+  z.object({ kind: z.literal("snoozed"), at: time, until: time }),
+  z.object({ kind: z.literal("kept"), at: time }),
+] as const;
 
 export const parkRecordSchema = z
   .object({ threadId: idSchema })
-  .and(parkSchema);
+  .and(z.discriminatedUnion("kind", parkVariants));
 
 export type ParkRecord = z.infer<typeof parkRecordSchema>;
+export type Park = z.infer<(typeof parkVariants)[number]>;
+export type Settle = Extract<Park, { kind: "settled" }>;
+export type Snooze = Extract<Park, { kind: "snoozed" }>;
 
-export type Shelf = "active" | Park["kind"];
+export type Shelf = "active" | "snoozed" | "settled";
 
 export const PARK_KEY_PREFIX = "park:";
 export const parkKey = (threadId: string): string =>
   `${PARK_KEY_PREFIX}${threadId}`;
 
+/** Settles stored before auto-settle carry no `by`; only the user filed them. */
+const storedParkSchema = z
+  .object({ threadId: idSchema })
+  .and(
+    z.discriminatedUnion("kind", [
+      parkVariants[0].extend({ by: settledBy.default("user") }),
+      parkVariants[1],
+      parkVariants[2],
+    ]),
+  )
+  .pipe(parkRecordSchema);
+
 export function parseStoredPark(raw: unknown): ParkRecord | null {
-  const parsed = parkRecordSchema.safeParse(raw);
+  const parsed = storedParkSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
 
@@ -45,6 +64,7 @@ export function isExpired(
   latestAttentionAt: number,
   now: number,
 ): boolean {
+  if (park.kind === "kept") return false;
   return (
     latestAttentionAt > park.at ||
     (park.kind === "snoozed" && park.until <= now)
@@ -61,7 +81,8 @@ export function resolveShelf(
   signals: ShelfSignals,
   now: number,
 ): Shelf {
-  if (park === undefined || !signals.parkable) return "active";
+  if (park === undefined || park.kind === "kept" || !signals.parkable)
+    return "active";
   return isExpired(park, signals.latestAttentionAt, now) ? "active" : park.kind;
 }
 
@@ -114,3 +135,117 @@ export const wakeLabel = (until: number, now: number): string =>
 /** When each snooze wakes, for the clock that wakes the model. */
 export const wakesOf = (parks: readonly Park[]): number[] =>
   parks.flatMap((park) => (park.kind === "snoozed" ? [park.until] : []));
+
+const DAY = 24 * HOUR;
+
+export const lastActivityOf = (thread: {
+  createdAt: number;
+  updatedAt: number;
+  latestAttentionAt: number;
+}): number =>
+  Math.max(thread.createdAt, thread.updatedAt, thread.latestAttentionAt);
+
+/** A card's pull request as auto-settle reads it; `unknown` when it could not be read. */
+export type PullRequestFacts =
+  | {
+      outcome: "available";
+      state: "draft" | "open" | "merged" | "closed";
+      updatedAt: string;
+    }
+  | { outcome: "absent" }
+  | { outcome: "unknown" };
+
+export type AutoSettleSettings = {
+  /** Settle a quiet card after this many days; null turns it off. */
+  afterDays: number | null;
+  onMerge: boolean;
+};
+
+/** A card folded over its whole tree: any thread pinned, waiting, queued or working holds it. */
+export type AutoSettleThread = {
+  lastActivityAt: number;
+  pinned: boolean;
+  hasPendingInteraction: boolean;
+  hasQueuedWork: boolean;
+  isWorking: boolean;
+};
+
+export type AutoSettleDecision = "keep" | "settle" | "unsettle";
+
+const isUserOverride = (park: Park | null): boolean =>
+  park?.kind === "kept" || (park?.kind === "settled" && park.by === "user");
+
+export function cannotAutoSettle(
+  park: Park | null,
+  thread: AutoSettleThread,
+): boolean {
+  return (
+    thread.pinned ||
+    thread.hasPendingInteraction ||
+    thread.hasQueuedWork ||
+    thread.isWorking ||
+    park?.kind === "snoozed"
+  );
+}
+
+/** Only a card the job could settle or unsettle needs its pull request read. */
+export const needsPullRequest = (
+  park: Park | null,
+  thread: AutoSettleThread,
+): boolean => !isUserOverride(park) && !cannotAutoSettle(park, thread);
+
+/** Whether policy wants the card settled, or null when it cannot tell. */
+function policySettles(
+  now: number,
+  pullRequest: PullRequestFacts,
+  settings: AutoSettleSettings,
+  lastActivityAt: number,
+): boolean | null {
+  if (pullRequest.outcome === "unknown") return null;
+  if (pullRequest.outcome === "available") {
+    const { state } = pullRequest;
+    if (state === "open" || state === "draft") return false;
+    if (state === "closed" || settings.onMerge) {
+      const updatedAt = Date.parse(pullRequest.updatedAt);
+      if (Number.isNaN(updatedAt)) return null;
+      if (updatedAt >= lastActivityAt) return true;
+    }
+  }
+  return (
+    settings.afterDays !== null &&
+    lastActivityAt < now - settings.afterDays * DAY
+  );
+}
+
+/**
+ * bb-sidebar's auto-settle rule. A user's settle or "Move to active" is never
+ * touched; a card that is pinned, live or snoozed comes off an auto settle; a
+ * closed PR, or a merged one with `onMerge`, settles a card it outlived; an
+ * open or draft PR holds it; otherwise it settles after `afterDays` quiet days.
+ * Only a change from the current auto-settled state is returned.
+ */
+export function decideAutoSettle({
+  park,
+  now,
+  pullRequest,
+  settings,
+  thread,
+}: {
+  park: Park | null;
+  now: number;
+  pullRequest: PullRequestFacts;
+  settings: AutoSettleSettings;
+  thread: AutoSettleThread;
+}): AutoSettleDecision {
+  if (isUserOverride(park)) return "keep";
+  const settled = park?.kind === "settled";
+  if (cannotAutoSettle(park, thread)) return settled ? "unsettle" : "keep";
+  const wanted = policySettles(
+    now,
+    pullRequest,
+    settings,
+    thread.lastActivityAt,
+  );
+  if (wanted === null || wanted === settled) return "keep";
+  return wanted ? "settle" : "unsettle";
+}
