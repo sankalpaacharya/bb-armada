@@ -8,7 +8,7 @@
   },
   "bb": {
     "name": "Armada",
-    "description": "A BB plugin with an example todo list.",
+    "description": "Captain threads with their workers nested underneath, and every other thread grouped by project.",
     "branding": {
       "icon": "ListTodo"
     },
@@ -16,7 +16,6 @@
     "app": "./app.tsx"
   },
   "dependencies": {
-    "@radix-ui/react-checkbox": "^1.3.7",
     "@radix-ui/react-slot": "^1.3.0",
     "zod": "^4.6.5"
   },
