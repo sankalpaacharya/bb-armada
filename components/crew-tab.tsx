@@ -85,7 +85,7 @@ function Group({
   );
 }
 
-/** The decisions the captain's backlog keeps waiting on the user, answered in its thread. */
+/** What the captain's backlog keeps waiting on the user, answered in its thread. */
 function NeedsYou({
   project,
   onOpenCaptain,
@@ -106,7 +106,11 @@ function NeedsYou({
         <button
           type="button"
           onClick={onOpenCaptain}
-          className={cn(PANEL_ROW, "h-7 items-center gap-1.5 px-2", SECTION_TITLE)}
+          className={cn(
+            PANEL_ROW,
+            "h-7 items-center gap-1.5 px-2",
+            SECTION_TITLE,
+          )}
         >
           Needs you
           <span

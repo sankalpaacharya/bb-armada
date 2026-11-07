@@ -86,7 +86,8 @@ export function createHomeReader(bb: BbPluginApi) {
           modifiedAt: file.modifiedAtMs ?? null,
         }),
       ),
-      needsYou: backlog === undefined ? [] : waitingOnUser(textOf(backlog.file)),
+      needsYou:
+        backlog === undefined ? [] : waitingOnUser(textOf(backlog.file)),
     };
   };
 

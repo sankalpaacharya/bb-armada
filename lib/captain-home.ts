@@ -19,7 +19,7 @@ const HEADING = /^#{1,6}\s/;
 const BULLET = /^[-*]\s+(.*\S)\s*$/;
 const PLACEHOLDER = /^\(.*\)$/;
 
-/** The decisions a backlog's Waiting on the user section holds, one per top-level bullet. */
+/** The decisions under a backlog's Waiting on the user, one per top-level bullet. */
 export function waitingOnUser(backlog: string): string[] {
   const lines = backlog.split(/\r?\n/);
   const start = lines.findIndex((line) => WAITING_HEADING.test(line));
@@ -60,7 +60,7 @@ export const captainHomeSchema = z.discriminatedUnion("status", [
     folder: z.string(),
     root: z.string(),
     files: z.array(homeFileSchema),
-    /** The backlog's open decisions for the user, from {@link waitingOnUser}. */
+    /** The backlog's open decisions, from {@link waitingOnUser}. */
     needsYou: z.array(z.string()),
   }),
 ]);

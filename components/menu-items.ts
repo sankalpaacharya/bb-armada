@@ -36,7 +36,7 @@ export function captainItems(actions: {
   ];
 }
 
-/** A crew thread must be in its captain's project, so only those captains are offered. */
+/** A crew thread must be in its captain's project, so only those are offered. */
 export function addToCaptainItems(
   entry: Pick<ThreadEntry, "thread" | "captain">,
   captains: readonly CaptainEntry[],
@@ -78,7 +78,10 @@ export function addToCaptainItems(
  * no lifecycle owner would hold it there instead.
  */
 export function removeFromCrewItems(
-  thread: Pick<PluginSidebarThread, "parentThreadId" | "lifecycleOwnerThreadId">,
+  thread: Pick<
+    PluginSidebarThread,
+    "parentThreadId" | "lifecycleOwnerThreadId"
+  >,
   onRemove: () => void,
 ): PluginThreadActionsInlineItem[] {
   if (thread.parentThreadId === null || thread.lifecycleOwnerThreadId !== null)
