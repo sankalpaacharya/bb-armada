@@ -391,7 +391,7 @@ describe("creating a captain", () => {
     expect(
       dialog.getByRole("radio", { name: "Beta" }).getAttribute("aria-checked"),
     ).toBe("true");
-    expect(dialog.getByText("🧭 Captain · Beta")).toBeTruthy();
+    expect(dialog.getByText("Captain · Beta")).toBeTruthy();
     fireEvent.click(dialog.getByRole("radio", { name: "Alpha" }));
     fireEvent.click(dialog.getByRole("radio", { name: "flag" }));
     fireEvent.click(dialog.getByRole("radio", { name: "Violet" }));

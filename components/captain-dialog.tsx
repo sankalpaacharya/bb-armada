@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { captainTitle } from "@/lib/captain-text";
+import { captainTitle, withoutLeadingEmoji } from "@/lib/captain-text";
 import type { CaptainRecord } from "@/lib/captains";
 import { COLORS, DEFAULT_COLOR, type ColorId } from "@/lib/colors";
 import { DEFAULT_LOGO, LOGOS, logoIcon, type LogoId } from "@/lib/logos";
@@ -49,7 +49,7 @@ function startingProject(
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-sm text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -113,7 +113,7 @@ function LogoGrid({
           title={logo.replace("-", " ")}
           onClick={() => onChange(logo)}
           className={cn(
-            "grid aspect-square cursor-pointer place-items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "grid aspect-square cursor-pointer place-items-center rounded-[7px] outline-none focus-visible:ring-2 focus-visible:ring-ring",
             logo === value
               ? "bg-accent text-foreground ring-1 ring-foreground/40"
               : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
@@ -202,8 +202,8 @@ export function CaptainDialog({
     state.kind === "create"
       ? project === undefined
         ? "Choose a project"
-        : captainTitle(project.name)
-      : state.thread.displayTitle;
+        : withoutLeadingEmoji(captainTitle(project.name))
+      : withoutLeadingEmoji(state.thread.displayTitle);
 
   const submit = async () => {
     if (pending || !canSubmit) return;
@@ -252,7 +252,7 @@ export function CaptainDialog({
         </DialogHeader>
         <div className="flex items-center gap-3 rounded-lg bg-accent/50 p-3">
           <CaptainTile logo={logo} color={color} size="preview" />
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {previewTitle}
           </span>
         </div>
