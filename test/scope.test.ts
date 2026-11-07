@@ -17,6 +17,7 @@ const { threads } = buildArmada(
     thread("a2", { projectId: "proj_a" }),
   ],
   projects,
+  {},
   [],
   [],
   new Set(),

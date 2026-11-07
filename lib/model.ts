@@ -15,6 +15,7 @@ import {
   type Shelf,
   type Snooze,
 } from "./lifecycle";
+import type { ProjectLogos } from "./project-logos";
 import {
   STATUS,
   signalsOf,
@@ -43,6 +44,8 @@ export type CaptainBadge = { threadId: string; name: string; avatar: Avatar };
 export type ThreadEntry = Fold & {
   thread: PluginSidebarThread;
   projectName: string | null;
+  /** The project's logo as an image data URI, when its repo has one. */
+  projectLogo: string | null;
   /** The nearest captain above this card, or null for a card of its own. */
   captain: CaptainBadge | null;
   /** A card of its own can become a captain; a captain's worker cannot. */
@@ -139,6 +142,7 @@ export function isSettled(entry: ThreadEntry): entry is ParkedEntry<Settle> {
 export function buildArmada(
   threads: readonly PluginSidebarThread[],
   projects: readonly PluginSidebarProject[],
+  logos: Readonly<ProjectLogos>,
   records: readonly CaptainRecord[],
   parks: readonly ParkRecord[],
   supervisorIds: ReadonlySet<string>,
@@ -183,6 +187,7 @@ export function buildArmada(
     return {
       thread,
       projectName: projectNames.get(thread.projectId) ?? null,
+      projectLogo: logos[thread.projectId] ?? null,
       captain,
       adoptable: captain === null,
       park,

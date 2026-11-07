@@ -100,6 +100,7 @@ async function render(
         parks_list: () => options.parks ?? [],
         parks_evaluate: () => ({ changed: [] }),
         captain_supervisors: () => [],
+        project_logos: () => ({}),
         ...options.rpc,
       } as never,
       sdk: options.sdk as never,
@@ -181,6 +182,43 @@ describe("Armada thread list", () => {
     ).toBeNull();
   });
 
+  it("leads a thread with its project's logo unless a captain launched it, and with a dot when the project has none", async () => {
+    const logo = "data:image/svg+xml;base64,PHN2Zy8+";
+    const { view } = await render({
+      threads: [
+        thread("cap", { title: "Captain Alpha", projectId: "proj_a" }),
+        thread("worker", {
+          title: "Worker",
+          parentThreadId: "cap",
+          projectId: "proj_a",
+        }),
+        thread("plain", { title: "Plain", projectId: "proj_a" }),
+        thread("bare", { title: "Bare", projectId: "proj_b" }),
+      ],
+      rpc: { project_logos: () => ({ proj_a: logo }) },
+    });
+    await waitFor(() =>
+      expect(
+        rowOf(view.container, "plain")
+          ?.querySelector("img")
+          ?.getAttribute("src"),
+      ).toBe(logo),
+    );
+    expect(
+      rowOf(view.container, "plain")!.querySelector("img")?.getAttribute("alt"),
+    ).toBe("");
+    const worker = rowOf(view.container, "worker")!;
+    expect(
+      Array.from(worker.querySelectorAll("img")).map((img) =>
+        img.getAttribute("src"),
+      ),
+    ).toEqual([
+      rowOf(view.container, "cap")!.querySelector("img")?.getAttribute("src"),
+    ]);
+    expect(within(worker).getByText("Launched by Captain Alpha")).toBeTruthy();
+    expect(rowOf(view.container, "bare")!.querySelector("img")).toBeNull();
+  });
+
   it("lists the workers a captain's supervisor runs as the captain's, and never the supervisor", async () => {
     const { view } = await render({
       threads: [
@@ -201,7 +239,9 @@ describe("Armada thread list", () => {
     await waitFor(() => expect(rowOf(view.container, "w")).not.toBeNull());
     expect(listOf(view.container, "w")).toBe("Threads");
     expect(
-      within(rowOf(view.container, "w")!).getByText("Launched by Captain Alpha"),
+      within(rowOf(view.container, "w")!).getByText(
+        "Launched by Captain Alpha",
+      ),
     ).toBeTruthy();
     expect(anchorOf(view.container, "thr_sup")).toBeNull();
   });

@@ -19,6 +19,7 @@ const build = (
   buildArmada(
     threads,
     projects,
+    {},
     captains,
     parks,
     supervisors,

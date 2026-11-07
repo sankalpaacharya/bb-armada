@@ -11,6 +11,7 @@ import { buildArmada } from "@/lib/model";
 import { parseSettings } from "@/lib/settings";
 import { useCaptains } from "./use-captains";
 import { useParks } from "./use-parks";
+import { useProjectLogos } from "./use-project-logos";
 import { useSupervisors } from "./use-supervisors";
 
 const NO_CAPTAINS: readonly CaptainRecord[] = [];
@@ -20,6 +21,7 @@ export function useArmadaModel() {
   const { status, threads, projects } = experimental_useSidebarThreads();
   const captains = useCaptains();
   const parks = useParks();
+  const logos = useProjectLogos();
   const supervisors = useSupervisors();
   const { inactiveAfterMs } = parseSettings(useSettings().values);
   const records = captains.status === "ready" ? captains.records : NO_CAPTAINS;
@@ -32,13 +34,23 @@ export function useArmadaModel() {
       buildArmada(
         threads,
         projects,
+        logos,
         records,
         parks,
         supervisors,
         wakeTime,
         inactiveAfterMs,
       ),
-    [threads, projects, records, parks, supervisors, wakeTime, inactiveAfterMs],
+    [
+      threads,
+      projects,
+      logos,
+      records,
+      parks,
+      supervisors,
+      wakeTime,
+      inactiveAfterMs,
+    ],
   );
   return { status, threads, projects, captains, model };
 }

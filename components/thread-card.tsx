@@ -8,18 +8,22 @@ import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
 import { RowActions } from "./row-actions";
 import { PlaceLine } from "./place-line";
+import { ProjectLogo } from "./project-logo";
 import { StatusGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
 /**
- * The leading mark: the captain that launched it, else a quiet dot. The
- * captain stays named for screen readers. Status sits at the row's right end.
+ * The leading mark: the captain that launched it, else its project's logo,
+ * else a quiet dot. The captain stays named for screen readers. Status sits
+ * at the row's right end.
  */
 function LeadMark({ entry }: { entry: ThreadEntry }) {
   const captain = entry.captain;
   const visual =
     captain !== null ? (
       <CaptainTile avatar={captain.avatar} size="badge" />
+    ) : entry.projectLogo !== null ? (
+      <ProjectLogo src={entry.projectLogo} />
     ) : (
       <span
         aria-hidden="true"

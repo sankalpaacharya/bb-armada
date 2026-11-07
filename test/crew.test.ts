@@ -27,6 +27,7 @@ const threads = [
 const model = buildArmada(
   threads,
   [project("proj_a", "Alpha"), project("proj_b", "Beta"), project("proj_c", "Gamma")],
+  {},
   [record("cap"), record("other")],
   [settledAt("done", NOW - 1000)],
   new Set(["sup"]),
