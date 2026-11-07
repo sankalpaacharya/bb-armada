@@ -1,174 +1,181 @@
-# bb-plugin-armada
+# Armada
 
-A sidebar for people who run many bb threads. Long-lived **captain** threads sit
-at the top, every thread appears once in one list you can filter by project
-(a captain's workers carry its face), and finished threads can be settled or
-snoozed onto quiet shelves below it.
+Armada is a bb sidebar for people who run many threads at once. Captains, the
+long-lived threads that run a project, sit at the top. Every other thread
+appears once in a list you can filter by project. Threads you have finished
+with move to shelves below the list.
 
-- `app.tsx` registers the thread list (`app.slots.experimental_threadList`).
-- `server.ts` owns the captain and park records in plugin KV and exposes them
-  over RPC.
-- `PLUGIN_OVERVIEW.md` is the store listing text.
+<img src="docs/screenshots/sidebar.png" alt="The Armada sidebar with two captains, four threads and the Inactive shelf" width="276">
+
+## What the sidebar shows
+
+### Captains
+
+Each captain is one row with its avatar, its name and a summary of its
+threads. The summary reads "2 working", "1 needs you", "1 failed" or "Idle".
+While any of its threads work, a small shade grid animates at the right. The
+**+** next to Captains starts a new captain.
+
+### Threads
+
+Each thread takes two lines. The first line is the thread's title and the mark
+to its left. The mark depends on where the thread came from.
+
+- A thread a captain started shows the captain's avatar.
+- When that captain's project has a logo too, the logo sits behind the avatar,
+  and the avatar overlaps a third of it.
+- A thread no captain started shows its project's logo.
+- A thread with neither shows a grey dot.
+
+The second line holds the project, then the worktree, branch or machine the
+thread runs on, any running workflows or background agents, the pull request
+number, and the harness icon. The thread's status comes last.
+
+- The shade grid means the thread is working.
+- **Unread** means it finished and you have not opened it. Its title is also
+  bold.
+- bb's own icons mark a thread that needs you or that failed.
+
+When a thread can be put away, hovering it shows a **Settle** button where the
+status was. Right-click a thread for bb's menu, the snooze presets and **Make
+captain…**.
+
+Armada finds a project's logo in its repository, the same way T3 Code does. It
+looks for a favicon, icon or logo file at the root, then under `public/`,
+`app/`, `src/app/` and `static/`, then under `apps/*` and `packages/*`. It reads SVG,
+PNG, ICO and WebP files up to 64 KB and checks again every 5 minutes. The
+personal project has no repository, so its threads keep the dot.
+
+### The project filter
+
+The menu beside Threads filters the list by project. Each project shows its
+logo and how many active threads it has. Clicking a project adds or removes
+it, and the menu stays open so you can choose several. **All projects** clears
+the choice and closes the menu. The button reads "cops" for one project and
+"cops +1" for two. Thread rows hide the project name while exactly one project
+is chosen.
+
+<img src="docs/screenshots/project-picker.png" alt="The project filter open, with logos for cops, content and gaia" width="276">
+
+### Shelves
+
+Three shelves sit under the list, and each folds open from its label.
+
+- **Inactive** holds threads that have not changed for 6 hours.
+- **Snoozed** holds threads you snoozed. They come back when the snooze ends.
+- **Settled** holds threads you settled. Armada also settles a thread on its
+  own once it has been quiet for 3 days, or when its pull request merges.
+
+A thread that starts working again, or that needs you, returns to the list
+whatever shelf it was on. The three numbers are settings in Armada's plugin
+settings.
+
+## The Crew tab
+
+In a thread's side panel, the New tab lists **Crew** under Actions. Crew opens
+the captain for the thread you are in. That is the thread itself if it is a
+captain, the captain that started it, or else the newest captain of its
+project. Only when the project has no captain does Crew ask you to pick one.
+
+The tab lists the captain's threads in Active, Inactive and Settled groups,
+with the same second line as the sidebar. Clicking a thread opens it. Below
+the threads, **Memory** lists the files in the captain's folder.
+
+<img src="docs/screenshots/crew-tab.png" alt="The Crew tab for the Personal captain, with one active thread and its memory files" width="368">
+
+## Captains and their memory
+
+**+** asks for a name, a project and an avatar, then starts the captain thread.
+The name starts as the project's name, and clicking the avatar rolls a new
+one.
+
+<img src="docs/screenshots/new-captain.png" alt="The New captain dialog" width="384">
+
+A captain keeps its memory in `~/.bb/captains/<project>/`, following the
+firstmate skill. The folder holds `captain.md`, `learnings.md`, `backlog.md`,
+`archive.md`, and a `tasks/<name>/` folder for each piece of work. The Memory
+section in Crew lists the `.md` files in that folder, up to two folders deep,
+and clicking one opens it in bb's file preview.
+
+A captain hands work to a supervisor thread, and the supervisor starts the
+workers. The first line of `backlog.md` names the supervisor
+(`Supervisor: thr_…`). Armada reads that line and treats the supervisor as part
+of its captain. Workers show as the captain's own threads, and the supervisor
+never shows as a row. A new supervisor appears within 5 minutes.
+
+The prompt a new captain starts with still names the older `/captain` skill and
+a single notes file at `~/.bb/captains/<project>.md` (`lib/captain-text.ts`).
 
 ## How it works
 
-The server keeps one KV record per captain at `captain:<threadId>`: the thread
-id, an avatar (`{ style: "micah", seed }`), and when it was made. A record
-from before avatars, with a logo and colour, reads as a Micah avatar seeded by
-its thread id, and a stored Adventurer avatar reads as Micah with the same seed. `captains_list` declares the
-`captains` tag and every write calls `bb.rpc.experimental_invalidate`, so the
-sidebar reads through `experimental_useRpcQuery` and refreshes on each write,
-on reconnect, and from any client. Records that cannot be parsed are skipped
-and logged. On start the server moves records out of the old single
-`captains` key, copies its raw value to `legacy-captains-backup`, then deletes
-it. If that fails the server still starts, logs the error and retries on the
-next start. Writes to one captain run one after another on the server, so an
-update that read a record cannot write it back after a remove. RPC inputs are
-strict objects: unknown fields are refused, not dropped.
+The server keeps one KV record per captain at `captain:<threadId>` and one per
+put-away thread at `park:<threadId>`. A park is `settled { at, by }`,
+`snoozed { at, until }` or `kept { at }`. A kept thread is one you moved back
+to the list, and auto-settle leaves it alone. Each list method declares a tag, and every write
+invalidates it, so the sidebar refreshes after each change and on reconnect.
+The client predicts each settle and snooze, so a row leaves the list at once.
+The server skips and logs records it cannot read. It also reads older records,
+which held a logo and a colour or an Adventurer or anime avatar, as Micah
+avatars.
 
-Parks follow the same pattern at `park:<threadId>` with the `parks` tag. A park
-is `settled { at }` or `snoozed { at, until }`. The client stamps `at` when
-the user acts and predicts the park in the cache, so a card leaves at once;
-the server stores the same record. A new settle or snooze replaces whatever
-park the thread had, and adopting or removing a captain clears its park.
+`lib/model.ts` turns bb's threads and projects and these records into the
+rows the list draws. Sub-threads fold into their parent, and the parent takes
+the most urgent status among them. `lib/forest.ts` holds that folding rule,
+including the supervisor rule above. The server's auto-settle job uses the same
+rule. `lib/status.ts` is one table that gives each status its rank, word,
+colour and mark.
 
-`lib/model.ts` turns the sidebar's threads, projects, captain records and
-parks into what the list draws. It is pure and unit-tested.
+| Method | Input | Output |
+| --- | --- | --- |
+| `captains_list` | none | captain records |
+| `captains_create` | `projectId`, `projectName`, `name`, `avatar` | the record, or the thread if recording it failed |
+| `captains_adopt` | `threadId`, `avatar`, `createdAt` | captain record |
+| `captains_update` | `threadId`, `avatar` | captain record |
+| `captains_remove` | `threadId` | none |
+| `parks_list` | none | park records |
+| `parks_settle` | `threadId`, `at` | park record |
+| `parks_snooze` | `threadId`, `at`, `until` | park record |
+| `parks_unpark` | `threadId` | none |
+| `parks_keep` | `threadId`, `at` | park record |
+| `parks_evaluate` | none | the threads auto-settle just settled |
+| `captain_home` | `project` | the memory folder's file list |
+| `captain_supervisors` | none | every supervisor's thread id |
+| `project_logos` | none | a logo for each project that has one |
 
-- One tree policy, through `parentThreadId` or `lifecycleOwnerThreadId`: a
-  card's root is reached by climbing parents until there are none or the next
-  is a captain. So a captain's children are cards of their own (its
-  workers), each folding its own descendants, and each carries `captain`, the
-  captain's thread id, name and avatar. Every other root has `captain: null`.
-  A captain nested under another captain keeps its own workers.
-- Every card carries a folded status, the newest activity and the newest
-  attention time of its subtree. A captain row folds itself and every
-  descendant below it, stopping at nested captains, for its summary counts.
-- Cards without a captain can be made captains; workers cannot.
-- Each card resolves a shelf from its park and its fold
-  (`lib/lifecycle.ts`). The fold is parkable only when no thread in it is
-  working, queued or needs you. That is read from every signal of every
-  thread, not from the folded status, because a failure outranks work still
-  running beside it. So a tree with live work or a raised hand is always
-  active, and it offers no Settle or Snooze. A snooze wakes on its timer or on
-  attention after it was set, and a settle returns on new attention. Captains are
-  never parked; workers park like any card. Snoozed is ordered by soonest
-  wake, Settled by newest settle.
-- Records and parks whose thread is archived, hidden or gone are ignored. They
-  stay in KV until you remove them. A park that can never apply again, because
-  attention came after it or its snooze passed, is listed by the model as
-  expired, and the sidebar deletes it once.
+`captains_create` starts the thread first and records it second, retrying
+after 100 ms and 400 ms. If the record still fails, the dialog switches to
+**Record captain**, which records the same thread instead of starting another.
 
-`lib/status.ts` is one table: each status has a rank, a word, a colour tone,
-a glyph, whether it counts as live, and whether a thread in it can be parked.
-Every row reads from the table through `StatusMark`.
-
-### RPC
-
-| method            | input                                       | output         |
-| ----------------- | ------------------------------------------- | -------------- |
-| `captains_list`   | none                                        | captain records |
-| `captains_create` | `projectId`, `projectName`, `name`, `avatar` | recorded record, or the unrecorded thread |
-| `captains_adopt`  | `threadId`, `avatar`, `createdAt` (kept if already a captain) | captain record |
-| `captains_update` | `threadId`, `avatar`                        | captain record |
-| `captains_remove` | `threadId`                                  | none           |
-| `parks_list`      | none                                        | park records   |
-| `parks_settle`    | `threadId`, `at`                            | park record    |
-| `parks_snooze`    | `threadId`, `at`, `until` (after `at`)      | park record    |
-| `parks_unpark`    | `threadId` (idempotent)                     | none           |
-
-`captains_create` spawns a thread titled with the name from the dialog, which
-starts as the project's name (`cops`, not `Captain · cops`; the Captains
-section already says what it is). The title is the captain's only name; the
-record keeps just the avatar. The thread's first prompt tells the agent to follow the `/captain` skill and keep notes in
-`~/.bb/captains/<project>.md`. The thread is spawned first and recorded after,
-retrying the write after 100 ms and again after 400 ms. If it still fails,
-`captains_create` answers `{ outcome: "unrecorded", threadId }` rather than
-throwing, and the dialog switches to **Record captain**, which records that
-same thread through `captains_adopt` instead of spawning a second one.
-
-### Pull requests
-
-Cards show the pull request number for their environment by reading the GitHub
-PR Status plugin (`bb--github-pr-status`) through `experimental_useRpcKeyedQuery`.
-Nothing shows when that plugin is absent.
-
-### Local state
-
-The sidebar remembers two things in `localStorage`: `armada/thread-scope`
-(the project filter) and `armada/shelves` (which shelves are open). It removes
-`armada/captains`, the registry cache from before captains were read through
-RPC, and `armada/captain-toggles`, from when workers nested in the deck.
-
-## Avatars
-
-Captain avatars are DiceBear's **Micah** style on a solid pastel background picked by the seed, generated
-locally by `@dicebear/core` and `@dicebear/micah` from the record's seed
-(`lib/avatar.ts`, memoised per style and seed, no network). `CaptainTile` is
-the one owner of avatar rendering: a decorative `<img alt="">` inside a
-rounded-square tile. In the dialog, clicking the avatar rolls a new seed. A
-stored anime avatar from the retired portrait set reads as Micah seeded by its
-thread id.
-
-## Crew tab
-
-The thread side panel's New tab lists **Crew** under Actions. It shows the
-open thread's captain (the thread itself, or the nearest captain above it) and
-that captain's workers, split into Active, Inactive and Settled like the
-sidebar shelves, each with its status, title, PR, age and where it runs.
-Clicking a row opens that thread. On a thread no captain launched it opens
-the newest captain of the thread's project, and only when the project has no
-captain does it list the captains to pick one. It reads the same model as the sidebar through
-`useArmadaModel`.
-
-## Design
-
-Captains sit flat on the sidebar, one row each: a 28px Micah avatar, the
-name, and a one-line summary of the captain's tree ("2 working" in the
-working tone, "1 needs you" in the attention tone, else "Idle") with the
-shade grid at the right while working. "1 failed" shows in the failure tone,
-apart from "needs you". Until the captains read settles the section says
-"Loading captains…", and after a failed read "Could not load captains",
-never the first-captain invitation. Captains holds only captain rows. Every
-thread appears once, as a card in Threads, flat on the sidebar background. A
-worker's first line starts with its captain's avatar in a 14px tile, then the
-captain's name, a muted "·" and the project ("[face] cops · cops" reads
-"[face] cops" when the names match). When the scope hides the project the
-face and name stay. Screen readers hear "Launched by <captain>". Section headers are a `div` with a small semibold `h2`
-title, a muted count, and the actions beside it, with no divider lines. Every row shares `ThreadLink`, which
-owns bb's row contract: the full-bleed anchor, `data-sidebar-thread-id`, split
-on cmd-click, the jump shortcuts, bb's context menu and inline rename. Pickers
-are one `ChoiceList` with listbox semantics; in the avatar grid up and down
-move by a row. Ages and "wakes in" labels come
-from one 30 s clock in `lib/clock.ts` through the `Age` and `WakesIn` leaves,
-so a tick re-renders only those leaves. The model is built from a separate
-wake time (`useWakeTime`) that moves only when the next snooze is due, so a
-snoozed thread returns on time without the list rebuilding every tick. A
-wake label rounds up and never reads "now" while the thread is still hidden. Shelf rows are one line in t3sidebar's style, and a
-parkable card swaps its status for a Settle button on hover; Snooze is in the thread menu.
+Pull request numbers come from bb's GitHub PR Status plugin. Without it, rows
+show no PR numbers. The sidebar remembers the project filter and which shelves
+are open in `localStorage`.
 
 ## Develop
 
 ```
 npm install
 npm run check     # typecheck, tests, build
-bb plugin install .
+bb plugin install /path/to/bb-armada
 bb plugin reload armada
 ```
 
-Then pick **Armada** under Settings, Appearance, Sidebar.
+Then choose **Armada** under Settings, Appearance, Sidebar. To refresh the
+screenshots, run bb, open it at `http://127.0.0.1:38886` and capture the
+sidebar, the open project filter, the Crew tab and the New captain dialog at
+2x.
 
 ## Layout
 
 ```
-app.tsx               registers the thread list
-server.ts             captain records, migration and RPC handlers
-lib/                  model, status table, lifecycle rules, schemas, avatar, scope, clock, styles
-hooks/                captains and parks queries, park actions, stored state, arrow-key rows
-components/           sections, shelves, row layouts, ThreadLink, ChoiceList, dialog
-components/ui/        vendored bb components (dialog, button, icon, hooks)
-test/                 model, lifecycle, server, status and rendered-list tests
+app.tsx          registers the sidebar list and the Crew tab
+server.ts        records, migration, RPC handlers and schedules
+lib/             model, folding, status table, shelves, scope, logos, memory reader
+hooks/           queries for captains, parks, supervisors and logos, park actions
+components/      sections, rows, shelves, Crew tab, Memory, dialog, pickers
+components/ui/   bb components copied into the plugin
+docs/            screenshots
+test/            model, server, shelf, scope and rendered-list tests
 ```
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for what is adapted from
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists the code adapted from
 other projects.
