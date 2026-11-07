@@ -1,0 +1,37 @@
+.armada-root {
+  --armada-attention: #e8a317;
+  --armada-working: #3987e5;
+  --armada-done: #1f9d55;
+}
+
+.armada-glyph[data-lane="attention"] {
+  --armada-lane: var(--armada-attention);
+}
+.armada-glyph[data-lane="working"] {
+  --armada-lane: var(--armada-working);
+}
+.armada-glyph[data-lane="done"] {
+  --armada-lane: var(--armada-done);
+}
+
+.armada-dot {
+  background-color: var(--armada-lane);
+}
+
+.armada-spinner {
+  border: 1.5px solid color-mix(in srgb, var(--armada-lane) 30%, transparent);
+  border-top-color: var(--armada-lane);
+  animation: armada-spin 0.9s linear infinite;
+}
+
+@keyframes armada-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .armada-spinner {
+    animation-duration: 3s;
+  }
+}
