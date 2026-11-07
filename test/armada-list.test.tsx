@@ -994,9 +994,9 @@ describe("shelves", () => {
     await view.experimental_invalidateRpc(["parks"]);
     await waitFor(() => expect(listOf(view.container, "done")).toBeNull());
     expect(listOf(view.container, "other")).toBe("Threads");
-    expect(screen.getByRole("heading", { name: /Settled/ })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Settled" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show settled" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Settled/ }));
     expect(listOf(view.container, "done")).toBe("Settled");
     fireEvent.click(
       within(rowOf(view.container, "done")!).getByRole("button", {
@@ -1056,8 +1056,8 @@ describe("shelves", () => {
     );
     await waitFor(() => expect(listOf(view.container, "a")).toBeNull());
     expect(listOf(view.container, "b")).toBeNull();
-    expect(screen.getByRole("heading", { name: /Settled/ })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /Snoozed/ })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Settled" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Snoozed" })).toBeTruthy();
   });
 
   it("offers no park buttons on a working card, and keeps a stored settle from hiding it", async () => {
@@ -1072,7 +1072,7 @@ describe("shelves", () => {
         name: "Settle",
       }),
     ).toBeNull();
-    expect(screen.queryByRole("heading", { name: /Settled/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Settled" })).toBeNull();
   });
 
   it("offers no park actions on a failed card while something in its tree is still working", async () => {
@@ -1124,14 +1124,14 @@ describe("shelves", () => {
       parks: [snoozedUntil("later", NOW + 2 * HOUR)],
     });
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Show snoozed" })).toBeTruthy(),
+      expect(screen.getByRole("button", { name: /^Snoozed/ })).toBeTruthy(),
     );
     expect(
       screen.getByText(
         "Nothing active. Inactive, snoozed and settled threads are below.",
       ),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Show snoozed" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Snoozed/ }));
     expect(listOf(view.container, "later")).toBe("Snoozed");
     expect(
       within(rowOf(view.container, "later")!).getByText("2h"),
@@ -1158,18 +1158,18 @@ describe("shelves", () => {
     });
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Show inactive" }),
+        screen.getByRole("button", { name: /^Inactive/ }),
       ).toBeTruthy(),
     );
     expect(listOf(view.container, "fresh")).toBe("Threads");
-    const count = (name: string) =>
-      screen.getByRole("heading", { level: 2, name }).textContent;
-    expect(count("Inactive")).toBe("Inactive2");
-    expect(count("Settled")).toBe("Settled1");
+    const toggle = (name: RegExp) => screen.getByRole("button", { name });
+    expect(toggle(/^Inactive/).textContent).toBe("Inactive2");
+    expect(toggle(/^Settled/).textContent).toBe("Settled1");
+    expect(toggle(/^Inactive/).getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("list", { name: "Inactive" })).toBeNull();
     expect(screen.queryByRole("list", { name: "Settled" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show inactive" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Inactive/ }));
     expect(listOf(view.container, "quiet")).toBe("Inactive");
     expect(
       within(rowOf(view.container, "quiet")!).getByText("8h"),
@@ -1179,7 +1179,7 @@ describe("shelves", () => {
         name: "Settle",
       }),
     );
-    await waitFor(() => expect(count("Settled")).toBe("Settled2"));
+    await waitFor(() => expect(toggle(/^Settled/).textContent).toBe("Settled2"));
     expect(
       view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
         ?.input,
@@ -1204,7 +1204,7 @@ describe("shelves", () => {
     await act(async () => {
       vi.advanceTimersByTime(2 * 60_000);
     });
-    expect(screen.getByRole("button", { name: "Show inactive" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Inactive/ })).toBeTruthy();
     expect(listOf(view.container, "aging")).toBeNull();
   });
 
@@ -1243,7 +1243,7 @@ describe("shelves", () => {
       ).toEqual({ threadId: "quiet", at: expect.any(Number) }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Show settled" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Settled/ }));
     fireEvent.contextMenu(anchorOf(view.container, "parked")!);
     fireEvent.click(
       await screen.findByRole("menuitem", { name: "Move to active" }),

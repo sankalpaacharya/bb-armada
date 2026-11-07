@@ -113,26 +113,28 @@ export function ArmadaList({
         onOpen={open}
         onDialog={setDialog}
       />
-      <ThreadsSection
-        entries={model.threads}
-        scoped={scoped}
-        shelvedCount={inactive.length + snoozed.length + settled.length}
-        projects={pickable}
-        scope={scope}
-        onScope={setScope}
-        status={captains.status === "loading" ? "loading-captains" : status}
-        activeThreadId={activeThreadId}
-        parkActions={parkActions}
-        onOpen={open}
-        onAdopt={(thread) => setDialog({ kind: "adopt", thread })}
-      />
-      <ShelfSection
-        title="Inactive"
-        entries={inactive}
-        {...shelf("inactive")}
-      />
-      <ShelfSection title="Snoozed" entries={snoozed} {...shelf("snoozed")} />
-      <ShelfSection title="Settled" entries={settled} {...shelf("settled")} />
+      <div className="flex flex-col gap-1">
+        <ThreadsSection
+          entries={model.threads}
+          scoped={scoped}
+          shelvedCount={inactive.length + snoozed.length + settled.length}
+          projects={pickable}
+          scope={scope}
+          onScope={setScope}
+          status={captains.status === "loading" ? "loading-captains" : status}
+          activeThreadId={activeThreadId}
+          parkActions={parkActions}
+          onOpen={open}
+          onAdopt={(thread) => setDialog({ kind: "adopt", thread })}
+        />
+        <ShelfSection
+          title="Inactive"
+          entries={inactive}
+          {...shelf("inactive")}
+        />
+        <ShelfSection title="Snoozed" entries={snoozed} {...shelf("snoozed")} />
+        <ShelfSection title="Settled" entries={settled} {...shelf("settled")} />
+      </div>
       {dialog === null ? null : (
         <CaptainDialog
           state={dialog}
