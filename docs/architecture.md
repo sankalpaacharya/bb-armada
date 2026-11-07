@@ -11,8 +11,9 @@ and clicking one opens it in bb's file preview.
 A captain hands work to a supervisor thread, and the supervisor starts the
 workers. The first line of `backlog.md` names the supervisor
 (`Supervisor: thr_…`). Armada reads that line and treats the supervisor as part
-of its captain. Workers show as the captain's own threads, and the supervisor
-never shows as a row. A new supervisor appears within 5 minutes.
+of its captain. Workers count as the captain's own threads in its Crew tab and
+its row's summary, and the supervisor never shows as a row. The sidebar list
+leaves out every thread a captain started. A new supervisor appears within 5 minutes.
 
 Armada ships the armada skill in `skills/armada/`, and bb loads every
 `skills/<name>/SKILL.md` in a plugin into agent threads. So installing Armada

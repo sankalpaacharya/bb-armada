@@ -19,6 +19,7 @@ import {
   resolveScope,
   scopeThreads,
 } from "@/lib/scope";
+import type { ThreadEntry } from "@/lib/model";
 import { parseBooleanMap, removeStored } from "@/lib/storage";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
 import { CaptainsSection } from "./captains-section";
@@ -30,6 +31,9 @@ const SCOPE_KEY = "armada/thread-scope";
 const SHELVES_KEY = "armada/shelves";
 /** The registry cache from before captains were read through RPC, and the deck's old worker toggles. */
 const RETIRED_KEYS = ["armada/captains", "armada/captain-toggles"];
+
+/** A captain's threads live in its Crew tab, not in the sidebar list. */
+const noCaptain = (entry: ThreadEntry): boolean => entry.captain === null;
 
 export function ArmadaList({
   activeThreadId,
@@ -57,13 +61,22 @@ export function ArmadaList({
     [model.captains],
   );
   const scope = resolveScope(storedScope, pickable);
-  const scoped = useMemo(
-    () => scopeThreads(model.threads, scope),
-    [model, scope],
+  const loose = useMemo(
+    () => ({
+      threads: model.threads.filter(noCaptain),
+      inactive: model.inactive.filter(noCaptain),
+      snoozed: model.snoozed.filter(noCaptain),
+      settled: model.settled.filter(noCaptain),
+    }),
+    [model],
   );
-  const inactive = scopeThreads(model.inactive, scope);
-  const snoozed = scopeThreads(model.snoozed, scope);
-  const settled = scopeThreads(model.settled, scope);
+  const scoped = useMemo(
+    () => scopeThreads(loose.threads, scope),
+    [loose, scope],
+  );
+  const inactive = scopeThreads(loose.inactive, scope);
+  const snoozed = scopeThreads(loose.snoozed, scope);
+  const settled = scopeThreads(loose.settled, scope);
 
   const openThread: OpenThread = (threadId, split) => {
     navigate.toThread(threadId, { split });
@@ -96,7 +109,7 @@ export function ArmadaList({
       />
       <div className="flex flex-col">
         <ThreadsSection
-          entries={model.threads}
+          entries={loose.threads}
           scoped={scoped}
           shelvedCount={inactive.length + snoozed.length + settled.length}
           projects={pickable}

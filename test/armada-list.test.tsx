@@ -120,19 +120,17 @@ const listOf = (container: HTMLElement, id: string) =>
   rowOf(container, id)?.closest("ul")?.getAttribute("aria-label") ?? null;
 
 describe("Armada thread list", () => {
-  it("lists every worker once, in Threads, and keeps only the captain in the deck", async () => {
+  it("keeps a captain's threads out of the sidebar list, and counts them on the captain's row", async () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
     expect(listOf(view.container, "cap")).toBe("Captains");
-    for (const id of ["w_busy1", "w_busy2", "w_wait", "plain"]) {
-      expect(listOf(view.container, id)).toBe("Threads");
+    expect(listOf(view.container, "plain")).toBe("Threads");
+    for (const id of ["w_busy1", "w_busy2", "w_wait", "w_deep"]) {
+      expect(anchorOf(view.container, id)).toBeNull();
     }
-    expect(anchorOf(view.container, "w_deep")).toBeNull();
-    const deck = within(screen.getByRole("list", { name: "Captains" }));
-    expect(
-      deck.getAllByRole("link").map((link) => link.getAttribute("aria-label")),
-    ).toEqual(["Captain Alpha"]);
-    expect(screen.queryByRole("button", { name: /workers/i })).toBeNull();
+    const captain = within(rowOf(view.container, "cap")!);
+    expect(captain.getByText("2 working")).toBeTruthy();
+    expect(captain.getByText("1 needs you")).toBeTruthy();
     expect(
       screen.getByRole("heading", { level: 2, name: "Captains" }),
     ).toBeTruthy();
@@ -140,58 +138,10 @@ describe("Armada thread list", () => {
       screen.getByRole("heading", { level: 2, name: "Threads" }),
     ).toBeTruthy();
   });
-
-  it("marks a worker with its captain's face on the left and its status on the right, and names the captain", async () => {
-    const { view } = await render({
-      threads: [
-        thread("cap", { title: "Captain Alpha", projectId: "proj_a" }),
-        thread("idle", {
-          title: "Idle work",
-          parentThreadId: "cap",
-          projectId: "proj_a",
-        }),
-        thread("waiting", {
-          title: "Waiting work",
-          parentThreadId: "cap",
-          projectId: "proj_a",
-          hasPendingInteraction: true,
-        }),
-        thread("plain", { title: "Plain", projectId: "proj_a" }),
-      ],
-    });
-    await waitFor(() =>
-      expect(rowOf(view.container, "waiting")).not.toBeNull(),
-    );
-    const idle = rowOf(view.container, "idle")!;
-    expect(within(idle).getByText("Launched by Captain Alpha")).toBeTruthy();
-    const face = idle.querySelector("img");
-    expect(face?.getAttribute("alt")).toBe("");
-    expect(face?.getAttribute("src")).toBe(
-      rowOf(view.container, "cap")!.querySelector("img")?.getAttribute("src"),
-    );
-    const waiting = rowOf(view.container, "waiting")!;
-    expect(within(waiting).getByText("Launched by Captain Alpha")).toBeTruthy();
-    const marks = Array.from(
-      waiting.querySelectorAll(
-        'img, [data-thread-status-glyph="waiting-for-input"]',
-      ),
-    );
-    expect(marks.map((mark) => mark.tagName === "IMG")).toEqual([true, false]);
-    expect(
-      within(rowOf(view.container, "plain")!).queryByText(/Launched by/),
-    ).toBeNull();
-  });
-
-  it("leads a captain's worker with its project's logo under the captain's face, a plain thread with the logo, and a thread without one with a dot", async () => {
+  it("leads a thread with its project's logo, and with a dot when the project has none", async () => {
     const logo = "data:image/svg+xml;base64,PHN2Zy8+";
     const { view } = await render({
       threads: [
-        thread("cap", { title: "Captain Alpha", projectId: "proj_a" }),
-        thread("worker", {
-          title: "Worker",
-          parentThreadId: "cap",
-          projectId: "proj_a",
-        }),
         thread("plain", { title: "Plain", projectId: "proj_a" }),
         thread("bare", { title: "Bare", projectId: "proj_b" }),
       ],
@@ -207,20 +157,9 @@ describe("Armada thread list", () => {
     expect(
       rowOf(view.container, "plain")!.querySelector("img")?.getAttribute("alt"),
     ).toBe("");
-    const worker = rowOf(view.container, "worker")!;
-    expect(
-      Array.from(worker.querySelectorAll("img")).map((img) =>
-        img.getAttribute("src"),
-      ),
-    ).toEqual([
-      logo,
-      rowOf(view.container, "cap")!.querySelector("img")?.getAttribute("src"),
-    ]);
-    expect(within(worker).getByText("Launched by Captain Alpha")).toBeTruthy();
     expect(rowOf(view.container, "bare")!.querySelector("img")).toBeNull();
   });
-
-  it("lists the workers a captain's supervisor runs as the captain's, and never the supervisor", async () => {
+  it("keeps a captain's supervisor and the workers it runs out of the sidebar, and counts them on the captain", async () => {
     const { view } = await render({
       threads: [
         thread("cap", { title: "Captain Alpha", projectId: "proj_a" }),
@@ -233,46 +172,19 @@ describe("Armada thread list", () => {
           title: "Build",
           parentThreadId: "thr_sup",
           projectId: "proj_a",
+          ...busy,
         }),
       ],
       rpc: { captain_supervisors: () => ["thr_sup"] },
     });
-    await waitFor(() => expect(rowOf(view.container, "w")).not.toBeNull());
-    expect(listOf(view.container, "w")).toBe("Threads");
-    expect(
-      within(rowOf(view.container, "w")!).getByText(
-        "Launched by Captain Alpha",
-      ),
-    ).toBeTruthy();
+    await waitFor(() =>
+      expect(
+        within(rowOf(view.container, "cap")!).queryByText("1 working"),
+      ).not.toBeNull(),
+    );
+    expect(anchorOf(view.container, "w")).toBeNull();
     expect(anchorOf(view.container, "thr_sup")).toBeNull();
   });
-
-  it("names the captain once when it is named like its project", async () => {
-    const { view } = await render({
-      threads: [
-        thread("cap", { title: "Alpha", projectId: "proj_a" }),
-        thread("w", {
-          title: "Build",
-          parentThreadId: "cap",
-          projectId: "proj_a",
-        }),
-      ],
-    });
-    await waitFor(() => expect(rowOf(view.container, "w")).not.toBeNull());
-    expect(
-      within(rowOf(view.container, "w")!).getAllByText(/Alpha/),
-    ).toHaveLength(1);
-  });
-
-  it("keeps the captain on a worker's card when the scope hides the project", async () => {
-    stored.set("armada/thread-scope", JSON.stringify("proj_a"));
-    const { view } = await render();
-    await waitFor(() => expect(rowOf(view.container, "w_wait")).not.toBeNull());
-    const card = within(rowOf(view.container, "w_wait")!);
-    expect(card.getByText(/Captain Alpha/)).toBeTruthy();
-    expect(card.queryByText("Alpha")).toBeNull();
-  });
-
   it("shows the captain's title as it is, with its avatar as a decorative image in the tile", async () => {
     const { view } = await render({
       threads: [thread("cap", { title: "cops", projectId: "proj_a" })],
@@ -375,7 +287,7 @@ describe("Armada thread list", () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
     const header = screen.getByRole("heading", { level: 2, name: "Threads" });
-    expect(header.textContent).toBe("Threads4");
+    expect(header.textContent).toBe("Threads1");
   });
 
   it("forgets the keys it no longer reads: the old registry cache and the worker toggles", async () => {
@@ -632,11 +544,11 @@ describe("Armada thread list", () => {
   });
 
   it("gives every row bb's thread-row contract", async () => {
-    const { view } = await render({ activeThreadId: "w_wait" });
+    const { view } = await render({ activeThreadId: "cap" });
     await waitFor(() =>
       expect(anchorOf(view.container, "plain")).not.toBeNull(),
     );
-    for (const id of ["cap", "w_busy1", "plain"]) {
+    for (const id of ["cap", "plain"]) {
       const anchor = anchorOf(view.container, id)!;
       expect(anchor.getAttribute("href")).toBe(
         `/projects/proj_a/threads/${id}`,
@@ -646,7 +558,7 @@ describe("Armada thread list", () => {
       );
     }
     expect(
-      anchorOf(view.container, "w_wait")!.getAttribute("aria-current"),
+      anchorOf(view.container, "cap")!.getAttribute("aria-current"),
     ).toBe("page");
     expect(
       anchorOf(view.container, "plain")!.hasAttribute("aria-current"),
@@ -659,10 +571,10 @@ describe("Armada thread list", () => {
       expect(anchorOf(view.container, "plain")).not.toBeNull(),
     );
     fireEvent.click(anchorOf(view.container, "plain")!);
-    fireEvent.click(anchorOf(view.container, "w_busy2")!, { metaKey: true });
+    fireEvent.click(anchorOf(view.container, "cap")!, { metaKey: true });
     expect(view.inspection.navigateCalls).toEqual([
       { method: "toThread", threadId: "plain", options: { split: false } },
-      { method: "toThread", threadId: "w_busy2", options: { split: true } },
+      { method: "toThread", threadId: "cap", options: { split: true } },
     ]);
     expect(onNavigate).toHaveBeenCalledTimes(2);
   });
@@ -969,15 +881,6 @@ describe("thread menu", () => {
     expect(
       await screen.findByRole("menuitem", { name: /Make captain/ }),
     ).toBeTruthy();
-  });
-
-  it("does not offer it on a worker", async () => {
-    const { view } = await render();
-    await waitFor(() =>
-      expect(anchorOf(view.container, "w_busy2")).not.toBeNull(),
-    );
-    rightClick(anchorOf(view.container, "w_busy2")!);
-    expect(screen.queryByRole("menuitem", { name: /Make captain/ })).toBeNull();
   });
 
   it("lets a captain change only its avatar or be removed without touching the thread", async () => {

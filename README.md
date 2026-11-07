@@ -17,9 +17,9 @@
 
 Armada replaces BB's sidebar thread list. A captain is a long-lived thread
 that runs one project. You tell it what you need, and it starts and watches
-worker threads for you. Your captains sit at the top of the sidebar, every
-other thread sits once in the list below, and finished threads move to
-shelves.
+worker threads for you. Your captains sit at the top of the sidebar, and the
+threads a captain starts stay in its Crew tab. Your own threads sit in the
+list below, and finished ones move to shelves.
 
 ## Install
 
@@ -34,13 +34,13 @@ The install includes the `armada` skill that captains run on.
 
 - Captains at the top, each with how many of its threads are working, need
   you or failed
-- Every thread once, with its project's logo or its captain's face, and its
-  branch or machine, pull request and harness on a second line
+- Your own threads in one list, each with its project's logo, and its branch
+  or machine, pull request and harness on a second line
 - **Unread** on threads that finished while you were away
 - A project filter where you can pick several projects
 - Inactive, Snoozed and Settled shelves that fill and empty on their own
-- A **Crew** tab in the side panel with a captain's threads and its memory
-  files
+- A **Crew** tab in the side panel with the threads a captain started and its
+  memory files
 
 Start a captain with the **+** next to Captains, or right-click any thread and
 choose **Make captain…**. Hover a finished thread for **Settle**, or

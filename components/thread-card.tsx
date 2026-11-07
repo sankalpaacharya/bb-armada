@@ -3,53 +3,27 @@ import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 import type { ParkActions } from "@/hooks/use-park-actions";
 import type { ThreadEntry } from "@/lib/model";
 import { cn } from "@/lib/utils";
-import { CaptainTile } from "./captain-tile";
 import { RowActions } from "./row-actions";
 import { PlaceLine } from "./place-line";
 import { ProjectLogo } from "./project-logo";
 import { StatusGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
-/**
- * The leading mark: the captain that launched it over its project's logo when
- * there are both, else whichever there is, else a quiet dot. The captain stays
- * named for screen readers. Status sits at the row's right end.
- */
+/** The leading mark: the project's logo, else a quiet dot. Status sits at the row's right end. */
 function LeadMark({ entry }: { entry: ThreadEntry }) {
-  const captain = entry.captain;
-  const visual =
-    captain !== null && entry.projectLogo !== null ? (
-      <span className="relative h-3.5 w-6">
-        <ProjectLogo src={entry.projectLogo} className="absolute left-0" />
-        <CaptainTile
-          avatar={captain.avatar}
-          size="badge"
-          className="absolute left-2.5 ring-[1.5px] ring-(--row-fill)"
-        />
-      </span>
-    ) : captain !== null ? (
-      <CaptainTile avatar={captain.avatar} size="badge" />
-    ) : entry.projectLogo !== null ? (
-      <ProjectLogo src={entry.projectLogo} />
-    ) : (
-      <span
-        aria-hidden="true"
-        className="size-1.5 rounded-full bg-muted-foreground/40"
-      />
-    );
-  return (
-    <span className="flex items-center">
-      {captain === null ? null : (
-        <span className="sr-only">Launched by {captain.name}</span>
-      )}
-      {visual}
-    </span>
+  return entry.projectLogo !== null ? (
+    <ProjectLogo src={entry.projectLogo} />
+  ) : (
+    <span
+      aria-hidden="true"
+      className="size-1.5 rounded-full bg-muted-foreground/40"
+    />
   );
 }
 
 /**
- * A thread as its title, with status or origin before it, over a line with its
- * project, where it runs and its PR. The tooltip adds its age.
+ * A thread as its title, with its project's mark before it, over a line with
+ * its project, where it runs, its PR, its harness and its status.
  */
 export function ThreadCard({
   entry,
@@ -67,11 +41,7 @@ export function ThreadCard({
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
 }) {
-  const environmentId = entry.thread.environment?.id ?? null;
-  const project =
-    showProject && entry.projectName !== entry.captain?.name
-      ? entry.projectName
-      : null;
+  const project = showProject ? entry.projectName : null;
   const threadId = entry.thread.id;
   return (
     <li className="list-none">
@@ -94,7 +64,7 @@ export function ThreadCard({
                   "group-focus-within/row:pr-6 group-hover/row:pr-6",
               )}
             >
-              <span className="grid h-4 w-6 shrink-0 place-items-center">
+              <span className="grid size-4 shrink-0 place-items-center">
                 <LeadMark entry={entry} />
               </span>
               {title}
@@ -114,7 +84,7 @@ export function ThreadCard({
             <PlaceLine
               thread={entry.thread}
               project={project}
-              className="pointer-events-none relative -mt-1 mb-1 pr-0 pl-8"
+              className="pointer-events-none relative -mt-1 mb-1 pr-0"
               trailing={
                 entry.status === null ? undefined : (
                   <span className="grid h-4 min-w-4 shrink-0 place-items-center">
