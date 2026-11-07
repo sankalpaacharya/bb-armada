@@ -475,7 +475,7 @@ describe("creating a captain", () => {
       createdAt: "2026-02-01T00:00:00.000Z",
     };
     const { view, onNavigate } = await render({
-      rpc: { captains_create: () => created },
+      rpc: { captains_create: () => ({ outcome: "recorded", record: created }) },
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
 
@@ -557,6 +557,39 @@ describe("creating a captain", () => {
       .getAllByRole("option")
       .map((option) => option.textContent);
     expect(names).toEqual(["Alpha", "Beta", "Personal"]);
+  });
+
+  it("records the thread a failed create already started instead of starting another", async () => {
+    const { view, onNavigate } = await render({
+      rpc: {
+        captains_create: () => ({
+          outcome: "unrecorded",
+          threadId: "thr_new",
+          reason: "disk full",
+        }),
+        captains_adopt: () => registry("thr_new")[0],
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
+    const retry = await dialog.findByRole("button", { name: "Record captain" });
+    expect(view.inspection.navigateCalls).toEqual([]);
+    expect(dialog.queryByRole("listbox", { name: "Project" })).toBeNull();
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(view.inspection.navigateCalls).toEqual([
+        { method: "toThread", threadId: "thr_new", options: undefined },
+      ]),
+    );
+    const calls = view.inspection.rpcCalls.map((call) => call.method);
+    expect(calls.filter((method) => method === "captains_create")).toHaveLength(1);
+    expect(
+      view.inspection.rpcCalls.find((call) => call.method === "captains_adopt")
+        ?.input,
+    ).toMatchObject({ threadId: "thr_new", avatar: { style: "micah" } });
+    expect(onNavigate).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("stays open and does not navigate when the server refuses", async () => {

@@ -57,7 +57,7 @@ Every row reads from the table through `StatusMark`.
 | method            | input                                       | output         |
 | ----------------- | ------------------------------------------- | -------------- |
 | `captains_list`   | none                                        | captain records |
-| `captains_create` | `projectId`, `projectName`, `name`, `avatar` | captain record |
+| `captains_create` | `projectId`, `projectName`, `name`, `avatar` | recorded record, or the unrecorded thread |
 | `captains_adopt`  | `threadId`, `avatar`                        | captain record |
 | `captains_update` | `threadId`, `avatar`                        | captain record |
 | `captains_remove` | `threadId`                                  | none           |
@@ -71,8 +71,10 @@ starts as the project's name (`cops`, not `Captain · cops`; the Captains
 section already says what it is). The title is the captain's only name; the
 record keeps just the avatar. The thread's first prompt tells the agent to follow the `/captain` skill and keep notes in
 `~/.bb/captains/<project>.md`. The thread is spawned first and recorded after,
-with three attempts; if recording still fails the error names the thread so
-you can adopt it with **Make captain…**.
+retrying the write after 100 ms and again after 400 ms. If it still fails,
+`captains_create` answers `{ outcome: "unrecorded", threadId }` rather than
+throwing, and the dialog switches to **Record captain**, which records that
+same thread through `captains_adopt` instead of spawning a second one.
 
 ### Pull requests
 

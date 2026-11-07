@@ -1,9 +1,15 @@
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import plugin from "../server";
 import { LEGACY_CAPTAINS_KEY, type CaptainRecord } from "../lib/captains";
 import type { ParkRecord } from "../lib/lifecycle";
+import type { Created } from "../lib/rpc";
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 async function load(options: { seed?: (kv: Kv) => Promise<void> } = {}) {
   const { bb, harness } = createFakePluginHost({
@@ -41,13 +47,16 @@ describe("captain records", () => {
 
   it("spawns a captain thread titled with its name in the project, records it and invalidates the captains read", async () => {
     const { harness, list } = await load();
-    const record = (await harness.callRpc("captains_create", {
+    const created = (await harness.callRpc("captains_create", {
       ...create,
       projectId: "proj_a",
       projectName: "Alpha",
       name: "  Fleet ",
-    })) as CaptainRecord;
-    expect(record.threadId).toBe("thr_new");
+    })) as Created;
+    expect(created).toMatchObject({
+      outcome: "recorded",
+      record: { threadId: "thr_new" },
+    });
     expect(await list()).toEqual([
       expect.objectContaining({ threadId: "thr_new", avatar: avatar("new") }),
     ]);
@@ -84,22 +93,40 @@ describe("captain records", () => {
     expect(await list()).toEqual([]);
   });
 
-  it("still records the spawned thread when the first write fails", async () => {
+  it("still records the spawned thread when the first writes fail, waiting longer before each retry", async () => {
     const { bb, harness, ids } = await load();
+    vi.useFakeTimers();
     const set = bb.storage.kv.set.bind(bb.storage.kv);
-    vi.spyOn(bb.storage.kv, "set")
-      .mockRejectedValueOnce(new Error("busy"))
-      .mockImplementation(set);
-    await harness.callRpc("captains_create", create);
+    const attempts: number[] = [];
+    vi.spyOn(bb.storage.kv, "set").mockImplementation(async (key, value) => {
+      attempts.push(Date.now());
+      if (attempts.length < 3) throw new Error("busy");
+      return set(key, value);
+    });
+    const created = harness.callRpc("captains_create", create);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await created).toMatchObject({ outcome: "recorded" });
+    expect(attempts.map((at) => at - attempts[0]!)).toEqual([0, 100, 500]);
     expect(await ids()).toEqual(["thr_new"]);
   });
 
-  it("names the spawned thread when it cannot be recorded at all", async () => {
+  it("names the spawned thread it could not record, without spawning another", async () => {
     const { bb, harness, list } = await load();
+    vi.useFakeTimers();
     vi.spyOn(bb.storage.kv, "set").mockRejectedValue(new Error("disk full"));
-    await expect(harness.callRpc("captains_create", create)).rejects.toThrow(
-      /thr_new.*disk full.*Make captain/,
-    );
+    const created = harness.callRpc("captains_create", create);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await created).toEqual({
+      outcome: "unrecorded",
+      threadId: "thr_new",
+      reason: "disk full",
+    });
+    expect(harness.sdk.callsTo("threads.spawn")).toHaveLength(1);
+    expect(harness.logEntries).toContainEqual({
+      level: "error",
+      message: expect.stringContaining("thr_new"),
+    });
+    vi.restoreAllMocks();
     expect(await list()).toEqual([]);
   });
 

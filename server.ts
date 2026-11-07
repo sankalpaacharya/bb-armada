@@ -16,9 +16,18 @@ import {
   parseStoredPark,
   type ParkRecord,
 } from "./lib/lifecycle";
-import { CAPTAINS_TAG, PARKS_TAG, rpcContract } from "./lib/rpc";
+import {
+  CAPTAINS_TAG,
+  PARKS_TAG,
+  rpcContract,
+  type Created,
+} from "./lib/rpc";
 
-const RECORD_ATTEMPTS = 3;
+/** A failed record write is retried after each wait, longer each time. */
+const RECORD_BACKOFF_MS = [100, 400] as const;
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const legacyRegistrySchema = z.object({
   captains: z.record(z.string(), z.unknown()),
@@ -67,7 +76,12 @@ export default async function plugin(bb: BbPluginApi) {
     captains_list: () =>
       listRecords(kv, CAPTAIN_KEY_PREFIX, parseStoredCaptain, bb.log.warn),
 
-    captains_create: async ({ projectId, projectName, name, avatar }) => {
+    captains_create: async ({
+      projectId,
+      projectName,
+      name,
+      avatar,
+    }): Promise<Created> => {
       const thread = await bb.sdk.threads.spawn({
         projectId,
         environment: { type: "project-default" },
@@ -79,18 +93,20 @@ export default async function plugin(bb: BbPluginApi) {
         avatar,
         createdAt: new Date().toISOString(),
       };
-      let failure: unknown;
-      for (let attempt = 0; attempt < RECORD_ATTEMPTS; attempt += 1) {
+      for (let attempt = 0; ; attempt += 1) {
         try {
-          return await saveCaptain(record);
+          return { outcome: "recorded", record: await saveCaptain(record) };
         } catch (cause) {
-          failure = cause;
+          const wait = RECORD_BACKOFF_MS[attempt];
+          if (wait !== undefined) {
+            await sleep(wait);
+            continue;
+          }
+          const reason = cause instanceof Error ? cause.message : String(cause);
+          bb.log.error(`could not record captain thread ${thread.id}: ${reason}`);
+          return { outcome: "unrecorded", threadId: thread.id, reason };
         }
       }
-      const reason = failure instanceof Error ? failure.message : String(failure);
-      throw new Error(
-        `Started captain thread ${thread.id} but could not record it (${reason}). Use "Make captain" on that thread.`,
-      );
     },
 
     captains_adopt: async ({ threadId, avatar }) => {

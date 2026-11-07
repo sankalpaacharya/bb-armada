@@ -10,6 +10,22 @@ export const PARKS_TAG = "parks";
 const threadId = threadIdSchema;
 const avatar = avatarSchema;
 
+/**
+ * A create spawns the thread first, so it can end with a thread that is
+ * running but not recorded. The client then records that thread instead of
+ * spawning another.
+ */
+const createdSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("recorded"), record: captainRecordSchema }),
+  z.object({
+    outcome: z.literal("unrecorded"),
+    threadId,
+    reason: z.string(),
+  }),
+]);
+
+export type Created = z.infer<typeof createdSchema>;
+
 export const rpcContract = defineRpcContract({
   captains_list: {
     input: z.null(),
@@ -23,7 +39,7 @@ export const rpcContract = defineRpcContract({
       name: z.string().trim().min(1).max(80),
       avatar,
     }),
-    output: captainRecordSchema,
+    output: createdSchema,
   },
   captains_adopt: {
     input: z.object({ threadId, avatar }),

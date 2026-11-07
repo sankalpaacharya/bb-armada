@@ -81,6 +81,12 @@ const COPY = {
     action: "Make captain",
     description: "Pin this thread to the top as the captain of its project.",
   },
+  unrecorded: {
+    title: "New captain",
+    action: "Record captain",
+    description:
+      "The captain's thread started, but it could not be recorded. Record it now; no second thread is started.",
+  },
   edit: {
     title: "Edit captain",
     action: "Save changes",
@@ -133,8 +139,10 @@ export function CaptainDialog({
   );
   const [typedName, setTypedName] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  /** The thread a create spawned but could not record; a retry records it. */
+  const [spawned, setSpawned] = useState<string | null>(null);
   const project = projects.find((candidate) => candidate.id === projectId);
-  const copy = COPY[state.kind];
+  const copy = COPY[spawned === null ? state.kind : "unrecorded"];
   const currentTitle =
     state.kind === "create" ? null : (state.thread.title ?? state.thread.displayTitle);
   const defaultName =
@@ -160,18 +168,37 @@ export function CaptainDialog({
     setAvatar(next[0]!);
   };
 
+  /** The recorded captain's thread, or null when it started but is not recorded yet. */
+  const recordCreated = async (
+    project: PluginSidebarProject,
+  ): Promise<string | null> => {
+    if (spawned !== null) {
+      await adopt.mutate({ threadId: spawned, avatar });
+      return spawned;
+    }
+    const created = await create.mutate({
+      projectId: project.id,
+      projectName: project.name,
+      name: trimmedName,
+      avatar,
+    });
+    if (created.outcome === "recorded") return created.record.threadId;
+    setSpawned(created.threadId);
+    toastFailure("Started the captain but could not record it", created.reason);
+    return null;
+  };
+
   const submit = async () => {
     if (pending || !canSubmit) return;
     setPending(true);
     try {
       if (state.kind === "create" && project !== undefined) {
-        const created = await create.mutate({
-          projectId: project.id,
-          projectName: project.name,
-          name: trimmedName,
-          avatar,
-        });
-        navigate.toThread(created.threadId);
+        const threadId = await recordCreated(project);
+        if (threadId === null) {
+          setPending(false);
+          return;
+        }
+        navigate.toThread(threadId);
         onNavigate();
       } else if (state.kind !== "create") {
         const threadId = state.thread.id;
@@ -214,6 +241,7 @@ export function CaptainDialog({
             id={nameId}
             value={name}
             maxLength={NAME_MAX}
+            readOnly={spawned !== null}
             autoComplete="off"
             onChange={(event) => setTypedName(event.target.value)}
             onKeyDown={(event) => {
@@ -230,7 +258,11 @@ export function CaptainDialog({
             <span className="text-sm">{editedProject.name}</span>
           </Field>
         )}
-        {state.kind === "create" ? (
+        {state.kind === "create" && spawned !== null ? (
+          <Field label="Project">
+            <span className="text-sm">{project?.name}</span>
+          </Field>
+        ) : state.kind === "create" ? (
           <Field label="Project">
             <ChoiceList
               label="Project"
