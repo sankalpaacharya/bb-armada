@@ -12,6 +12,7 @@ import { parkRecordSchema } from "./lifecycle";
 export const CAPTAINS_TAG = "captains";
 export const PARKS_TAG = "parks";
 export const HOMES_TAG = "homes";
+export const LOGOS_TAG = "logos";
 
 const threadId = idSchema;
 const avatar = avatarSchema;
@@ -105,5 +106,11 @@ export const rpcContract = defineRpcContract({
     input: z.null(),
     output: z.array(threadId),
     tags: () => [HOMES_TAG],
+  },
+  /** Each project's logo as an image data URI; a project without one is absent. */
+  project_logos: {
+    input: z.null(),
+    output: z.record(idSchema, z.string().startsWith("data:image/")),
+    tags: () => [LOGOS_TAG],
   },
 });

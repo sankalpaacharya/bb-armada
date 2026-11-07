@@ -19,9 +19,11 @@ import {
   parseStoredPark,
   type ParkRecord,
 } from "./lib/lifecycle";
+import { createLogoReader } from "./lib/project-logos";
 import {
   CAPTAINS_TAG,
   HOMES_TAG,
+  LOGOS_TAG,
   PARKS_TAG,
   rpcContract,
   type Created,
@@ -78,6 +80,7 @@ export default async function plugin(bb: BbPluginApi) {
   const queue = queueByKey();
   const settings = bb.settings.define(SETTINGS);
   const homes = createHomeReader(bb);
+  const logos = createLogoReader(bb);
 
   const findCaptain = async (threadId: string): Promise<CaptainRecord | null> =>
     parseStoredCaptain(await kv.get<unknown>(captainKey(threadId)));
@@ -220,10 +223,15 @@ export default async function plugin(bb: BbPluginApi) {
     captain_home_file: ({ project, path }) => homes.file(project, path),
 
     captain_supervisors: () => homes.supervisors(),
+
+    project_logos: () => logos.logos(),
   });
 
   bb.background.schedule("auto-settle", "*/5 * * * *", async () => {
     await evaluate();
+  });
+  bb.background.schedule("project-logos", "*/5 * * * *", async () => {
+    if (await logos.refresh()) bb.rpc.experimental_invalidate([LOGOS_TAG]);
   });
   settings.onChange(inBackground(reevaluate));
   inBackground(evaluate)();
