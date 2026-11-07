@@ -7,6 +7,7 @@ export type Status = "needs-you" | "failed" | "working" | "queued" | "done";
 
 export type StatusGlyph =
   | { kind: "grid" }
+  | { kind: "dot" }
   | { kind: "indicator"; indicator: PluginSidebarThreadIndicator };
 
 export type StatusRow = {
@@ -66,8 +67,8 @@ export const STATUS: Record<Status, StatusRow> = {
   done: {
     rank: 1,
     word: "Done",
-    tone: "text-muted-foreground",
-    glyph: indicator("unread-success"),
+    tone: "text-[color:var(--bbb-accent,var(--timeline-accent))]",
+    glyph: { kind: "dot" },
     wordOnCard: true,
     live: false,
     parkable: true,

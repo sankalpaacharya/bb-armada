@@ -14,16 +14,13 @@ import { StatusGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
 /**
- * The leading mark: a status that needs a look first; otherwise, working or
- * at rest, the captain that launched it, else a quiet dot. The captain stays
- * named for screen readers either way.
+ * The leading mark: the captain that launched it, else a quiet dot. The
+ * captain stays named for screen readers. Status sits at the row's right end.
  */
 function LeadMark({ entry }: { entry: ThreadEntry }) {
   const captain = entry.captain;
   const visual =
-    entry.status !== null && entry.status !== "working" ? (
-      <StatusGlyph status={entry.status} />
-    ) : captain !== null ? (
+    captain !== null ? (
       <CaptainTile avatar={captain.avatar} size="badge" />
     ) : (
       <span
@@ -94,11 +91,11 @@ export function ThreadCard({
                 <LeadMark entry={entry} />
               </span>
               {title}
-              {entry.status === "working" ? (
+              {entry.status === null ? null : (
                 <span className="grid size-4 shrink-0 place-items-center">
-                  <StatusGlyph status="working" />
+                  <StatusGlyph status={entry.status} />
                 </span>
-              ) : null}
+              )}
               {shortcut}
               {entry.parkable ? (
                 <RowActions

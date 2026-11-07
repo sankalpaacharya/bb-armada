@@ -140,7 +140,7 @@ describe("Armada thread list", () => {
     ).toBeTruthy();
   });
 
-  it("marks a worker with its captain's face at rest, its status while live, and names the captain either way", async () => {
+  it("marks a worker with its captain's face on the left and its status on the right, and names the captain", async () => {
     const { view } = await render({
       threads: [
         thread("cap", { title: "Captain Alpha", projectId: "proj_a" }),
@@ -170,10 +170,12 @@ describe("Armada thread list", () => {
     );
     const waiting = rowOf(view.container, "waiting")!;
     expect(within(waiting).getByText("Launched by Captain Alpha")).toBeTruthy();
-    expect(waiting.querySelector("img")).toBeNull();
-    expect(
-      waiting.querySelector('[data-thread-status-glyph="waiting-for-input"]'),
-    ).not.toBeNull();
+    const marks = Array.from(
+      waiting.querySelectorAll(
+        'img, [data-thread-status-glyph="waiting-for-input"]',
+      ),
+    );
+    expect(marks.map((mark) => mark.tagName === "IMG")).toEqual([true, false]);
     expect(
       within(rowOf(view.container, "plain")!).queryByText(/Launched by/),
     ).toBeNull();

@@ -3,6 +3,7 @@ import { isSnoozed, type ThreadEntry } from "@/lib/model";
 import { Age, WakesIn } from "./age";
 import { parkItems } from "./menu-items";
 import { RowActions } from "./row-actions";
+import { StatusGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
 /**
@@ -46,7 +47,11 @@ export function ShelfRow({
             {title}
             {shortcut ?? (
               <span className="flex min-w-5 shrink-0 justify-end transition-opacity duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-focus-within/row:opacity-0 group-hover/row:opacity-0 motion-reduce:transition-none">
-                {isSnoozed(entry) ? (
+                {entry.status !== null ? (
+                  <span className="grid size-4 place-items-center">
+                    <StatusGlyph status={entry.status} />
+                  </span>
+                ) : isSnoozed(entry) ? (
                   <WakesIn until={entry.park.until} />
                 ) : (
                   <Age at={entry.lastActivityAt} />
