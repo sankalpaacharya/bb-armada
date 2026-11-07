@@ -7,6 +7,7 @@ import {
 } from "@get-bb/plugin-sdk/app";
 
 import { useArmadaModel } from "@/hooks/use-armada-model";
+import { useProjectLogos } from "@/hooks/use-project-logos";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
 import type { CaptainEntry, ThreadEntry } from "@/lib/model";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
@@ -16,7 +17,7 @@ import { Summary } from "./captain-row";
 import { CaptainTile } from "./captain-tile";
 import { MemorySection } from "./memory-section";
 import { PlaceLine } from "./place-line";
-import { PullRequestNumber } from "./pull-request-number";
+import { ProjectLogo } from "./project-logo";
 import { Note } from "./section";
 import { StatusGlyph } from "./status-mark";
 import { Icon } from "./ui/icon";
@@ -100,27 +101,35 @@ function WorkerRow({
       >
         <span className="flex h-7 w-full items-center gap-2">
           <span className="grid size-4 shrink-0 place-items-center">
-            {entry.status === null ? (
+            {entry.projectLogo === null ? (
               <span
                 aria-hidden="true"
                 className="size-1.5 rounded-full bg-muted-foreground/40"
               />
             ) : (
-              <StatusGlyph status={entry.status} />
+              <ProjectLogo src={entry.projectLogo} />
             )}
           </span>
           <span className="min-w-0 flex-1 truncate text-sm text-foreground">
             <ThreadTitle threadId={entry.thread.id} />
           </span>
-          <span className="contents text-2xs">
-            <PullRequestNumber
-              environmentId={entry.thread.environment?.id ?? null}
-            />
-          </span>
-          <Age at={entry.lastActivityAt} />
         </span>
         <span className="w-full">
-          <PlaceLine thread={entry.thread} project={null} />
+          <PlaceLine
+            thread={entry.thread}
+            project={null}
+            className="pr-0"
+            trailing={
+              <>
+                {entry.status === null ? null : (
+                  <span className="grid h-4 min-w-4 shrink-0 place-items-center">
+                    <StatusGlyph status={entry.status} />
+                  </span>
+                )}
+                <Age at={entry.lastActivityAt} />
+              </>
+            }
+          />
         </span>
       </button>
     </li>
@@ -144,6 +153,7 @@ function CrewView({
   onBack: (() => void) | null;
 }) {
   const { captain } = crew;
+  const projectLogo = useProjectLogos()[captain.thread.projectId] ?? null;
   const workers = crew.active.length + crew.inactive.length + crew.parked.length;
   const rows = (entries: readonly ThreadEntry[]) =>
     entries.map((entry) => (
@@ -157,7 +167,15 @@ function CrewView({
   return (
     <div className="flex min-h-full flex-col gap-5">
       <header className="flex items-center gap-3 px-2">
-        <CaptainTile avatar={captain.record.avatar} size="preview" />
+        <span className="relative shrink-0">
+          <CaptainTile avatar={captain.record.avatar} size="preview" />
+          {projectLogo === null ? null : (
+            <ProjectLogo
+              src={projectLogo}
+              className="absolute -right-1 -bottom-1 size-4 rounded-[5px] ring-2 ring-background"
+            />
+          )}
+        </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <button
             type="button"

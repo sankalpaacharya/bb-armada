@@ -100,7 +100,6 @@ export function ThreadCard({
             <PlaceLine
               thread={entry.thread}
               project={project}
-              detailed={active}
               className={cn(
                 "pointer-events-none relative -mt-1 mb-1 pr-0 pl-8",
                 entry.parkable &&

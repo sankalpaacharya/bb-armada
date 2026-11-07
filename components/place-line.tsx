@@ -18,21 +18,17 @@ function ActivityCount({ label, count }: { label: string; count: number }) {
 }
 
 /**
- * A thread's detail line: its project, where it runs, its activity and PR,
- * then whatever the row puts at its end. The detailed line, for the open
- * thread, adds the harness. With nothing to say it draws nothing, so the row
- * stays one line.
+ * A thread's detail line: its project, where it runs, its activity, PR and
+ * harness, then whatever the row puts at its end.
  */
 export function PlaceLine({
   thread,
   project,
-  detailed = true,
   trailing,
   className,
 }: {
   thread: PluginSidebarThread;
   project: string | null;
-  detailed?: boolean;
   trailing?: ReactNode;
   className?: string;
 }) {
@@ -47,16 +43,6 @@ export function PlaceLine({
       : host !== null
         ? { name: "Laptop", label: "Machine" }
         : null;
-  const busy =
-    thread.activity.workflows > 0 || thread.activity.backgroundAgents > 0;
-  if (
-    project === null &&
-    placeIcon === null &&
-    !busy &&
-    !detailed &&
-    trailing === undefined
-  )
-    return null;
   return (
     <div
       className={cn(
@@ -91,7 +77,7 @@ export function PlaceLine({
         />
       ) : null}
       <PullRequestNumber environmentId={environment?.id ?? null} />
-      {detailed ? <ProviderGlyph providerId={thread.providerId} /> : null}
+      <ProviderGlyph providerId={thread.providerId} />
       {trailing}
     </div>
   );
