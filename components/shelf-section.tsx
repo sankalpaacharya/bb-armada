@@ -27,7 +27,9 @@ export function ShelfSection({
   onOpen: OpenThread;
 }) {
   if (entries.length === 0) return null;
-  const label = expanded ? `Hide ${title.toLowerCase()}` : `Show ${title.toLowerCase()}`;
+  const label = expanded
+    ? `Hide ${title.toLowerCase()}`
+    : `Show ${title.toLowerCase()}`;
   return (
     <section className="flex flex-col gap-1">
       <SectionHeader

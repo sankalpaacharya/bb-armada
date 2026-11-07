@@ -46,7 +46,9 @@ export function ChoiceList<Id extends string | null>({
   const row = grid?.columns ?? 1;
   const ref = useRef<HTMLUListElement>(null);
   const options = () =>
-    Array.from(ref.current?.querySelectorAll<HTMLElement>("[role=option]") ?? []);
+    Array.from(
+      ref.current?.querySelectorAll<HTMLElement>("[role=option]") ?? [],
+    );
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -127,7 +129,9 @@ export function ChoiceList<Id extends string | null>({
                       className="size-3.5 shrink-0 text-muted-foreground"
                     />
                   )}
-                  <span className="min-w-0 flex-1 truncate">{choice.label}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {choice.label}
+                  </span>
                   {choice.count === undefined || choice.count === 0 ? null : (
                     <span
                       aria-hidden="true"

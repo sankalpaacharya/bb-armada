@@ -51,11 +51,11 @@ export function ParkableSlot({
 }) {
   if (!entry.parkable) return children;
   return (
-    <span className="relative flex shrink-0 items-center">
-      <span className="flex items-center group-hover/row:invisible group-focus-within/row:invisible">
+    <>
+      <span className="flex shrink-0 items-center gap-2 group-focus-within/row:hidden group-hover/row:hidden">
         {children}
       </span>
-      <span className="pointer-events-auto absolute top-1/2 right-0 hidden -translate-y-1/2 items-center gap-0.5 group-hover/row:flex group-focus-within/row:flex">
+      <span className="pointer-events-auto hidden shrink-0 items-center gap-0.5 group-focus-within/row:flex group-hover/row:flex">
         <ParkButton
           label="Snooze until tomorrow"
           icon="Clock"
@@ -69,6 +69,6 @@ export function ParkableSlot({
           onActivate={() => actions.settle(entry.thread.id)}
         />
       </span>
-    </span>
+    </>
   );
 }
