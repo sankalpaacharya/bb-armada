@@ -92,19 +92,24 @@ const BUSY_STATUSES = new Set<string>([
   "waiting-for-host",
 ]);
 
-export function statusOf(thread: PluginSidebarThread): Status | null {
+/**
+ * Every status a thread shows at once. They can overlap: a send can fail while
+ * a turn is still running, and the thread is then both failed and working.
+ */
+export function signalsOf(thread: PluginSidebarThread): Status[] {
+  const signals: Status[] = [];
   if (
     thread.hasPendingInteraction ||
     thread.indicator === "waiting-for-input"
   ) {
-    return "needs-you";
+    signals.push("needs-you");
   }
   if (
     thread.queuedWork === "failed" ||
     thread.indicator === "queued-failed" ||
     thread.indicator === "unread-error"
   ) {
-    return "failed";
+    signals.push("failed");
   }
   const { activity } = thread;
   if (
@@ -117,10 +122,15 @@ export function statusOf(thread: PluginSidebarThread): Status | null {
       activity.goals >
       0
   ) {
-    return thread.indicator === "queued-waiting" ? "queued" : "working";
+    signals.push(thread.indicator === "queued-waiting" ? "queued" : "working");
   }
-  if (thread.indicator === "unread-success") return "done";
-  return null;
+  if (thread.indicator === "unread-success") signals.push("done");
+  return signals;
+}
+
+/** The most urgent of a thread's signals, which is what its card shows. */
+export function statusOf(thread: PluginSidebarThread): Status | null {
+  return signalsOf(thread).reduce<Status | null>(strongerStatus, null);
 }
 
 export function strongerStatus(
@@ -134,8 +144,4 @@ export function strongerStatus(
 
 export function isLive(status: Status | null): boolean {
   return status !== null && STATUS[status].live;
-}
-
-export function canPark(status: Status | null): boolean {
-  return status === null || STATUS[status].parkable;
 }

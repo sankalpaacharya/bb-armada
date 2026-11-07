@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  nextWakeAt,
   parseStoredPark,
   resolveShelf,
   snoozePresets,
@@ -12,7 +11,7 @@ import { NOW } from "./fixtures";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-const quiet = { status: null, latestAttentionAt: 0 } as const;
+const quiet = { parkable: true, latestAttentionAt: 0 } as const;
 const settled: Park = { kind: "settled", at: NOW - HOUR };
 const snoozed: Park = { kind: "snoozed", at: NOW - HOUR, until: NOW + HOUR };
 
@@ -21,18 +20,15 @@ describe("resolveShelf", () => {
     expect(resolveShelf(undefined, quiet, NOW)).toBe("active");
   });
 
-  it("never hides a thread that is working, queued or waiting on you", () => {
-    for (const status of ["working", "queued", "needs-you"] as const) {
-      expect(resolveShelf(settled, { ...quiet, status }, NOW)).toBe("active");
-      expect(resolveShelf(snoozed, { ...quiet, status }, NOW)).toBe("active");
-    }
+  it("never hides a thread whose tree has live work or a raised hand", () => {
+    const live = { ...quiet, parkable: false };
+    expect(resolveShelf(settled, live, NOW)).toBe("active");
+    expect(resolveShelf(snoozed, live, NOW)).toBe("active");
   });
 
-  it("shelves a quiet, done or failed thread the way the user filed it", () => {
-    for (const status of [null, "done", "failed"] as const) {
-      expect(resolveShelf(settled, { ...quiet, status }, NOW)).toBe("settled");
-      expect(resolveShelf(snoozed, { ...quiet, status }, NOW)).toBe("snoozed");
-    }
+  it("shelves a parkable thread the way the user filed it", () => {
+    expect(resolveShelf(settled, quiet, NOW)).toBe("settled");
+    expect(resolveShelf(snoozed, quiet, NOW)).toBe("snoozed");
   });
 
   it("wakes a snooze on its timer", () => {
@@ -89,22 +85,12 @@ describe("snoozePresets", () => {
   });
 });
 
-describe("wake timing", () => {
-  it("labels the time left with the same formatter as ages", () => {
+describe("wakeLabel", () => {
+  it("rounds the time left up, so a hidden snooze never reads now", () => {
+    expect(wakeLabel(NOW + 40_000, NOW)).toBe("1m");
+    expect(wakeLabel(NOW + HOUR - 1000, NOW)).toBe("1h");
     expect(wakeLabel(NOW + 5 * MINUTE, NOW)).toBe("5m");
-    expect(wakeLabel(NOW + 2 * HOUR, NOW)).toBe("2h");
     expect(wakeLabel(NOW - 1, NOW)).toBe("now");
-  });
-
-  it("finds the soonest wake still ahead", () => {
-    const parks: Park[] = [
-      settled,
-      { kind: "snoozed", at: NOW, until: NOW + 3 * HOUR },
-      { kind: "snoozed", at: NOW, until: NOW + HOUR },
-      { kind: "snoozed", at: NOW - HOUR, until: NOW - 1 },
-    ];
-    expect(nextWakeAt(parks, NOW)).toBe(NOW + HOUR);
-    expect(nextWakeAt([settled], NOW)).toBeNull();
   });
 });
 

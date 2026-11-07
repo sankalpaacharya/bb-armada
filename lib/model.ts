@@ -3,26 +3,44 @@ import type {
   PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
 
-import type { CaptainRecord } from "./captains";
+import type { Avatar, CaptainRecord } from "./captains";
 import {
+  isExpired,
   resolveShelf,
   type Park,
   type ParkRecord,
   type Shelf,
   type Snooze,
 } from "./lifecycle";
-import { statusOf, strongerStatus, type Status } from "./status";
+import {
+  STATUS,
+  signalsOf,
+  statusOf,
+  strongerStatus,
+  type Status,
+} from "./status";
 
 type Fold = {
+  /** The most urgent status anywhere in the folded threads. */
   status: Status | null;
+  /**
+   * Whether every signal of every folded thread allows parking. This is not
+   * a property of `status`: a failure outranks work still running elsewhere.
+   */
+  parkable: boolean;
   activityAt: number;
   latestAttentionAt: number;
 };
 
+/** The captain a card was launched by, as its card shows it. */
+export type CaptainBadge = { threadId: string; name: string; avatar: Avatar };
+
 export type ThreadEntry = Fold & {
   thread: PluginSidebarThread;
   projectName: string | null;
-  /** Root cards can become captains; a captain's workers cannot. */
+  /** The nearest captain above this card, or null for a card of its own. */
+  captain: CaptainBadge | null;
+  /** A card of its own can become a captain; a captain's worker cannot. */
   adoptable: boolean;
   park: Park | null;
   shelf: Shelf;
@@ -30,14 +48,12 @@ export type ThreadEntry = Fold & {
 
 export type ParkedEntry<Kind extends Park> = ThreadEntry & { park: Kind };
 
-export type CaptainCounts = { working: number; needsYou: number };
+export type CaptainCounts = { working: number; needsYou: number; failed: number };
 
 export type CaptainEntry = Fold & {
   record: CaptainRecord;
   thread: PluginSidebarThread;
-  /** Active workers; parked ones sit on the shelves. */
-  workers: ThreadEntry[];
-  /** Threads in the captain's tree that are working, and that need you. */
+  /** Threads in the captain's tree that are working, that need you, and that failed. */
   counts: CaptainCounts;
 };
 
@@ -46,6 +62,8 @@ export type ArmadaModel = {
   threads: ThreadEntry[];
   snoozed: ParkedEntry<Snooze>[];
   settled: ParkedEntry<Extract<Park, { kind: "settled" }>>[];
+  /** Threads whose stored park can never apply again, to delete. */
+  expiredParks: string[];
 };
 
 function parentIdOf(thread: PluginSidebarThread): string | null {
@@ -54,14 +72,18 @@ function parentIdOf(thread: PluginSidebarThread): string | null {
 
 function fold(threads: readonly PluginSidebarThread[]): Fold {
   let status: Status | null = null;
+  let parkable = true;
   let activityAt = 0;
   let latestAttentionAt = 0;
   for (const thread of threads) {
-    status = strongerStatus(status, statusOf(thread));
+    for (const signal of signalsOf(thread)) {
+      status = strongerStatus(status, signal);
+      parkable &&= STATUS[signal].parkable;
+    }
     activityAt = Math.max(activityAt, thread.updatedAt);
     latestAttentionAt = Math.max(latestAttentionAt, thread.latestAttentionAt);
   }
-  return { status, activityAt, latestAttentionAt };
+  return { status, parkable, activityAt, latestAttentionAt };
 }
 
 function pinOrder(a: PluginSidebarThread, b: PluginSidebarThread): number {
@@ -84,16 +106,13 @@ function entryOrder(a: ThreadEntry, b: ThreadEntry): number {
   return b.activityAt - a.activityAt;
 }
 
-function byActivity(a: Fold, b: Fold): number {
-  return b.activityAt - a.activityAt;
-}
-
 function countStatuses(threads: readonly PluginSidebarThread[]): CaptainCounts {
-  const counts = { working: 0, needsYou: 0 };
+  const counts = { working: 0, needsYou: 0, failed: 0 };
   for (const thread of threads) {
     const status = statusOf(thread);
     if (status === "working" || status === "queued") counts.working += 1;
-    else if (status === "needs-you" || status === "failed") counts.needsYou += 1;
+    else if (status === "needs-you") counts.needsYou += 1;
+    else if (status === "failed") counts.failed += 1;
   }
   return counts;
 }
@@ -154,42 +173,37 @@ export function buildArmada(
     return found;
   };
 
-  const entryOf = (
-    thread: PluginSidebarThread,
-    adoptable: boolean,
-  ): ThreadEntry => {
+  const badgeOf = new Map(
+    captainRecords.map(({ record, thread }): [string, CaptainBadge] => [
+      thread.id,
+      { threadId: thread.id, name: thread.displayTitle, avatar: record.avatar },
+    ]),
+  );
+  const parked: ThreadEntry[] = [];
+  const expiredParks: string[] = [];
+
+  const entryOf = (thread: PluginSidebarThread): ThreadEntry => {
     const folded = fold([thread, ...subtreeOf(thread.id)]);
     const park = parkOf.get(thread.id) ?? null;
+    if (park !== null && isExpired(park, folded.latestAttentionAt, now))
+      expiredParks.push(thread.id);
+    const parentId = parentIdOf(thread);
+    const captain = (parentId === null ? undefined : badgeOf.get(parentId)) ?? null;
     return {
       thread,
       projectName: projectNames.get(thread.projectId) ?? null,
-      adoptable,
+      captain,
+      adoptable: captain === null,
       park,
       shelf: resolveShelf(park ?? undefined, folded, now),
       ...folded,
     };
   };
 
-  const parked: ThreadEntry[] = [];
-  const owned = new Set(captainIds);
   const captains = captainRecords
     .map(({ record, thread }): CaptainEntry => {
-      const subtree = subtreeOf(thread.id);
-      for (const member of subtree) owned.add(member.id);
-      const workers = (childrenOf.get(thread.id) ?? [])
-        .filter((child) => !captainIds.has(child.id))
-        .map((child) => entryOf(child, false))
-        .sort(byActivity);
-      for (const worker of workers)
-        if (worker.shelf !== "active") parked.push(worker);
-      const tree = [thread, ...subtree];
-      return {
-        record,
-        thread,
-        workers: workers.filter((worker) => worker.shelf === "active"),
-        counts: countStatuses(tree),
-        ...fold(tree),
-      };
+      const tree = [thread, ...subtreeOf(thread.id)];
+      return { record, thread, counts: countStatuses(tree), ...fold(tree) };
     })
     .sort(
       (a, b) =>
@@ -197,13 +211,19 @@ export function buildArmada(
         a.record.threadId.localeCompare(b.record.threadId),
     );
 
+  /** A card's root: the thread reached by climbing parents until none is left or the next is a captain. */
   const rootOf = (thread: PluginSidebarThread): PluginSidebarThread => {
     let current = thread;
     const seen = new Set([current.id]);
     for (;;) {
       const parentId = parentIdOf(current);
       const parent = parentId === null ? undefined : byId.get(parentId);
-      if (parent === undefined || seen.has(parent.id)) return current;
+      if (
+        parent === undefined ||
+        captainIds.has(parent.id) ||
+        seen.has(parent.id)
+      )
+        return current;
       seen.add(parent.id);
       current = parent;
     }
@@ -211,11 +231,11 @@ export function buildArmada(
 
   const roots = new Map<string, PluginSidebarThread>();
   for (const thread of visible) {
-    if (owned.has(thread.id)) continue;
+    if (captainIds.has(thread.id)) continue;
     const root = rootOf(thread);
     roots.set(root.id, root);
   }
-  const entries = [...roots.values()].map((root) => entryOf(root, true));
+  const entries = [...roots.values()].map(entryOf);
   for (const entry of entries) if (entry.shelf !== "active") parked.push(entry);
 
   return {
@@ -223,5 +243,6 @@ export function buildArmada(
     threads: entries.filter((entry) => entry.shelf === "active").sort(entryOrder),
     snoozed: parked.filter(isSnoozed).sort((a, b) => a.park.until - b.park.until),
     settled: parked.filter(isSettled).sort((a, b) => b.park.at - a.park.at),
+    expiredParks,
   };
 }

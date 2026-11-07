@@ -32,6 +32,7 @@ export type CaptainDialogState =
   | { kind: "edit"; thread: PluginSidebarThread; record: CaptainRecord };
 
 const OFFERED = 12;
+const AVATAR_COLUMNS = 6;
 const NAME_MAX = 80;
 
 function startingProject(
@@ -43,10 +44,11 @@ function startingProject(
 }
 
 /** A fresh set of offers, with the current avatar kept first so it can be picked again. */
-function offerAvatars(keep: Avatar | null): Avatar[] {
-  const offers = Array.from({ length: OFFERED }, randomAvatar);
-  if (keep !== null) offers[0] = keep;
-  return offers;
+function offerAvatars(keep: Avatar | null): [Avatar, ...Avatar[]] {
+  return [
+    keep ?? randomAvatar(),
+    ...Array.from({ length: OFFERED - 1 }, randomAvatar),
+  ];
 }
 
 function Field({
@@ -81,6 +83,12 @@ const COPY = {
     action: "Make captain",
     description: "Pin this thread to the top as the captain of its project.",
   },
+  unrecorded: {
+    title: "New captain",
+    action: "Record captain",
+    description:
+      "The captain's thread started, but it could not be recorded. Record it now; no second thread is started.",
+  },
   edit: {
     title: "Edit captain",
     action: "Save changes",
@@ -108,6 +116,18 @@ export function CaptainDialog({
   const adopt = experimental_useRpcMutation({
     contract: rpcContract,
     method: "captains_adopt",
+    optimistic: ({ threadId, avatar, createdAt }, cache) => {
+      cache.update("captains_list", null, (current) => {
+        const kept = current.find((record) => record.threadId === threadId);
+        return [
+          ...current.filter((record) => record.threadId !== threadId),
+          { threadId, avatar, createdAt: kept?.createdAt ?? createdAt },
+        ];
+      });
+      cache.update("parks_list", null, (current) =>
+        current.filter((park) => park.threadId !== threadId),
+      );
+    },
   });
   const update = experimental_useRpcMutation({
     contract: rpcContract,
@@ -127,14 +147,16 @@ export function CaptainDialog({
   const [offers, setOffers] = useState(() =>
     offerAvatars(state.kind === "edit" ? state.record.avatar : null),
   );
-  const [avatar, setAvatar] = useState<Avatar>(() => offers[0]!);
+  const [avatar, setAvatar] = useState<Avatar>(() => offers[0]);
   const [projectId, setProjectId] = useState(() =>
     startingProject(projects, activeProjectId),
   );
   const [typedName, setTypedName] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  /** The thread a create spawned but could not record; a retry records it. */
+  const [spawned, setSpawned] = useState<string | null>(null);
   const project = projects.find((candidate) => candidate.id === projectId);
-  const copy = COPY[state.kind];
+  const copy = COPY[spawned === null ? state.kind : "unrecorded"];
   const currentTitle =
     state.kind === "create" ? null : (state.thread.title ?? state.thread.displayTitle);
   const defaultName =
@@ -157,7 +179,31 @@ export function CaptainDialog({
   const shuffle = () => {
     const next = offerAvatars(null);
     setOffers(next);
-    setAvatar(next[0]!);
+    setAvatar(next[0]);
+  };
+
+  /** The recorded captain's thread, or null when it started but is not recorded yet. */
+  const recordCreated = async (
+    project: PluginSidebarProject,
+  ): Promise<string | null> => {
+    if (spawned !== null) {
+      await adopt.mutate({
+        threadId: spawned,
+        avatar,
+        createdAt: new Date().toISOString(),
+      });
+      return spawned;
+    }
+    const created = await create.mutate({
+      projectId: project.id,
+      projectName: project.name,
+      name: trimmedName,
+      avatar,
+    });
+    if (created.outcome === "recorded") return created.record.threadId;
+    setSpawned(created.threadId);
+    toastFailure("Started the captain but could not record it", created.reason);
+    return null;
   };
 
   const submit = async () => {
@@ -165,13 +211,12 @@ export function CaptainDialog({
     setPending(true);
     try {
       if (state.kind === "create" && project !== undefined) {
-        const created = await create.mutate({
-          projectId: project.id,
-          projectName: project.name,
-          name: trimmedName,
-          avatar,
-        });
-        navigate.toThread(created.threadId);
+        const threadId = await recordCreated(project);
+        if (threadId === null) {
+          setPending(false);
+          return;
+        }
+        navigate.toThread(threadId);
         onNavigate();
       } else if (state.kind !== "create") {
         const threadId = state.thread.id;
@@ -180,7 +225,11 @@ export function CaptainDialog({
             ? sdk.threads.update({ threadId, title: trimmedName })
             : null,
           state.kind === "adopt"
-            ? adopt.mutate({ threadId, avatar })
+            ? adopt.mutate({
+                threadId,
+                avatar,
+                createdAt: new Date().toISOString(),
+              })
             : avatarChanged
               ? update.mutate({ threadId, avatar })
               : null,
@@ -214,6 +263,7 @@ export function CaptainDialog({
             id={nameId}
             value={name}
             maxLength={NAME_MAX}
+            readOnly={spawned !== null}
             autoComplete="off"
             onChange={(event) => setTypedName(event.target.value)}
             onKeyDown={(event) => {
@@ -230,7 +280,11 @@ export function CaptainDialog({
             <span className="text-sm">{editedProject.name}</span>
           </Field>
         )}
-        {state.kind === "create" ? (
+        {state.kind === "create" && spawned !== null ? (
+          <Field label="Project">
+            <span className="text-sm">{project?.name}</span>
+          </Field>
+        ) : state.kind === "create" ? (
           <Field label="Project">
             <ChoiceList
               label="Project"
@@ -255,14 +309,16 @@ export function CaptainDialog({
             onChange={(seed) =>
               setAvatar(offers.find((offer) => offer.seed === seed) ?? avatar)
             }
-            className="grid grid-cols-6 gap-1"
-            renderChoice={(choice, selected) => (
-              <CaptainTile
-                avatar={{ style: "micah", seed: choice.id }}
-                size="preview"
-                className={selected ? "ring-2 ring-ring" : undefined}
-              />
-            )}
+            grid={{
+              columns: AVATAR_COLUMNS,
+              render: (choice, selected) => (
+                <CaptainTile
+                  avatar={{ style: "micah", seed: choice.id }}
+                  size="preview"
+                  className={selected ? "ring-2 ring-ring" : undefined}
+                />
+              ),
+            }}
           />
           <Button
             type="button"

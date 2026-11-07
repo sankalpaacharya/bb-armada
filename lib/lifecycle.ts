@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-import { threadIdSchema } from "./captains";
-import { canPark, type Status } from "./status";
+import { idSchema } from "./captains";
 import { formatDuration } from "./time";
 
 const time = z.number().int().positive();
@@ -15,12 +14,12 @@ export type Park = z.infer<typeof parkSchema>;
 export type Snooze = Extract<Park, { kind: "snoozed" }>;
 
 export const parkRecordSchema = z
-  .object({ threadId: threadIdSchema })
+  .object({ threadId: idSchema })
   .and(parkSchema);
 
 export type ParkRecord = z.infer<typeof parkRecordSchema>;
 
-export type Shelf = "active" | "snoozed" | "settled";
+export type Shelf = "active" | Park["kind"];
 
 export const PARK_KEY_PREFIX = "park:";
 export const parkKey = (threadId: string): string =>
@@ -32,9 +31,25 @@ export function parseStoredPark(raw: unknown): ParkRecord | null {
 }
 
 export type ShelfSignals = {
-  status: Status | null;
+  /** False while anything in the thread's tree is working, queued or needs you. */
+  parkable: boolean;
   latestAttentionAt: number;
 };
+
+/**
+ * A park that can never apply again: attention came after it, or its snooze
+ * timer passed. Deleting it changes nothing the list shows.
+ */
+export function isExpired(
+  park: Park,
+  latestAttentionAt: number,
+  now: number,
+): boolean {
+  return (
+    latestAttentionAt > park.at ||
+    (park.kind === "snoozed" && park.until <= now)
+  );
+}
 
 /**
  * Live work and a raised hand always win, so a parked thread that starts
@@ -46,10 +61,8 @@ export function resolveShelf(
   signals: ShelfSignals,
   now: number,
 ): Shelf {
-  if (park === undefined || !canPark(signals.status)) return "active";
-  if (signals.latestAttentionAt > park.at) return "active";
-  if (park.kind === "snoozed") return park.until <= now ? "active" : "snoozed";
-  return "settled";
+  if (park === undefined || !signals.parkable) return "active";
+  return isExpired(park, signals.latestAttentionAt, now) ? "active" : park.kind;
 }
 
 const MINUTE = 60_000;
@@ -69,6 +82,9 @@ function atHour(base: Date, hour: number, addDays = 0): number {
   return next.getTime();
 }
 
+export const tomorrowMorning = (now: Date): number =>
+  atHour(now, MORNING_HOUR, 1);
+
 /** "This evening" only while it is more than an hour before 18:00. */
 export function snoozePresets(now: Date): SnoozePreset[] {
   const presets: SnoozePreset[] = [
@@ -80,7 +96,7 @@ export function snoozePresets(now: Date): SnoozePreset[] {
   presets.push({
     id: "tomorrow",
     label: "Tomorrow",
-    until: atHour(now, MORNING_HOUR, 1),
+    until: tomorrowMorning(now),
   });
   const daysUntilMonday = (1 - now.getDay() + 7) % 7 || 7;
   presets.push({
@@ -91,18 +107,10 @@ export function snoozePresets(now: Date): SnoozePreset[] {
   return presets;
 }
 
+/** Rounded up, so a snooze never reads "now" while the thread is still hidden. */
 export const wakeLabel = (until: number, now: number): string =>
-  formatDuration(until - now);
+  formatDuration(until - now, "up");
 
-/** The soonest snooze wake still ahead, or null when nothing is snoozed. */
-export function nextWakeAt(
-  parks: readonly Park[],
-  now: number,
-): number | null {
-  let soonest: number | null = null;
-  for (const park of parks) {
-    if (park.kind !== "snoozed" || park.until <= now) continue;
-    if (soonest === null || park.until < soonest) soonest = park.until;
-  }
-  return soonest;
-}
+/** When each snooze wakes, for the clock that wakes the model. */
+export const wakesOf = (parks: readonly Park[]): number[] =>
+  parks.flatMap((park) => (park.kind === "snoozed" ? [park.until] : []));

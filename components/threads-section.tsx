@@ -9,7 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
 import type { ThreadEntry } from "@/lib/model";
 import { countByProject, type ThreadScope } from "@/lib/scope";
-import { HEADER_ACTION } from "@/lib/styles";
+import { HEADER_ACTION, SECTION_TEXT } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { ChoiceList, type Choice } from "./choice-list";
 import { makeCaptainItem, parkItems } from "./menu-items";
@@ -86,17 +86,20 @@ export function ThreadsSection({
     <div ref={sectionRef} className="contents">
       <SectionHeader
         title="Threads"
+        count={scoped.length}
         actions={
           <button
             ref={triggerRef}
             type="button"
+            aria-haspopup="listbox"
             aria-expanded={open}
-            aria-controls={listId}
+            aria-controls={open ? listId : undefined}
             aria-label={`Threads from ${scopeName ?? "All projects"}`}
             onClick={() => setOpen((current) => !current)}
             className={cn(
               HEADER_ACTION,
-              "flex h-6 w-auto max-w-[60%] min-w-0 gap-1 px-1.5 text-[12px]",
+              "flex h-6 w-auto max-w-[60%] min-w-0 gap-1 px-1.5",
+              SECTION_TEXT,
             )}
           >
             <span className="min-w-0 truncate">
