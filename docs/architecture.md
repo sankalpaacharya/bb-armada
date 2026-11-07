@@ -15,6 +15,12 @@ of its captain. Workers count as the captain's own threads in its Crew tab and
 its row's summary, and the supervisor never shows as a row. The sidebar list
 leaves out every thread a captain started. A new supervisor appears within 5 minutes.
 
+The Crew tab's Needs you section lists the bullets under `## Waiting on the
+user` in `backlog.md` (older homes say `## Waiting on captain`), and clicking
+one opens the captain's thread to answer it. New decisions show within 5
+minutes too. **Add to captain** in a thread's menu makes a captain of the same
+project the thread's parent, and **Remove from crew** on a Crew row clears it.
+
 Armada ships the armada skill in `skills/armada/`, and bb loads every
 `skills/<name>/SKILL.md` in a plugin into agent threads. So installing Armada
 installs the skill, and nothing else is needed for a captain to work. A new
@@ -55,7 +61,7 @@ colour and mark.
 | `parks_unpark` | `threadId` | none |
 | `parks_keep` | `threadId`, `at` | park record |
 | `parks_evaluate` | none | the threads auto-settle just settled |
-| `captain_home` | `project` | the memory folder's file list |
+| `captain_home` | `project` | the memory folder's file list and the backlog's open decisions for the user |
 | `captain_supervisors` | none | every supervisor's thread id |
 | `project_logos` | none | a logo for each project that has one |
 
