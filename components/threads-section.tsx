@@ -99,7 +99,7 @@ export function ThreadsSection({
               : `No threads in ${scopeName} yet.`}
         </Note>
       ) : (
-        <ul aria-label="Threads" className="m-0 flex flex-col gap-px p-0">
+        <ul aria-label="Threads" className="m-0 flex flex-col gap-0.5 p-0">
           {scoped.map((entry) => (
             <ThreadCard
               key={entry.thread.id}

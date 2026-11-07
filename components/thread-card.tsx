@@ -121,13 +121,12 @@ export function ThreadCard({
                 />
               ) : null}
             </div>
-            <div className="pointer-events-none relative -mt-1 pb-1">
-              <PlaceLine
-                thread={entry.thread}
-                project={project}
-                showProvider={active}
-              />
-            </div>
+            <PlaceLine
+              thread={entry.thread}
+              project={project}
+              detailed={active}
+              className="pointer-events-none relative -mt-1 mb-1"
+            />
           </>
         )}
       </ThreadLink>
