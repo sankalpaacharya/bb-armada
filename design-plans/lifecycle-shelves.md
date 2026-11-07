@@ -132,3 +132,62 @@ The user saw every one of 176 threads as a full card and expected T3 Code's beha
   - setting 0 disables the shelf
   - a stored park beats inactive
   - new activity returns the thread to active
+
+## Revision: copy bb-sidebar's auto-shelving exactly (user; supersedes the earlier "automatic Inactive shelf" revision)
+
+The user measured their 178 threads. bb-sidebar shows Pinned 1, Active 4, Inactive 33 and Settled 140. Armada shows all 175 as active. They want Armada to behave like bb-sidebar.
+
+The lead extracted bb-sidebar's decision code from `/Users/sanku/.bb/plugins/cache/git/github.com/yusuf8834/bb-sidebar/*/dist/server.js` (`decideAutoSettle`/`cp`, `cannotAutoSettle`/`Wm`, the `auto-settle` schedule) and `dist/app.js` (`Od`, `uf`). Read those minified functions yourself to confirm. Its live settings are: inactive after **6** hours, auto-settle after **3** days, settle on merge **on**.
+
+### Rules to port
+
+`lastActivity(thread) = max(createdAt, updatedAt, latestAttentionAt)`.
+
+- **Inactive** (client, computed, never stored): not on another shelf, not live, and `lastActivity <= now - inactiveAfterHours*3600e3`. Captains are never inactive. Pinned threads stay active.
+- **Auto-settle** (server, persisted), `decideAutoSettle({ park, now, pullRequest, settings, thread })` returns `"keep" | "settle" | "unsettle"`:
+  1. A user override (manual settle, or "keep active") → `keep`.
+  2. `cannotAutoSettle` → `unsettle` if currently auto-settled, else `keep`. It is true when any of these holds:
+     - pinned
+     - pending interaction
+     - queued work
+     - working (any live activity)
+     - snoozed
+  3. PR outcome unknown (fetch failed) → `keep`.
+  4. PR closed, or merged with `settleOnMerge`, and `Date.parse(pr.updatedAt) >= lastActivity` → should settle.
+  5. PR open or draft → never settle.
+  6. Otherwise, with `afterDays !== null` and no open/draft PR, settle when `lastActivity < now - afterDays*86400e3`.
+  7. Return `settle`/`unsettle` only when that differs from the current auto-settled state, else `keep`.
+  - Port it as a pure, unit-tested function in `lib/lifecycle.ts`, with a test per branch.
+- **Runner** (server): `bb.background.schedule("auto-settle", "*/5 * * * *", evaluate)`. Also run it once at plugin start, and expose `parks_evaluate: null → { changed: string[] }` for the client to call on mount.
+  - `evaluate` loads every non-archived thread through the server SDK. Check how bb-sidebar's `loadPolicyThreads` does it; it is likely `bb.sdk.threads.list`.
+  - It loads each thread environment's PR with `bb.sdk.environments.pullRequest({ environmentId })`, at most 4 concurrent, as bb-sidebar does. A thread without an environment counts as PR `absent`.
+  - It applies the decisions as single `park:<id>` KV writes and deletes, then invalidates `parks`.
+  - Only threads whose decision isn't `keep` are written.
+  - It must be idempotent.
+- **Park model.**
+  - Settled parks become `{ kind: "settled"; at; by: "user" | "auto" }`. Stored records without `by` parse as `"user"`; test that migration.
+  - "Move to active" on an auto-settled or inactive thread stores `{ kind: "kept"; at }`, the user override. A kept thread is never auto-settled, but can still show as Inactive by age, as in bb-sidebar.
+  - Settling it again replaces the kept record.
+  - `resolveShelf` keeps "live always wins". An auto-settled thread whose `lastActivity > at` resolves active immediately on the client, without waiting for the 5-minute job.
+  - A user settle keeps Armada's current rule: it returns on new attention.
+- **Settings** (`bb.settings.define`, read reactively on the client):
+  - `inactiveAfterHours` (default 6; 0 = off)
+  - `autoSettleAfterDays` (default 3; 0 = off)
+  - `autoSettleOnMerge` (default true)
+  - Re-run `evaluate` when a setting changes, if the SDK exposes a change hook.
+- **UI.**
+  - Active list first; pinned threads stay at the top, as today.
+  - Then an "Inactive N" section of one-line `ShelfRow`s, then "Snoozed N", then "Settled N".
+  - Inactive and Settled are **collapsed by default**, with their open state persisted. The chevron rotates.
+  - The scope filter applies to all shelves.
+  - Hover on an inactive row offers Settle. On a settled row it offers "Move to active".
+- **Tests.**
+  - every `decideAutoSettle` branch
+  - the inactive threshold
+  - pinned and live threads exempt
+  - an auto-settled thread unsettling on new activity, on both the client and the server
+  - a kept thread never auto-settled
+  - the legacy `by` migration
+  - the runner writing only changed records (fake SDK)
+  - a rendered list showing Inactive and Settled collapsed with counts
+- Don't import bb-sidebar's stored settles; Armada computes its own.
