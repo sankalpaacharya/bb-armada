@@ -314,7 +314,7 @@ describe("Armada thread list", () => {
     expect(stored.has("armada/captain-toggles")).toBe(false);
   });
 
-  it("draws a thread on one line that stays one line when opened, with where it runs in the tooltip", async () => {
+  it("draws a thread on one line, and shows where it runs once it is open", async () => {
     const { view } = await render({
       threads: [
         thread("plain", {
@@ -369,16 +369,29 @@ describe("Armada thread list", () => {
     cleanup();
     const opened = await render({
       activeThreadId: "plain",
-      threads: [thread("plain", { title: "Loose idea", projectId: "proj_b" })],
+      threads: [
+        thread("plain", {
+          title: "Loose idea",
+          projectId: "proj_b",
+          environment: {
+            id: "env_1",
+            name: "loose-idea",
+            branchName: "feat/loose-idea",
+            path: null,
+            isWorktree: true,
+            providerId: null,
+            workspaceDisplayKind: null,
+          },
+        }),
+      ],
     });
     await waitFor(() =>
       expect(rowOf(opened.view.container, "plain")).not.toBeNull(),
     );
-    expect(
-      rowOf(opened.view.container, "plain")!.querySelectorAll(
-        ".pointer-events-none.relative",
-      ),
-    ).toHaveLength(1);
+    const open = within(rowOf(opened.view.container, "plain")!);
+    expect(open.getByText("feat/loose-idea")).toBeTruthy();
+    expect(open.getByLabelText("Worktree")).toBeTruthy();
+    expect(open.getByText("Beta")).toBeTruthy();
   });
 
   it("shows only the chosen project's threads, without repeating the project on each card", async () => {

@@ -6,6 +6,7 @@ import { placeHint } from "@/lib/place";
 import { Age } from "./age";
 import { CaptainTile } from "./captain-tile";
 import { ParkableSlot } from "./park-buttons";
+import { PlaceLine } from "./place-line";
 import { ProviderGlyph } from "./provider-glyph";
 import { PullRequestNumber } from "./pull-request-number";
 import { StatusGlyph } from "./status-mark";
@@ -36,7 +37,7 @@ function LeadMark({ entry }: { entry: ThreadEntry }) {
   );
 }
 
-/** A thread as one line: status or origin on the left, PR and age on the right, where it runs in the tooltip. */
+/** A thread as one line: status or origin on the left, PR and age on the right; the open thread also shows where it runs. */
 export function ThreadCard({
   entry,
   active,
@@ -79,12 +80,19 @@ export function ThreadCard({
               </span>
               {title}
               <ParkableSlot entry={entry} actions={parkActions}>
-                <span className="pointer-events-auto shrink-0 text-2xs">
-                  <PullRequestNumber environmentId={environmentId} />
-                </span>
+                {active ? null : (
+                  <span className="pointer-events-auto shrink-0 text-2xs">
+                    <PullRequestNumber environmentId={environmentId} />
+                  </span>
+                )}
                 {shortcut ?? <Age at={entry.activityAt} />}
               </ParkableSlot>
             </div>
+            {active ? (
+              <div className="pointer-events-none relative -mt-1 pb-1">
+                <PlaceLine thread={entry.thread} project={project} />
+              </div>
+            ) : null}
           </>
         )}
       </ThreadLink>
