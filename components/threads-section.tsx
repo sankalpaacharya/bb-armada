@@ -15,7 +15,6 @@ import { ChoiceList, type Choice } from "./choice-list";
 import { makeCaptainItem, parkItems } from "./menu-items";
 import { Note, SectionHeader } from "./section";
 import { ThreadCard } from "./thread-card";
-import { projectMarks } from "@/lib/project-tone";
 import type { OpenThread } from "./thread-link";
 
 export function ThreadsSection({
@@ -55,7 +54,6 @@ export function ThreadsSection({
   const counts = useMemo(() => countByProject(entries), [entries]);
   const scopeName =
     projects.find((project) => project.id === scope)?.name ?? null;
-  const marks = useMemo(() => projectMarks(projects), [projects]);
   const choices: Choice<string | null>[] = [
     { id: null, label: "All projects", icon: "Layers", count: entries.length },
     ...projects.map((project) => ({
@@ -152,11 +150,6 @@ export function ThreadsSection({
               entry={entry}
               active={entry.thread.id === activeThreadId}
               showProject={scope === null}
-              projectMark={
-                scope === null
-                  ? (marks.get(entry.thread.projectId) ?? null)
-                  : null
-              }
               parkActions={parkActions}
               inline={[
                 ...(entry.adoptable

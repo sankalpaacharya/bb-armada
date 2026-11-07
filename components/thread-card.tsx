@@ -2,8 +2,6 @@ import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
 import type { ThreadEntry } from "@/lib/model";
-import type { ProjectMark } from "@/lib/project-tone";
-import { cn } from "@/lib/utils";
 import { placeHint } from "@/lib/place";
 import { Age } from "./age";
 import { CaptainTile } from "./captain-tile";
@@ -19,29 +17,13 @@ import { ThreadLink, type OpenThread } from "./thread-link";
  * is on the open thread's place line). The captain stays named for screen
  * readers either way.
  */
-function LeadMark({
-  entry,
-  projectMark,
-}: {
-  entry: ThreadEntry;
-  projectMark: ProjectMark | null;
-}) {
+function LeadMark({ entry }: { entry: ThreadEntry }) {
   const captain = entry.captain;
   const visual =
     entry.status !== null ? (
       <StatusGlyph status={entry.status} />
     ) : captain !== null ? (
       <CaptainTile avatar={captain.avatar} size="badge" />
-    ) : projectMark !== null ? (
-      <span
-        aria-hidden="true"
-        className={cn(
-          "grid size-3.5 place-items-center rounded-[4px] text-[9px] font-semibold leading-none",
-          projectMark.tone,
-        )}
-      >
-        {projectMark.initial}
-      </span>
     ) : (
       <span
         aria-hidden="true"
@@ -63,7 +45,6 @@ export function ThreadCard({
   entry,
   active,
   showProject,
-  projectMark,
   parkActions,
   inline,
   onOpen,
@@ -72,8 +53,6 @@ export function ThreadCard({
   active: boolean;
   /** Off when the list is already scoped to one project. */
   showProject: boolean;
-  /** The project's letter tile; null when the list shows one project. */
-  projectMark: ProjectMark | null;
   parkActions: ParkActions;
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
@@ -100,7 +79,7 @@ export function ThreadCard({
           <>
             <div className="pointer-events-none relative flex h-8 items-center gap-2">
               <span className="grid size-4 shrink-0 place-items-center">
-                <LeadMark entry={entry} projectMark={projectMark} />
+                <LeadMark entry={entry} />
               </span>
               {title}
               <ParkableSlot entry={entry} actions={parkActions}>
