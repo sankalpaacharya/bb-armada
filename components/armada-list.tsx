@@ -73,6 +73,9 @@ function useStoredScope(): [ThreadScope, (scope: ThreadScope) => void] {
   return [scope, set];
 }
 
+const HEADER_ACTION =
+  "size-6 rounded-md text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground";
+
 function SectionHeader({
   title,
   children,
@@ -81,11 +84,10 @@ function SectionHeader({
   children?: ReactNode;
 }) {
   return (
-    <h2 className="flex items-center gap-2 px-2.5 pt-3 pb-1 first:pt-1">
-      <span className="text-2xs font-medium text-muted-foreground/70">
+    <h2 className="mt-3 flex h-8 items-center justify-between gap-2 px-2.5 first:mt-0">
+      <span className="text-[13px] font-normal text-muted-foreground">
         {title}
       </span>
-      <span className="h-px flex-1 bg-sidebar-border" />
       {children}
     </h2>
   );
@@ -274,7 +276,7 @@ export function ArmadaList({
           variant="ghost"
           size="icon"
           aria-label="New captain"
-          className="size-6 text-muted-foreground"
+          className={HEADER_ACTION}
           onClick={() => setDialog({ kind: "create" })}
         >
           <Icon name="Plus" className="size-4" />
@@ -289,8 +291,9 @@ export function ArmadaList({
           Start a captain to run a project from one chat.
         </Note>
       )}
-      <SectionHeader title="Threads" />
-      <ScopePicker projects={pickable} scope={scope} onChange={setScope} />
+      <SectionHeader title="Threads">
+        <ScopePicker projects={pickable} scope={scope} onChange={setScope} />
+      </SectionHeader>
       {status === "loading" ? (
         <Note>Loading threads…</Note>
       ) : status === "error" && threads.length === 0 ? (
