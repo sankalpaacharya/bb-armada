@@ -11,11 +11,40 @@ export function captainSlug(projectName: string): string {
   return slug === "" ? "project" : slug;
 }
 
-export function captainPrompt(projectName: string): string {
-  return [
-    `/armada You are the first mate for the bb project "${projectName}".`,
-    `Your home is ~/.bb/captains/${captainSlug(projectName)}/.`,
-    "If it does not exist, create it as the skill describes, using what you can learn quickly from the repo's README, CLAUDE.md/AGENTS.md and recent commits.",
-    "Then reply with a 3-line hello: what you understood the project to be, and that the user can now tell you what they need.",
+const SKILL = "armada";
+const TRIGGER = `/${SKILL}`;
+
+/**
+ * A new captain's first message: the armada skill, invoked the way bb's
+ * composer does it, followed by what the captain should do first.
+ */
+export function captainInput(projectName: string) {
+  const text = [
+    TRIGGER,
+    `You are the captain for the bb project "${projectName}".`,
+    `Keep your memory in ~/.bb/captains/${captainSlug(projectName)}/.`,
+    "If that folder does not exist yet, set it up from the repo's README, AGENTS.md or CLAUDE.md, and its recent commits.",
+    "Then say hello in three lines: what you think the project is, and that the user can tell you what to work on.",
   ].join(" ");
+  return [
+    {
+      type: "text" as const,
+      text,
+      mentions: [
+        {
+          start: 0,
+          end: TRIGGER.length,
+          resource: {
+            kind: "command" as const,
+            trigger: "/" as const,
+            name: SKILL,
+            label: SKILL,
+            source: "skill" as const,
+            origin: "user" as const,
+            argumentHint: null,
+          },
+        },
+      ],
+    },
+  ];
 }

@@ -2,7 +2,7 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 import { createAutoSettle } from "./lib/auto-settle";
-import { captainPrompt } from "./lib/captain-text";
+import { captainInput } from "./lib/captain-text";
 import {
   CAPTAIN_KEY_PREFIX,
   LEGACY_CAPTAINS_BACKUP_KEY,
@@ -140,7 +140,7 @@ export default async function plugin(bb: BbPluginApi) {
         projectId,
         environment: { type: "project-default" },
         title: name,
-        prompt: captainPrompt(projectName),
+        input: captainInput(projectName),
       });
       const record: CaptainRecord = {
         threadId: thread.id,

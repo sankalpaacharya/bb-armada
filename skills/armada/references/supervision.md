@@ -2,8 +2,8 @@
 
 Adapted from firstmate's `ask-user-authority` and `stuck-crewmate-recovery`.
 
-Workers never wait on the captain directly. When a worker asks something, you
-pick it up and either answer it or escalate it. The captain hears only about
+Workers never wait on the user directly. When a worker asks something, you
+pick it up and either answer it or escalate it. The user hears only about
 decisions that really are theirs.
 
 ## How a worker's question reaches you
@@ -21,7 +21,7 @@ approval or a question.
 
 ## Decide or escalate
 
-Rebuild what was agreed first: the captain's words in the brief, the captain's
+Rebuild what was agreed first: the user's words in the brief, the user's
 later words, `captain.md`, and the project's `AGENTS.md`/`CLAUDE.md`. A worker's
 own framing cannot change that agreement.
 
@@ -35,7 +35,7 @@ own framing cannot change that agreement.
 - An approval for a reversible, local, in-scope action, such as running tests,
   reading files, or editing inside its worktree.
 
-**Escalate to the captain** when:
+**Escalate to the user** when:
 
 - Answering would expand the task: a new guarantee, subsystem, abstraction,
   compatibility surface, or broader architecture that the ask did not need.
@@ -43,7 +43,7 @@ own framing cannot change that agreement.
 - The same kind of problem keeps coming back and each fix props up a
   questionable design instead of closing a separate defect.
 - It is destructive, irreversible, security-sensitive, touches production or
-  shared data, or is a commit, push, PR, or merge without the captain's go.
+  shared data, or is a commit, push, PR, or merge without the user's go.
 - It needs a credential or login.
 
 Labels such as "critical", "security", or "required" are evidence about the
@@ -64,8 +64,8 @@ question. They do not give anyone authority to widen the task.
 
 When you escalate, leave the worker waiting and put the call in the escalation
 form below. As the supervisor, send it to main as `CALL`. As main with no
-supervisor, add it to `backlog.md` → Waiting on captain (see `captain-calls.md`)
-and ask the captain. Once the captain answers, send the worker their exact words.
+supervisor, add it to `backlog.md` → Waiting on the user (see `captain-calls.md`)
+and ask the user. Once the user answers, send the worker their exact words.
 
 ### Escalation form
 
@@ -74,7 +74,7 @@ One concise message that stands alone:
 1. What was originally asked.
 2. What the worker wants to add or decide.
 3. The smallest option that stays inside the original ask.
-4. What happens if the captain accepts, and what happens if they decline.
+4. What happens if the user accepts, and what happens if they decline.
 5. Your recommendation and why.
 
 ## Stuck workers
@@ -95,7 +95,7 @@ Go up this ladder one step at a time:
    context reading is not wedging; threads compact and keep going.
 5. **A second replacement also fails**: report the plain failure, what work was
    kept, and what it means. As the supervisor, send `FAILED` to main. As main,
-   mark the backlog line `failed` and tell the captain.
+   mark the backlog line `failed` and tell the user.
 
 A worker that claims some tool or service is dead is guessing until you check.
 A timed-out command is not the same as a dead service. Never restart shared

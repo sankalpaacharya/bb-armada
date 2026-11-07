@@ -142,9 +142,16 @@ describe("captain records", () => {
       environment: { type: "project-default" },
       title: "Fleet",
     });
-    const prompt = (spawn![0] as { prompt: string }).prompt;
-    expect(prompt.startsWith("/armada ")).toBe(true);
-    expect(prompt).toContain("~/.bb/captains/alpha/");
+    const [part] = (
+      spawn![0] as {
+        input: { text: string; mentions: { resource: { name: string } }[] }[];
+      }
+    ).input;
+    expect(part.text.startsWith("/armada ")).toBe(true);
+    expect(part.text).toContain("~/.bb/captains/alpha/");
+    expect(part.mentions.map((mention) => mention.resource.name)).toEqual([
+      "armada",
+    ]);
   });
 
   it("refuses a blank name without spawning a thread", async () => {
