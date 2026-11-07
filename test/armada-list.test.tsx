@@ -957,8 +957,42 @@ describe("thread menu", () => {
 
 describe("shelves", () => {
   const HOUR = 3_600_000;
+  const openAllShelves = () =>
+    stored.set(
+      "armada/shelves",
+      JSON.stringify({ inactive: true, snoozed: true, settled: true }),
+    );
+
+  it("starts Settled closed and Inactive open, and remembers a shelf you close", async () => {
+    vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
+    await render({
+      settings: { inactiveAfterHours: 6 },
+      threads: [
+        thread("quiet", {
+          title: "Quiet",
+          updatedAt: NOW - 8 * HOUR,
+          createdAt: NOW - 8 * HOUR,
+        }),
+        thread("done", { title: "Done" }),
+      ],
+      parks: [settledAt("done", NOW)],
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Settled" })).toBeTruthy(),
+    );
+    expect(screen.queryByRole("list", { name: "Settled" })).toBeNull();
+    expect(screen.getByRole("list", { name: "Inactive" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Inactive/ }));
+    expect(screen.queryByRole("list", { name: "Inactive" })).toBeNull();
+    expect(JSON.parse(stored.get("armada/shelves") ?? "{}")).toMatchObject({
+      inactive: false,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Settled/ }));
+    expect(screen.getByRole("list", { name: "Settled" })).toBeTruthy();
+  });
 
   it("settles a card from its hover button, lists it under Settled, and brings it back with Move to active", async () => {
+    openAllShelves();
     let parks: ParkRecord[] = [];
     const { view } = await render({
       threads: [
@@ -1031,6 +1065,7 @@ describe("shelves", () => {
   });
 
   it("moves a settled or snoozed card off the list before the server answers", async () => {
+    openAllShelves();
     const { view } = await render({
       threads: [
         thread("a", { title: "First", projectId: "proj_b" }),
@@ -1141,6 +1176,7 @@ describe("shelves", () => {
   });
 
   it("shows a long shelf's first eight rows and offers the rest", async () => {
+    openAllShelves();
     const ids = Array.from({ length: 10 }, (_, index) => `s${index}`);
     await render({
       threads: ids.map((id) => thread(id, { title: id })),
@@ -1160,6 +1196,7 @@ describe("shelves", () => {
   });
 
   it("shows Inactive and Settled as quiet lists under the active one, and settles an inactive row from its hover button", async () => {
+    openAllShelves();
     vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
     const quiet = { createdAt: NOW - 9 * HOUR, updatedAt: NOW - 8 * HOUR };
     const { view } = await render({
@@ -1230,6 +1267,7 @@ describe("shelves", () => {
   });
 
   it("puts Settle, the snooze presets and Move to active in the thread menu", async () => {
+    openAllShelves();
     const { view } = await render({
       threads: [
         thread("quiet", { title: "Quiet" }),

@@ -1,6 +1,6 @@
 import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
-import { isSettled, isSnoozed, type ThreadEntry } from "@/lib/model";
+import { isSnoozed, type ThreadEntry } from "@/lib/model";
 import { FOCUS_RING } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age, WakesIn } from "./age";
@@ -8,9 +8,9 @@ import { parkItems } from "./menu-items";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
 /**
- * A shelved thread as one quiet line: its title, then when it wakes, how long
- * ago it settled, or how long it has been quiet. Hover offers Settle on an
- * inactive row and Move to active on a parked one.
+ * A shelved thread as one quiet line: its title, then when it wakes or how
+ * long it has been quiet. Hover offers Settle on an inactive row and Move to
+ * active on a parked one.
  */
 export function ShelfRow({
   entry,
@@ -42,11 +42,12 @@ export function ShelfRow({
         active={active}
         inline={parkItems(entry, actions)}
         onOpen={onOpen}
-        className="flex h-8 items-center gap-2 px-2.5"
+        className="flex h-8 items-center gap-2 px-2"
         titleClassName="text-muted-foreground/70 group-hover/row:text-foreground"
       >
         {({ title, shortcut }) => (
           <>
+            <span aria-hidden="true" className="size-4 shrink-0" />
             <span className="pointer-events-none relative flex min-w-0 flex-1 items-center">
               {title}
             </span>
@@ -56,11 +57,7 @@ export function ShelfRow({
                   (isSnoozed(entry) ? (
                     <WakesIn until={entry.park.until} />
                   ) : (
-                    <Age
-                      at={
-                        isSettled(entry) ? entry.park.at : entry.lastActivityAt
-                      }
-                    />
+                    <Age at={entry.lastActivityAt} />
                   ))}
               </span>
               <button

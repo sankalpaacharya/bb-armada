@@ -86,19 +86,21 @@ export function ArmadaList({
   const snoozed = scopeThreads(model.snoozed, scope);
   const settled = scopeThreads(model.settled, scope);
 
-  const open: OpenThread = (threadId, split) => {
+  const openThread: OpenThread = (threadId, split) => {
     navigate.toThread(threadId, { split });
     onNavigate();
   };
 
-  const shelf = (name: "inactive" | "snoozed" | "settled") => ({
-    expanded: shelves[name] ?? false,
-    onToggle: () =>
-      setShelves({ ...shelves, [name]: !(shelves[name] ?? false) }),
-    activeThreadId,
-    actions: parkActions,
-    onOpen: open,
-  });
+  const shelf = (name: "inactive" | "snoozed" | "settled") => {
+    const open = shelves[name] ?? name !== "settled";
+    return {
+      open,
+      onToggleOpen: () => setShelves({ ...shelves, [name]: !open }),
+      activeThreadId,
+      actions: parkActions,
+      onOpen: openThread,
+    };
+  };
 
   return (
     <div
@@ -110,7 +112,7 @@ export function ArmadaList({
         status={captains.status}
         captains={model.captains}
         activeThreadId={activeThreadId}
-        onOpen={open}
+        onOpen={openThread}
         onDialog={setDialog}
       />
       <div className="flex flex-col">
@@ -124,7 +126,7 @@ export function ArmadaList({
           status={captains.status === "loading" ? "loading-captains" : status}
           activeThreadId={activeThreadId}
           parkActions={parkActions}
-          onOpen={open}
+          onOpen={openThread}
           onAdopt={(thread) => setDialog({ kind: "adopt", thread })}
         />
         <ShelfSection
