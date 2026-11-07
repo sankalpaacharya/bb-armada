@@ -35,12 +35,18 @@ const OFFERED = 12;
 const AVATAR_COLUMNS = 6;
 const NAME_MAX = 80;
 
-function startingProject(
+/** The open project unless it already has a captain, else the first project without one. */
+export function startingProject(
   projects: readonly PluginSidebarProject[],
   activeProjectId: string | null,
+  captained: ReadonlySet<string>,
 ): string {
   const active = projects.find((project) => project.id === activeProjectId);
-  return (active ?? projects[0])?.id ?? "";
+  const free = (project: PluginSidebarProject | undefined) =>
+    project !== undefined && !captained.has(project.id);
+  const pick =
+    (free(active) ? active : projects.find(free)) ?? active ?? projects[0];
+  return pick?.id ?? "";
 }
 
 /** A fresh set of offers, with the current avatar kept first so it can be picked again. */
@@ -100,12 +106,15 @@ export function CaptainDialog({
   state,
   projects,
   activeProjectId,
+  captained,
   onClose,
   onNavigate,
 }: {
   state: CaptainDialogState;
   projects: readonly PluginSidebarProject[];
   activeProjectId: string | null;
+  /** Projects that already have a captain. */
+  captained: ReadonlySet<string>;
   onClose: () => void;
   onNavigate: () => void;
 }) {
@@ -149,7 +158,7 @@ export function CaptainDialog({
   );
   const [avatar, setAvatar] = useState<Avatar>(() => offers[0]);
   const [projectId, setProjectId] = useState(() =>
-    startingProject(projects, activeProjectId),
+    startingProject(projects, activeProjectId, captained),
   );
   const [typedName, setTypedName] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -291,6 +300,9 @@ export function CaptainDialog({
               choices={projects.map((candidate) => ({
                 id: candidate.id,
                 label: candidate.name,
+                detail: captained.has(candidate.id)
+                  ? "has a captain"
+                  : undefined,
               }))}
               value={projectId}
               onChange={setProjectId}

@@ -7,6 +7,7 @@ import { Age } from "./age";
 import { CaptainTile } from "./captain-tile";
 import { ParkableSlot } from "./park-buttons";
 import { PlaceLine } from "./place-line";
+import { PullRequestNumber } from "./pull-request-number";
 import { StatusGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
@@ -39,7 +40,7 @@ function LeadMark({ entry }: { entry: ThreadEntry }) {
   );
 }
 
-/** A thread as one line: status or origin on the left, age on the right; under it, where it runs and its PR. Every row has the same height. */
+/** A thread as one line: status or origin on the left, PR and age on the right; the open thread also shows where it runs. */
 export function ThreadCard({
   entry,
   active,
@@ -56,6 +57,7 @@ export function ThreadCard({
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
 }) {
+  const environmentId = entry.thread.environment?.id ?? null;
   const project =
     showProject && entry.projectName !== entry.captain?.name
       ? entry.projectName
@@ -81,12 +83,19 @@ export function ThreadCard({
               </span>
               {title}
               <ParkableSlot entry={entry} actions={parkActions}>
+                {active ? null : (
+                  <span className="pointer-events-auto shrink-0 text-2xs">
+                    <PullRequestNumber environmentId={environmentId} />
+                  </span>
+                )}
                 {shortcut ?? <Age at={entry.activityAt} />}
               </ParkableSlot>
             </div>
-            <div className="pointer-events-none relative -mt-1 pb-1">
-              <PlaceLine thread={entry.thread} project={project} />
-            </div>
+            {active ? (
+              <div className="pointer-events-none relative -mt-1 pb-1">
+                <PlaceLine thread={entry.thread} project={project} />
+              </div>
+            ) : null}
           </>
         )}
       </ThreadLink>

@@ -314,7 +314,7 @@ describe("Armada thread list", () => {
     expect(stored.has("armada/captain-toggles")).toBe(false);
   });
 
-  it("draws every thread with its title and age, then project, place, PR and harness, whether or not it is open", async () => {
+  it("draws a thread on one line, and shows where it runs once it is open", async () => {
     const { view } = await render({
       threads: [
         thread("plain", {
@@ -349,18 +349,49 @@ describe("Armada thread list", () => {
       },
     });
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
-    const row = rowOf(view.container, "plain")!;
-    const card = within(row);
+    const card = within(rowOf(view.container, "plain")!);
+    expect(card.queryByText("Beta")).toBeNull();
     expect(card.getByRole("img", { name: "Working" })).toBeTruthy();
-    expect(card.getByText("Beta")).toBeTruthy();
-    expect(card.getByText("feat/loose-idea")).toBeTruthy();
-    expect(card.getByLabelText("Worktree")).toBeTruthy();
     expect(
-      row.querySelector('[data-provider-id="claude-code"]'),
-    ).not.toBeNull();
+      rowOf(view.container, "plain")!.querySelector(
+        '[data-provider-id="claude-code"]',
+      ),
+    ).toBeNull();
     expect(
       (await card.findByRole("link", { name: "#42" })).getAttribute("href"),
     ).toBe("https://github.com/acme/app/pull/42");
+    expect(card.queryByText("feat/loose-idea")).toBeNull();
+
+    expect(anchorOf(view.container, "plain")!.getAttribute("title")).toBe(
+      "Beta · Worktree feat/loose-idea",
+    );
+
+    cleanup();
+    const opened = await render({
+      activeThreadId: "plain",
+      threads: [
+        thread("plain", {
+          title: "Loose idea",
+          projectId: "proj_b",
+          environment: {
+            id: "env_1",
+            name: "loose-idea",
+            branchName: "feat/loose-idea",
+            path: null,
+            isWorktree: true,
+            providerId: null,
+            workspaceDisplayKind: null,
+          },
+        }),
+      ],
+    });
+    await waitFor(() =>
+      expect(rowOf(opened.view.container, "plain")).not.toBeNull(),
+    );
+    const open = within(rowOf(opened.view.container, "plain")!);
+    expect(open.getByText("feat/loose-idea")).toBeTruthy();
+    expect(open.getByLabelText("Worktree")).toBeTruthy();
+    expect(open.getByText("Beta")).toBeTruthy();
   });
 
   it("shows only the chosen project's threads, without repeating the project on each card", async () => {
@@ -413,7 +444,7 @@ describe("Armada thread list", () => {
     expect(all.getAttribute("aria-selected")).toBe("true");
     fireEvent.keyDown(list, { key: "ArrowDown" });
     expect(document.activeElement).toBe(
-      within(list).getByRole("option", { name: "Alpha" }),
+      within(list).getByRole("option", { name: /^Alpha/ }),
     );
     fireEvent.keyDown(list, { key: "End" });
     expect(document.activeElement).toBe(
@@ -561,12 +592,12 @@ describe("creating a captain", () => {
     }) as HTMLInputElement;
     expect(preview("Beta")).toHaveLength(1);
     expect(name.value).toBe("Beta");
-    fireEvent.click(dialog.getByRole("option", { name: "Alpha" }));
+    fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
     expect(preview("Alpha")).toHaveLength(1);
     expect(name.value).toBe("Alpha");
     fireEvent.change(name, { target: { value: "  Fleet " } });
     fireEvent.click(dialog.getByRole("option", { name: "Beta" }));
-    fireEvent.click(dialog.getByRole("option", { name: "Alpha" }));
+    fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
     expect(name.value).toBe("  Fleet ");
     expect(dialog.getByText("Fleet")).toBeTruthy();
     const avatars = within(dialog.getByRole("listbox", { name: "Avatar" }));
@@ -644,7 +675,7 @@ describe("creating a captain", () => {
     )
       .getAllByRole("option")
       .map((option) => option.textContent);
-    expect(names).toEqual(["Alpha", "Beta", "Personal"]);
+    expect(names).toEqual(["Alpha · has a captain", "Beta", "Personal"]);
   });
 
   it("records the thread a failed create already started instead of starting another", async () => {

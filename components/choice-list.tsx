@@ -9,6 +9,8 @@ export type Choice<Id extends string | null> = {
   label: string;
   icon?: string;
   count?: number;
+  /** A short muted note after the label, read with it. */
+  detail?: string;
 };
 
 const keyOf = (id: string | null) => id ?? "\u0000";
@@ -131,6 +133,12 @@ export function ChoiceList<Id extends string | null>({
                   )}
                   <span className="min-w-0 flex-1 truncate">
                     {choice.label}
+                    {choice.detail === undefined ? null : (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {choice.detail}
+                      </span>
+                    )}
                   </span>
                   {choice.count === undefined || choice.count === 0 ? null : (
                     <span

@@ -61,6 +61,10 @@ export function ArmadaList({
   usePruneParks(model.expiredParks);
   useEffect(() => RETIRED_KEYS.forEach(removeStored), []);
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
+  const captained = useMemo(
+    () => new Set(model.captains.map((captain) => captain.thread.projectId)),
+    [model.captains],
+  );
   const scope = resolveScope(storedScope, pickable);
   const scoped = useMemo(
     () => scopeThreads(model.threads, scope),
@@ -116,6 +120,7 @@ export function ArmadaList({
           state={dialog}
           projects={pickable}
           activeProjectId={activeProjectId}
+          captained={captained}
           onClose={() => setDialog(null)}
           onNavigate={onNavigate}
         />
