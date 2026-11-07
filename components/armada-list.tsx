@@ -79,7 +79,7 @@ export function ArmadaList({
     <div
       ref={rows.ref}
       onKeyDown={rows.onKeyDown}
-      className="flex min-h-full shrink-0 flex-col px-1.5 pb-2"
+      className="flex min-h-full shrink-0 flex-col gap-6 px-1.5 pb-2"
     >
       <CaptainsSection
         status={captains.status}
