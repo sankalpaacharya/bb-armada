@@ -79,12 +79,16 @@ function renderCrew(
 const openMemory = async () =>
   fireEvent.click(await screen.findByRole("button", { name: "Memory" }));
 
-/** Each row of the Memory section, with its "1h" age dropped. */
+/** Each row of the Memory section, with its age dropped. */
 const memoryRows = () =>
   within(screen.getByRole("heading", { name: "Memory" }).closest("section")!)
     .queryAllByRole("button")
-    .filter((button) => button.textContent !== "Memory")
-    .map((button) => button.textContent?.replace(/1h$/, ""));
+    .filter(
+      (button) =>
+        button.textContent !== "Memory" &&
+        button.getAttribute("aria-label") !== "Refresh memory",
+    )
+    .map((button) => button.textContent?.replace(/(\d+[a-z]+|now)$/, ""));
 
 describe("the crew tab's memory", () => {
   it("shows the captain's home as files, startup memory first, then a folder per task", async () => {
@@ -99,7 +103,9 @@ describe("the crew tab's memory", () => {
     );
     await openMemory();
     await screen.findByText("~/.bb/captains/cops");
-    expect(reads).toEqual([{ project: "cops" }]);
+    expect(new Set(reads.map((read) => JSON.stringify(read)))).toEqual(
+      new Set([JSON.stringify({ project: "cops" })]),
+    );
     expect(memoryRows()).toEqual([
       "captain.md",
       "learnings.md",
@@ -128,6 +134,17 @@ describe("the crew tab's memory", () => {
         location: null,
       },
     });
+  });
+
+  it("reads the folder again when opened, and when Refresh is pressed", async () => {
+    const { reads } = renderCrew(() => ready("backlog.md"));
+    await screen.findByRole("button", { name: "Memory" });
+    await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+    const before = reads.length;
+    await openMemory();
+    await waitFor(() => expect(reads.length).toBe(before + 1));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh memory" }));
+    await waitFor(() => expect(reads.length).toBe(before + 2));
   });
 
   it("starts folded, opens, and folds away again", async () => {

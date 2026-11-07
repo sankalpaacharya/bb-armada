@@ -6,7 +6,7 @@ import {
 
 import { memoryTree, type MemoryNode } from "@/lib/captain-home";
 import { rpcContract } from "@/lib/rpc";
-import { PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
+import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age } from "./age";
 import { Note } from "./section";
@@ -137,7 +137,7 @@ export function MemorySection({
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useBbNavigate();
-  const { data, error } = experimental_useRpcQuery({
+  const { data, error, isFetching, refetch } = experimental_useRpcQuery({
     contract: rpcContract,
     method: "captain_home",
     input: { project },
@@ -177,15 +177,37 @@ export function MemorySection({
 
   return (
     <section className="flex flex-col gap-1">
-      <h3 className="m-0">
+      <h3 className="m-0 flex items-center gap-1">
         <button
           type="button"
           aria-expanded={open}
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => {
+            if (!open) void refetch();
+            setOpen((current) => !current);
+          }}
           className={cn(PANEL_ROW, "h-7 items-center gap-1.5 px-2", SECTION_TITLE)}
         >
           <Disclosure open={open} />
           Memory
+        </button>
+        <button
+          type="button"
+          aria-label="Refresh memory"
+          title="Refresh memory"
+          onClick={() => void refetch()}
+          className={cn(
+            "grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+            FOCUS_RING,
+          )}
+        >
+          <Icon
+            name="RotateCcw"
+            aria-hidden
+            className={cn(
+              "size-3.5",
+              isFetching && "animate-spin motion-reduce:animate-none",
+            )}
+          />
         </button>
       </h3>
       <div
