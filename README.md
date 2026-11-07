@@ -20,11 +20,17 @@ its thread id, and a stored Adventurer avatar reads as Micah with the same seed.
 sidebar reads through `experimental_useRpcQuery` and refreshes on each write,
 on reconnect, and from any client. Records that cannot be parsed are skipped
 and logged. On start the server moves records out of the old single
-`captains` key, then deletes it.
+`captains` key, copies its raw value to `legacy-captains-backup`, then deletes
+it. If that fails the server still starts, logs the error and retries on the
+next start. Writes to one captain run one after another on the server, so an
+update that read a record cannot write it back after a remove. RPC inputs are
+strict objects: unknown fields are refused, not dropped.
 
 Parks follow the same pattern at `park:<threadId>` with the `parks` tag. A park
-is `settled { at }` or `snoozed { at, until }`. The server stamps the time, and
-a new settle or snooze replaces whatever park the thread had.
+is `settled { at }` or `snoozed { at, until }`. The client stamps `at` when
+the user acts and predicts the park in the cache, so a card leaves at once;
+the server stores the same record. A new settle or snooze replaces whatever
+park the thread had, and adopting or removing a captain clears its park.
 
 `lib/model.ts` turns the sidebar's threads, projects, captain records and
 parks into what the list draws. It is pure and unit-tested.
@@ -41,8 +47,8 @@ parks into what the list draws. It is pure and unit-tested.
   working, queued or needs you. That is read from every signal of every
   thread, not from the folded status, because a failure outranks work still
   running beside it. So a tree with live work or a raised hand is always
-  active, and it offers no Settle or Snooze, a snooze wakes on its timer or on attention after it was set, and a
-  settle returns on new attention. Captains are never parked. A parked worker
+  active, and it offers no Settle or Snooze. A snooze wakes on its timer or on
+  attention after it was set, and a settle returns on new attention. Captains are never parked. A parked worker
   leaves its captain's list for the shelf. Snoozed is ordered by soonest wake,
   Settled by newest settle.
 - Records and parks whose thread is archived, hidden or gone are ignored. They
@@ -58,12 +64,12 @@ Every row reads from the table through `StatusMark`.
 | ----------------- | ------------------------------------------- | -------------- |
 | `captains_list`   | none                                        | captain records |
 | `captains_create` | `projectId`, `projectName`, `name`, `avatar` | recorded record, or the unrecorded thread |
-| `captains_adopt`  | `threadId`, `avatar`                        | captain record |
+| `captains_adopt`  | `threadId`, `avatar`, `createdAt` (kept if already a captain) | captain record |
 | `captains_update` | `threadId`, `avatar`                        | captain record |
 | `captains_remove` | `threadId`                                  | none           |
 | `parks_list`      | none                                        | park records   |
-| `parks_settle`    | `threadId`                                  | park record    |
-| `parks_snooze`    | `threadId`, `until` (must be in the future) | park record    |
+| `parks_settle`    | `threadId`, `at`                            | park record    |
+| `parks_snooze`    | `threadId`, `at`, `until` (after `at`)      | park record    |
 | `parks_unpark`    | `threadId` (idempotent)                     | none           |
 
 `captains_create` spawns a thread titled with the name from the dialog, which

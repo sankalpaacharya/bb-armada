@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { threadIdSchema } from "./captains";
+import { idSchema } from "./captains";
 import { formatDuration } from "./time";
 
 const time = z.number().int().positive();
@@ -14,7 +14,7 @@ export type Park = z.infer<typeof parkSchema>;
 export type Snooze = Extract<Park, { kind: "snoozed" }>;
 
 export const parkRecordSchema = z
-  .object({ threadId: threadIdSchema })
+  .object({ threadId: idSchema })
   .and(parkSchema);
 
 export type ParkRecord = z.infer<typeof parkRecordSchema>;

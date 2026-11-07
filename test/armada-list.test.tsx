@@ -857,7 +857,7 @@ describe("shelves", () => {
       expect(
         view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
           ?.input,
-      ).toEqual({ threadId: "done" }),
+      ).toEqual({ threadId: "done", at: expect.any(Number) }),
     );
     await view.experimental_invalidateRpc(["parks"]);
     await waitFor(() => expect(listOf(view.container, "done")).toBeNull());
@@ -876,6 +876,32 @@ describe("shelves", () => {
       view.inspection.rpcCalls.find((call) => call.method === "parks_unpark")
         ?.input,
     ).toEqual({ threadId: "done" });
+  });
+
+  it("moves a settled or snoozed card off the list before the server answers", async () => {
+    const { view } = await render({
+      threads: [
+        thread("a", { title: "First", projectId: "proj_b" }),
+        thread("b", { title: "Second", projectId: "proj_b" }),
+      ],
+      rpc: {
+        parks_settle: () => new Promise(() => {}),
+        parks_snooze: () => new Promise(() => {}),
+      },
+    });
+    await waitFor(() => expect(rowOf(view.container, "a")).not.toBeNull());
+    fireEvent.click(
+      within(rowOf(view.container, "a")!).getByRole("button", { name: "Settle" }),
+    );
+    fireEvent.click(
+      within(rowOf(view.container, "b")!).getByRole("button", {
+        name: "Snooze until tomorrow",
+      }),
+    );
+    await waitFor(() => expect(listOf(view.container, "a")).toBeNull());
+    expect(listOf(view.container, "b")).toBeNull();
+    expect(screen.getByRole("heading", { name: /Settled/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Snoozed/ })).toBeTruthy();
   });
 
   it("offers no park buttons on a working card, and keeps a stored settle from hiding it", async () => {
@@ -951,7 +977,7 @@ describe("shelves", () => {
       expect(
         view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
           ?.input,
-      ).toEqual({ threadId: "quiet" }),
+      ).toEqual({ threadId: "quiet", at: expect.any(Number) }),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Show settled" }));

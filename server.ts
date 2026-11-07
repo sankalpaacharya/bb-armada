@@ -4,12 +4,13 @@ import { z } from "zod";
 import { captainPrompt } from "./lib/captain-text";
 import {
   CAPTAIN_KEY_PREFIX,
+  LEGACY_CAPTAINS_BACKUP_KEY,
   LEGACY_CAPTAINS_KEY,
   captainKey,
   parseStoredCaptain,
   type CaptainRecord,
 } from "./lib/captains";
-import { listRecords } from "./lib/kv-records";
+import { listRecords, queueByKey } from "./lib/kv-records";
 import {
   PARK_KEY_PREFIX,
   parkKey,
@@ -26,6 +27,9 @@ import {
 /** A failed record write is retried after each wait, longer each time. */
 const RECORD_BACKOFF_MS = [100, 400] as const;
 
+const messageOf = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
+
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -33,10 +37,15 @@ const legacyRegistrySchema = z.object({
   captains: z.record(z.string(), z.unknown()),
 });
 
+/**
+ * Moves records out of the old single key. The raw value is copied aside
+ * first, so records it cannot read are not lost with the key.
+ */
 async function migrateLegacyCaptains(bb: BbPluginApi): Promise<void> {
   const { kv } = bb.storage;
   const raw = await kv.get<unknown>(LEGACY_CAPTAINS_KEY);
   if (raw === undefined) return;
+  await kv.set(LEGACY_CAPTAINS_BACKUP_KEY, raw);
   const legacy = legacyRegistrySchema.safeParse(raw);
   if (legacy.success) {
     for (const [threadId, candidate] of Object.entries(legacy.data.captains)) {
@@ -55,7 +64,14 @@ async function migrateLegacyCaptains(bb: BbPluginApi): Promise<void> {
 
 export default async function plugin(bb: BbPluginApi) {
   const { kv } = bb.storage;
-  await migrateLegacyCaptains(bb);
+  try {
+    await migrateLegacyCaptains(bb);
+  } catch (cause) {
+    bb.log.error(
+      `could not move captains out of the old key, will retry on the next start: ${messageOf(cause)}`,
+    );
+  }
+  const queue = queueByKey();
 
   const findCaptain = async (threadId: string): Promise<CaptainRecord | null> =>
     parseStoredCaptain(await kv.get<unknown>(captainKey(threadId)));
@@ -95,48 +111,61 @@ export default async function plugin(bb: BbPluginApi) {
       };
       for (let attempt = 0; ; attempt += 1) {
         try {
-          return { outcome: "recorded", record: await saveCaptain(record) };
+          return {
+            outcome: "recorded",
+            record: await queue(record.threadId, () => saveCaptain(record)),
+          };
         } catch (cause) {
           const wait = RECORD_BACKOFF_MS[attempt];
           if (wait !== undefined) {
             await sleep(wait);
             continue;
           }
-          const reason = cause instanceof Error ? cause.message : String(cause);
+          const reason = messageOf(cause);
           bb.log.error(`could not record captain thread ${thread.id}: ${reason}`);
           return { outcome: "unrecorded", threadId: thread.id, reason };
         }
       }
     },
 
-    captains_adopt: async ({ threadId, avatar }) => {
-      const createdAt =
-        (await findCaptain(threadId))?.createdAt ?? new Date().toISOString();
-      return saveCaptain({ threadId, avatar, createdAt });
-    },
+    captains_adopt: ({ threadId, avatar, createdAt }) =>
+      queue(threadId, async () => {
+        const current = await findCaptain(threadId);
+        const record: CaptainRecord = {
+          threadId,
+          avatar,
+          createdAt: current?.createdAt ?? createdAt,
+        };
+        await kv.set(captainKey(threadId), record);
+        await kv.delete(parkKey(threadId));
+        bb.rpc.experimental_invalidate([CAPTAINS_TAG, PARKS_TAG]);
+        return record;
+      }),
 
-    captains_update: async ({ threadId, avatar }) => {
-      const current = await findCaptain(threadId);
-      if (current === null)
-        throw new Error(`Thread ${threadId} is not a captain`);
-      return saveCaptain({ ...current, avatar });
-    },
+    captains_update: ({ threadId, avatar }) =>
+      queue(threadId, async () => {
+        const current = await findCaptain(threadId);
+        if (current === null)
+          throw new Error(`Thread ${threadId} is not a captain`);
+        return saveCaptain({ ...current, avatar });
+      }),
 
-    captains_remove: async ({ threadId }) => {
-      await kv.delete(captainKey(threadId));
-      bb.rpc.experimental_invalidate([CAPTAINS_TAG]);
-      return null;
-    },
+    captains_remove: ({ threadId }) =>
+      queue(threadId, async () => {
+        await kv.delete(captainKey(threadId));
+        await kv.delete(parkKey(threadId));
+        bb.rpc.experimental_invalidate([CAPTAINS_TAG, PARKS_TAG]);
+        return null;
+      }),
 
     parks_list: () =>
       listRecords(kv, PARK_KEY_PREFIX, parseStoredPark, bb.log.warn),
 
-    parks_settle: ({ threadId }) =>
-      savePark({ threadId, kind: "settled", at: Date.now() }),
+    parks_settle: ({ threadId, at }) =>
+      savePark({ threadId, kind: "settled", at }),
 
-    parks_snooze: ({ threadId, until }) => {
-      const at = Date.now();
-      if (until <= at) throw new Error("A snooze must end in the future");
+    parks_snooze: ({ threadId, at, until }) => {
+      if (until <= at) throw new Error("A snooze must end after it starts");
       return savePark({ threadId, kind: "snoozed", at, until });
     },
 

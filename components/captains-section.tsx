@@ -56,10 +56,14 @@ export function CaptainsSection({
   const remove = experimental_useRpcMutation({
     contract: rpcContract,
     method: "captains_remove",
-    optimistic: ({ threadId }, cache) =>
+    optimistic: ({ threadId }, cache) => {
       cache.update("captains_list", null, (current) =>
         current.filter((record) => record.threadId !== threadId),
-      ),
+      );
+      cache.update("parks_list", null, (current) =>
+        current.filter((park) => park.threadId !== threadId),
+      );
+    },
   });
 
   return (

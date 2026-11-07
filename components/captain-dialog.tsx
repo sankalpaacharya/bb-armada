@@ -114,6 +114,18 @@ export function CaptainDialog({
   const adopt = experimental_useRpcMutation({
     contract: rpcContract,
     method: "captains_adopt",
+    optimistic: ({ threadId, avatar, createdAt }, cache) => {
+      cache.update("captains_list", null, (current) => {
+        const kept = current.find((record) => record.threadId === threadId);
+        return [
+          ...current.filter((record) => record.threadId !== threadId),
+          { threadId, avatar, createdAt: kept?.createdAt ?? createdAt },
+        ];
+      });
+      cache.update("parks_list", null, (current) =>
+        current.filter((park) => park.threadId !== threadId),
+      );
+    },
   });
   const update = experimental_useRpcMutation({
     contract: rpcContract,
@@ -173,7 +185,11 @@ export function CaptainDialog({
     project: PluginSidebarProject,
   ): Promise<string | null> => {
     if (spawned !== null) {
-      await adopt.mutate({ threadId: spawned, avatar });
+      await adopt.mutate({
+        threadId: spawned,
+        avatar,
+        createdAt: new Date().toISOString(),
+      });
       return spawned;
     }
     const created = await create.mutate({
@@ -207,7 +223,11 @@ export function CaptainDialog({
             ? sdk.threads.update({ threadId, title: trimmedName })
             : null,
           state.kind === "adopt"
-            ? adopt.mutate({ threadId, avatar })
+            ? adopt.mutate({
+                threadId,
+                avatar,
+                createdAt: new Date().toISOString(),
+              })
             : avatarChanged
               ? update.mutate({ threadId, avatar })
               : null,
