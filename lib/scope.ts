@@ -27,3 +27,14 @@ export function parseScope(raw: string): ThreadScope | undefined {
   const value: unknown = JSON.parse(raw);
   return value === null || typeof value === "string" ? value : undefined;
 }
+
+export function countByProject(
+  entries: readonly ThreadEntry[],
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    const id = entry.thread.projectId;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}

@@ -270,7 +270,7 @@ describe("Armada thread list", () => {
     );
     const list = screen.getByRole("list", { name: "Show threads from" });
     expect(view.container.contains(list)).toBe(true);
-    fireEvent.click(within(list).getByRole("button", { name: "Beta" }));
+    fireEvent.click(within(list).getByRole("button", { name: /^Beta/ }));
     await waitFor(() => expect(rowOf(view.container, "a")).toBeNull());
     expect(rowOf(view.container, "b")).not.toBeNull();
     expect(screen.queryByRole("list", { name: "Show threads from" })).toBeNull();

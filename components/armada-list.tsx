@@ -24,6 +24,7 @@ import type { rpcContract } from "@/lib/rpc";
 import {
   parseScope,
   resolveScope,
+  countByProject,
   scopeThreads,
   type ThreadScope,
 } from "@/lib/scope";
@@ -143,6 +144,10 @@ export function ArmadaList({
     [threads, projects, registry],
   );
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
+  const projectCounts = useMemo(
+    () => countByProject(model.threads),
+    [model.threads],
+  );
   const scope = resolveScope(storedScope, projects);
   const scoped = useMemo(
     () => scopeThreads(model.threads, scope),
@@ -302,6 +307,7 @@ export function ArmadaList({
       {scopeOpen ? (
         <ScopeList
           projects={pickable}
+          counts={projectCounts}
           scope={scope}
           onChange={setScope}
           onClose={() => setScopeOpen(false)}

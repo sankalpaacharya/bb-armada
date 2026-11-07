@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { buildArmada } from "../lib/model";
-import { parseScope, resolveScope, scopeThreads } from "../lib/scope";
+import {
+  countByProject,
+  parseScope,
+  resolveScope,
+  scopeThreads,
+} from "../lib/scope";
 import { project, thread } from "./fixtures";
 
 const projects = [project("proj_a", "Alpha"), project("proj_b", "Beta")];
@@ -22,6 +27,13 @@ describe("thread scope", () => {
     expect(ids(scopeThreads(threads, null))).toEqual(["a1", "a2", "b1"]);
     expect(ids(scopeThreads(threads, "proj_a"))).toEqual(["a1", "a2"]);
     expect(ids(scopeThreads(threads, "proj_gone"))).toEqual([]);
+  });
+
+  it("counts each project's threads and leaves out projects with none", () => {
+    const counts = countByProject(threads);
+    expect(counts.get("proj_a")).toBe(2);
+    expect(counts.get("proj_b")).toBe(1);
+    expect(counts.has("proj_gone")).toBe(false);
   });
 
   it("falls back to all projects when the stored project is gone", () => {
