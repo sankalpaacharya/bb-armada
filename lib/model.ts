@@ -107,7 +107,10 @@ function entryOrder(a: ThreadEntry, b: ThreadEntry): number {
   if (a.thread.isPinned !== b.thread.isPinned)
     return a.thread.isPinned ? -1 : 1;
   if (a.thread.isPinned) return pinOrder(a.thread, b.thread);
-  return b.thread.createdAt - a.thread.createdAt || a.thread.id.localeCompare(b.thread.id);
+  return (
+    b.thread.createdAt - a.thread.createdAt ||
+    a.thread.id.localeCompare(b.thread.id)
+  );
 }
 
 function countStatuses(threads: readonly PluginSidebarThread[]): CaptainCounts {
