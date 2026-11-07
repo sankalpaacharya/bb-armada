@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
-import { snoozePresets } from "@/lib/lifecycle";
+import { tomorrowMorning } from "@/lib/lifecycle";
 import type { ThreadEntry } from "@/lib/model";
 import { FOCUS_RING } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -50,8 +50,6 @@ export function ParkableSlot({
   children: ReactNode;
 }) {
   if (!entry.parkable) return children;
-  const tomorrow = () =>
-    snoozePresets(new Date()).find((preset) => preset.id === "tomorrow")!;
   return (
     <span className="relative flex shrink-0 items-center">
       <span className="flex items-center group-hover/row:invisible group-focus-within/row:invisible">
@@ -61,7 +59,9 @@ export function ParkableSlot({
         <ParkButton
           label="Snooze until tomorrow"
           icon="Clock"
-          onActivate={() => actions.snooze(entry.thread.id, tomorrow().until)}
+          onActivate={() =>
+            actions.snooze(entry.thread.id, tomorrowMorning(new Date()))
+          }
         />
         <ParkButton
           label="Settle"

@@ -20,12 +20,11 @@ const UNITS = [
  */
 export function formatDuration(ms: number, round: "down" | "up" = "down"): string {
   if (round === "down" ? ms < MINUTE : ms <= 0) return "now";
-  let index = 0;
-  while (index + 1 < UNITS.length && UNITS[index + 1]!.ms <= ms) index += 1;
-  const unit = UNITS[index]!;
+  let unit: (typeof UNITS)[number] = UNITS[0];
+  for (const candidate of UNITS) if (candidate.ms <= ms) unit = candidate;
   if (round === "down") return `${Math.floor(ms / unit.ms)}${unit.suffix}`;
   const value = Math.ceil(ms / unit.ms);
-  const larger = UNITS[index + 1];
+  const larger = UNITS.find((candidate) => candidate.ms > unit.ms);
   if (larger !== undefined && value * unit.ms >= larger.ms) return `1${larger.suffix}`;
   return `${value}${unit.suffix}`;
 }

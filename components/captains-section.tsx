@@ -2,13 +2,20 @@ import { useState } from "react";
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 
 import { Icon } from "@/components/ui/icon";
+import type { CaptainsRead } from "@/hooks/use-captains";
 import type { ParkActions } from "@/hooks/use-park-actions";
 import { useStoredState } from "@/hooks/use-stored-state";
 import type { CaptainEntry } from "@/lib/model";
 import { rpcContract } from "@/lib/rpc";
 import { isLive } from "@/lib/status";
 import { parseBooleanMap } from "@/lib/storage";
-import { DECK_INDENT, DECK_PANEL, FOCUS_RING, HEADER_ACTION } from "@/lib/styles";
+import {
+  DECK_INDENT,
+  DECK_PANEL,
+  FOCUS_RING,
+  HEADER_ACTION,
+  ROW_HOVER,
+} from "@/lib/styles";
 import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { CaptainDialogState } from "./captain-dialog";
@@ -39,12 +46,14 @@ function pruneToggles(
 
 /** The deck: every captain on one raised panel, with its active workers nested under it. */
 export function CaptainsSection({
+  status,
   captains,
   activeThreadId,
   parkActions,
   onOpen,
   onDialog,
 }: {
+  status: CaptainsRead["status"];
   captains: readonly CaptainEntry[];
   activeThreadId: string | null;
   parkActions: ParkActions;
@@ -70,7 +79,7 @@ export function CaptainsSection({
     <>
       <SectionHeader
         title="Captains"
-        count={captains.length}
+        count={status === "ready" ? captains.length : undefined}
         actions={
           <button
             type="button"
@@ -84,7 +93,11 @@ export function CaptainsSection({
         }
       />
       <div className={DECK_PANEL}>
-        {captains.length === 0 ? (
+        {status === "loading" ? (
+          <Note>Loading captains…</Note>
+        ) : status === "error" ? (
+          <Note>Could not load captains</Note>
+        ) : captains.length === 0 ? (
           <Note>Start a captain to run a project from one chat.</Note>
         ) : (
           <ul aria-label="Captains" className="m-0 flex flex-col gap-px p-0">
@@ -146,7 +159,8 @@ export function CaptainsSection({
                               )
                             }
                             className={cn(
-                              "flex h-7 w-full cursor-pointer items-center rounded-md pr-2.5 text-left text-2xs text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                              "flex h-7 w-full cursor-pointer items-center rounded-md pr-2.5 text-left text-2xs text-muted-foreground hover:text-foreground",
+                              ROW_HOVER,
                               DECK_INDENT,
                               FOCUS_RING,
                             )}

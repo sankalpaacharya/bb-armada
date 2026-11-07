@@ -5,6 +5,7 @@ import type {
 
 import type { CaptainRecord } from "./captains";
 import {
+  isExpired,
   resolveShelf,
   type Park,
   type ParkRecord,
@@ -42,14 +43,14 @@ export type ThreadEntry = Fold & {
 
 export type ParkedEntry<Kind extends Park> = ThreadEntry & { park: Kind };
 
-export type CaptainCounts = { working: number; needsYou: number };
+export type CaptainCounts = { working: number; needsYou: number; failed: number };
 
 export type CaptainEntry = Fold & {
   record: CaptainRecord;
   thread: PluginSidebarThread;
   /** Active workers; parked ones sit on the shelves. */
   workers: ThreadEntry[];
-  /** Threads in the captain's tree that are working, and that need you. */
+  /** Threads in the captain's tree that are working, that need you, and that failed. */
   counts: CaptainCounts;
 };
 
@@ -58,6 +59,8 @@ export type ArmadaModel = {
   threads: ThreadEntry[];
   snoozed: ParkedEntry<Snooze>[];
   settled: ParkedEntry<Extract<Park, { kind: "settled" }>>[];
+  /** Threads whose stored park can never apply again, to delete. */
+  expiredParks: string[];
 };
 
 function parentIdOf(thread: PluginSidebarThread): string | null {
@@ -105,11 +108,12 @@ function byActivity(a: Fold, b: Fold): number {
 }
 
 function countStatuses(threads: readonly PluginSidebarThread[]): CaptainCounts {
-  const counts = { working: 0, needsYou: 0 };
+  const counts = { working: 0, needsYou: 0, failed: 0 };
   for (const thread of threads) {
     const status = statusOf(thread);
     if (status === "working" || status === "queued") counts.working += 1;
-    else if (status === "needs-you" || status === "failed") counts.needsYou += 1;
+    else if (status === "needs-you") counts.needsYou += 1;
+    else if (status === "failed") counts.failed += 1;
   }
   return counts;
 }
@@ -176,6 +180,8 @@ export function buildArmada(
   ): ThreadEntry => {
     const folded = fold([thread, ...subtreeOf(thread.id)]);
     const park = parkOf.get(thread.id) ?? null;
+    if (park !== null && isExpired(park, folded.latestAttentionAt, now))
+      expiredParks.push(thread.id);
     return {
       thread,
       projectName: projectNames.get(thread.projectId) ?? null,
@@ -187,6 +193,7 @@ export function buildArmada(
   };
 
   const parked: ThreadEntry[] = [];
+  const expiredParks: string[] = [];
   const owned = new Set(captainIds);
   const captains = captainRecords
     .map(({ record, thread }): CaptainEntry => {
@@ -239,5 +246,6 @@ export function buildArmada(
     threads: entries.filter((entry) => entry.shelf === "active").sort(entryOrder),
     snoozed: parked.filter(isSnoozed).sort((a, b) => a.park.until - b.park.until),
     settled: parked.filter(isSettled).sort((a, b) => b.park.at - a.park.at),
+    expiredParks,
   };
 }

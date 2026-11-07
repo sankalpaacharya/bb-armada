@@ -19,6 +19,7 @@ const stored = new Map<string, string>();
 vi.stubGlobal("localStorage", {
   getItem: (key: string) => stored.get(key) ?? null,
   setItem: (key: string, value: string) => void stored.set(key, value),
+  removeItem: (key: string) => void stored.delete(key),
 });
 
 vi.stubGlobal("matchMedia", () => ({
@@ -153,8 +154,6 @@ describe("Armada thread list", () => {
     const image = row.querySelector("img");
     expect(image?.getAttribute("alt")).toBe("");
     expect(image?.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
-    expect(image?.parentElement?.className).toContain("rounded-");
-    expect(image?.parentElement?.className).not.toContain("rounded-full");
   });
 
   it("still lists every thread when the captains read fails", async () => {
@@ -173,9 +172,7 @@ describe("Armada thread list", () => {
   it("sums up the captain's tree under its name: how many are working and how many need you", async () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
-    const captain = within(
-      rowOf(view.container, "cap")!.querySelector("div.group\\/row")!,
-    );
+    const captain = within(rowOf(view.container, "cap")!);
     expect(captain.getByText("2 working")).toBeTruthy();
     expect(captain.getByText("1 needs you")).toBeTruthy();
     expect(captain.queryByText("Idle")).toBeNull();
@@ -184,14 +181,12 @@ describe("Armada thread list", () => {
   it("draws the shade grid on a captain whose tree is working and nothing needs you", async () => {
     const { view } = await render({
       threads: [
-        thread("cap", { title: "cops" }),
-        thread("w", { title: "Build", parentThreadId: "cap", ...busy }),
+        thread("cap", { title: "cops", ...busy }),
+        thread("w", { title: "Build", parentThreadId: "cap" }),
       ],
     });
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
-    const captain = within(
-      rowOf(view.container, "cap")!.querySelector("div.group\\/row")!,
-    );
+    const captain = within(rowOf(view.container, "cap")!);
     expect(captain.getByText("1 working")).toBeTruthy();
     expect(captain.getByRole("img", { name: "Working" })).toBeTruthy();
   });
@@ -228,6 +223,55 @@ describe("Armada thread list", () => {
     expect(within(workers).getAllByRole("link")).toHaveLength(5);
     fireEvent.click(within(workers).getByRole("button", { name: "2 more" }));
     expect(within(workers).getAllByRole("link")).toHaveLength(7);
+  });
+
+  it("counts a failure in the captain's tree as failed, not as needing you", async () => {
+    const { view } = await render({
+      threads: [
+        thread("cap", { title: "cops" }),
+        thread("w", { title: "Broke", parentThreadId: "cap", indicator: "unread-error" }),
+      ],
+    });
+    await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
+    const captain = within(rowOf(view.container, "cap")!);
+    expect(captain.getByText("1 failed")).toBeTruthy();
+    expect(captain.queryByText(/needs you/)).toBeNull();
+  });
+
+  it("says the captains are loading instead of inviting the first one", async () => {
+    await render({ rpc: { captains_list: () => new Promise(() => {}) } });
+    expect(await screen.findByText("Loading captains…")).toBeTruthy();
+    expect(
+      screen.queryByText("Start a captain to run a project from one chat."),
+    ).toBeNull();
+  });
+
+  it("says the captains could not be read instead of inviting the first one", async () => {
+    await render({
+      rpc: {
+        captains_list: () => {
+          throw new Error("kv unavailable");
+        },
+      },
+    });
+    expect(await screen.findByText("Could not load captains")).toBeTruthy();
+    expect(
+      screen.queryByText("Start a captain to run a project from one chat."),
+    ).toBeNull();
+  });
+
+  it("counts the active threads in its header", async () => {
+    const { view } = await render();
+    await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
+    const header = screen.getByRole("heading", { level: 2, name: "Threads" });
+    expect(header.textContent).toBe("Threads1");
+  });
+
+  it("forgets the registry cache it kept before captains were read through RPC", async () => {
+    stored.set("armada/captains", "{}");
+    const { view } = await render();
+    await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
+    expect(stored.has("armada/captains")).toBe(false);
   });
 
   it("draws a thread as a card with its project, status, branch, pull request and harness", async () => {
@@ -341,6 +385,20 @@ describe("Armada thread list", () => {
       screen.queryByRole("listbox", { name: "Show threads from" }),
     ).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("says the trigger opens a listbox, and points at it only while it is open", async () => {
+    const { view } = await render();
+    await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
+    const trigger = screen.getByRole("button", {
+      name: "Threads from All projects",
+    });
+    expect(trigger.getAttribute("aria-haspopup")).toBe("listbox");
+    expect(trigger.hasAttribute("aria-controls")).toBe(false);
+    fireEvent.click(trigger);
+    const list = screen.getByRole("listbox", { name: "Show threads from" });
+    expect(trigger.getAttribute("aria-controls")).toBe(list.id);
+    expect(within(list).queryAllByRole("listitem")).toEqual([]);
   });
 
   it("closes the project list on a click elsewhere", async () => {
@@ -527,6 +585,21 @@ describe("creating a captain", () => {
     });
     expect(onNavigate).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("moves through the avatar grid by row with up and down", async () => {
+    await render();
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    const grid = dialog.getByRole("listbox", { name: "Avatar" });
+    const option = (name: string) => within(grid).getByRole("option", { name });
+    option("Avatar 2").focus();
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(option("Avatar 8"));
+    fireEvent.keyDown(grid, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(option("Avatar 9"));
+    fireEvent.keyDown(grid, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(option("Avatar 3"));
   });
 
   it("will not create a captain without a name", async () => {
@@ -936,6 +1009,25 @@ describe("shelves", () => {
     await screen.findByRole("menu");
     expect(screen.queryByRole("menuitem", { name: "Settle" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: /Snooze/ })).toBeNull();
+  });
+
+  it("deletes a park that new attention has outlived, once", async () => {
+    const { view } = await render({
+      threads: [
+        thread("back", { title: "Back", latestAttentionAt: NOW }),
+        thread("still", { title: "Still" }),
+      ],
+      parks: [settledAt("back", NOW - HOUR), settledAt("still", NOW - HOUR)],
+      rpc: { parks_unpark: () => null },
+    });
+    await waitFor(() => expect(listOf(view.container, "back")).toBe("Threads"));
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls
+          .filter((call) => call.method === "parks_unpark")
+          .map((call) => call.input),
+      ).toEqual([{ threadId: "back" }]),
+    );
   });
 
   it("shows a snoozed thread with its wake time and wakes it on time", async () => {

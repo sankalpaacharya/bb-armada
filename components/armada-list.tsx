@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   experimental_useSidebarThreads,
   useBbNavigate,
@@ -7,7 +7,7 @@ import {
 
 import { useArrowKeyRows } from "@/hooks/use-arrow-key-rows";
 import { useCaptains } from "@/hooks/use-captains";
-import { useParkActions } from "@/hooks/use-park-actions";
+import { useParkActions, usePruneParks } from "@/hooks/use-park-actions";
 import { useParks } from "@/hooks/use-parks";
 import { useStoredState } from "@/hooks/use-stored-state";
 import { useWakeTime } from "@/lib/clock";
@@ -19,7 +19,8 @@ import {
   resolveScope,
   scopeThreads,
 } from "@/lib/scope";
-import { parseBooleanMap } from "@/lib/storage";
+import { parseBooleanMap, removeStored } from "@/lib/storage";
+import type { CaptainRecord } from "@/lib/captains";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
 import { CaptainsSection } from "./captains-section";
 import { ShelfSection } from "./shelf-section";
@@ -28,6 +29,9 @@ import { ThreadsSection } from "./threads-section";
 
 const SCOPE_KEY = "armada/thread-scope";
 const SHELVES_KEY = "armada/shelves";
+/** The old registry cache, from before captains were read through RPC. */
+const RETIRED_KEYS = ["armada/captains"];
+const NO_CAPTAINS: readonly CaptainRecord[] = [];
 
 export function ArmadaList({
   activeThreadId,
@@ -44,11 +48,14 @@ export function ArmadaList({
   const [shelves, setShelves] = useStoredState(SHELVES_KEY, parseBooleanMap, {});
   const rows = useArrowKeyRows();
 
+  const records = captains.status === "ready" ? captains.records : NO_CAPTAINS;
   const wakeTime = useWakeTime(wakesOf(parks));
   const model = useMemo(
-    () => buildArmada(threads, projects, captains ?? [], parks, wakeTime),
-    [threads, projects, captains, parks, wakeTime],
+    () => buildArmada(threads, projects, records, parks, wakeTime),
+    [threads, projects, records, parks, wakeTime],
   );
+  usePruneParks(model.expiredParks);
+  useEffect(() => RETIRED_KEYS.forEach(removeStored), []);
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
   const scope = resolveScope(storedScope, pickable);
   const scoped = useMemo(() => scopeThreads(model.threads, scope), [model, scope]);
@@ -75,6 +82,7 @@ export function ArmadaList({
       className="flex min-h-full shrink-0 flex-col px-1.5 pb-2"
     >
       <CaptainsSection
+        status={captains.status}
         captains={model.captains}
         activeThreadId={activeThreadId}
         parkActions={parkActions}
@@ -88,7 +96,7 @@ export function ArmadaList({
         projects={pickable}
         scope={scope}
         onScope={setScope}
-        status={captains === undefined ? "loading-captains" : status}
+        status={captains.status === "loading" ? "loading-captains" : status}
         activeThreadId={activeThreadId}
         parkActions={parkActions}
         onOpen={open}

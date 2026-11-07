@@ -32,6 +32,7 @@ export type CaptainDialogState =
   | { kind: "edit"; thread: PluginSidebarThread; record: CaptainRecord };
 
 const OFFERED = 12;
+const AVATAR_COLUMNS = 6;
 const NAME_MAX = 80;
 
 function startingProject(
@@ -43,10 +44,11 @@ function startingProject(
 }
 
 /** A fresh set of offers, with the current avatar kept first so it can be picked again. */
-function offerAvatars(keep: Avatar | null): Avatar[] {
-  const offers = Array.from({ length: OFFERED }, randomAvatar);
-  if (keep !== null) offers[0] = keep;
-  return offers;
+function offerAvatars(keep: Avatar | null): [Avatar, ...Avatar[]] {
+  return [
+    keep ?? randomAvatar(),
+    ...Array.from({ length: OFFERED - 1 }, randomAvatar),
+  ];
 }
 
 function Field({
@@ -145,7 +147,7 @@ export function CaptainDialog({
   const [offers, setOffers] = useState(() =>
     offerAvatars(state.kind === "edit" ? state.record.avatar : null),
   );
-  const [avatar, setAvatar] = useState<Avatar>(() => offers[0]!);
+  const [avatar, setAvatar] = useState<Avatar>(() => offers[0]);
   const [projectId, setProjectId] = useState(() =>
     startingProject(projects, activeProjectId),
   );
@@ -177,7 +179,7 @@ export function CaptainDialog({
   const shuffle = () => {
     const next = offerAvatars(null);
     setOffers(next);
-    setAvatar(next[0]!);
+    setAvatar(next[0]);
   };
 
   /** The recorded captain's thread, or null when it started but is not recorded yet. */
@@ -307,14 +309,16 @@ export function CaptainDialog({
             onChange={(seed) =>
               setAvatar(offers.find((offer) => offer.seed === seed) ?? avatar)
             }
-            className="grid grid-cols-6 gap-1"
-            renderChoice={(choice, selected) => (
-              <CaptainTile
-                avatar={{ style: "micah", seed: choice.id }}
-                size="preview"
-                className={selected ? "ring-2 ring-ring" : undefined}
-              />
-            )}
+            grid={{
+              columns: AVATAR_COLUMNS,
+              render: (choice, selected) => (
+                <CaptainTile
+                  avatar={{ style: "micah", seed: choice.id }}
+                  size="preview"
+                  className={selected ? "ring-2 ring-ring" : undefined}
+                />
+              ),
+            }}
           />
           <Button
             type="button"

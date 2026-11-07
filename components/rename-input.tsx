@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
+import { LIST_TEXT } from "@/lib/styles";
 import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
@@ -59,7 +60,8 @@ export function RenameInput({
       }}
       onBlur={() => finish(true)}
       className={cn(
-        "min-w-0 flex-1 rounded-md border border-ring bg-background px-1.5 py-0.5 text-[13px] text-foreground outline-none",
+        "min-w-0 flex-1 rounded-md border border-ring bg-background px-1.5 py-0.5 text-foreground outline-none",
+        LIST_TEXT,
         className,
       )}
     />

@@ -11,7 +11,7 @@ import { WorkingOrAge } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
 function Summary({ counts }: { counts: CaptainCounts }) {
-  if (counts.working === 0 && counts.needsYou === 0)
+  if (counts.working === 0 && counts.needsYou === 0 && counts.failed === 0)
     return <span className="text-muted-foreground">Idle</span>;
   return (
     <>
@@ -22,6 +22,9 @@ function Summary({ counts }: { counts: CaptainCounts }) {
         <span className={STATUS["needs-you"].tone}>
           {counts.needsYou} needs you
         </span>
+      ) : null}
+      {counts.failed > 0 ? (
+        <span className={STATUS.failed.tone}>{counts.failed} failed</span>
       ) : null}
     </>
   );

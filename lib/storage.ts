@@ -20,6 +20,14 @@ export function writeStored(key: string, value: string): void {
   }
 }
 
+export function removeStored(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    return;
+  }
+}
+
 export function parseBooleanMap(
   raw: string,
 ): Record<string, boolean> | undefined {

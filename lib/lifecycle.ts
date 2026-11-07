@@ -19,7 +19,7 @@ export const parkRecordSchema = z
 
 export type ParkRecord = z.infer<typeof parkRecordSchema>;
 
-export type Shelf = "active" | "snoozed" | "settled";
+export type Shelf = "active" | Park["kind"];
 
 export const PARK_KEY_PREFIX = "park:";
 export const parkKey = (threadId: string): string =>
@@ -37,6 +37,21 @@ export type ShelfSignals = {
 };
 
 /**
+ * A park that can never apply again: attention came after it, or its snooze
+ * timer passed. Deleting it changes nothing the list shows.
+ */
+export function isExpired(
+  park: Park,
+  latestAttentionAt: number,
+  now: number,
+): boolean {
+  return (
+    latestAttentionAt > park.at ||
+    (park.kind === "snoozed" && park.until <= now)
+  );
+}
+
+/**
  * Live work and a raised hand always win, so a parked thread that starts
  * working or asks a question comes straight back. A snooze wakes on its
  * timer or on attention after it was set; a settle returns on new attention.
@@ -47,9 +62,7 @@ export function resolveShelf(
   now: number,
 ): Shelf {
   if (park === undefined || !signals.parkable) return "active";
-  if (signals.latestAttentionAt > park.at) return "active";
-  if (park.kind === "snoozed") return park.until <= now ? "active" : "snoozed";
-  return "settled";
+  return isExpired(park, signals.latestAttentionAt, now) ? "active" : park.kind;
 }
 
 const MINUTE = 60_000;
@@ -69,6 +82,9 @@ function atHour(base: Date, hour: number, addDays = 0): number {
   return next.getTime();
 }
 
+export const tomorrowMorning = (now: Date): number =>
+  atHour(now, MORNING_HOUR, 1);
+
 /** "This evening" only while it is more than an hour before 18:00. */
 export function snoozePresets(now: Date): SnoozePreset[] {
   const presets: SnoozePreset[] = [
@@ -80,7 +96,7 @@ export function snoozePresets(now: Date): SnoozePreset[] {
   presets.push({
     id: "tomorrow",
     label: "Tomorrow",
-    until: atHour(now, MORNING_HOUR, 1),
+    until: tomorrowMorning(now),
   });
   const daysUntilMonday = (1 - now.getDay() + 7) % 7 || 7;
   presets.push({

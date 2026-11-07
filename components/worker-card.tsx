@@ -38,7 +38,7 @@ export function WorkerCard({
                   <StatusOrAge
                     status={entry.status}
                     activityAt={entry.activityAt}
-                            />
+                  />
                 )}
               </ParkableSlot>
             </div>

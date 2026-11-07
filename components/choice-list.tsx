@@ -1,7 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { Icon } from "@/components/ui/icon";
-import { FOCUS_RING, LIST_TEXT } from "@/lib/styles";
+import { FOCUS_RING, LIST_TEXT, ROW_HOVER, rowFill } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
 export type Choice<Id extends string | null> = {
@@ -16,8 +16,8 @@ const keyOf = (id: string | null) => id ?? "\u0000";
 /**
  * A single-select list with listbox semantics: one tab stop on the selected
  * option, arrow keys move focus, Enter or Space pick, Escape asks to close.
- * `renderChoice` replaces the default icon, label and count row, for a grid
- * of pictures; the label still names the option for assistive tech.
+ * `grid` lays the options out in columns of pictures drawn by its `render`;
+ * up and down then move by a row, and the label still names each option.
  */
 export function ChoiceList<Id extends string | null>({
   id,
@@ -28,7 +28,7 @@ export function ChoiceList<Id extends string | null>({
   onClose,
   autoFocus = false,
   className,
-  renderChoice,
+  grid,
 }: {
   id?: string;
   label: string;
@@ -38,8 +38,12 @@ export function ChoiceList<Id extends string | null>({
   onClose?: () => void;
   autoFocus?: boolean;
   className?: string;
-  renderChoice?: (choice: Choice<Id>, selected: boolean) => ReactNode;
+  grid?: {
+    columns: number;
+    render: (choice: Choice<Id>, selected: boolean) => ReactNode;
+  };
 }) {
+  const row = grid?.columns ?? 1;
   const ref = useRef<HTMLUListElement>(null);
   const options = () =>
     Array.from(ref.current?.querySelectorAll<HTMLElement>("[role=option]") ?? []);
@@ -56,9 +60,9 @@ export function ChoiceList<Id extends string | null>({
     const all = options();
     const index = all.findIndex((option) => option === document.activeElement);
     const moves: Record<string, number> = {
-      ArrowDown: index + 1,
+      ArrowDown: index + row,
       ArrowRight: index + 1,
-      ArrowUp: index - 1,
+      ArrowUp: index - row,
       ArrowLeft: index - 1,
       Home: 0,
       End: all.length - 1,
@@ -82,33 +86,40 @@ export function ChoiceList<Id extends string | null>({
       onKeyDown={onKeyDown}
       className={cn(
         "m-0 list-none p-0",
-        renderChoice === undefined && "flex flex-col gap-px",
+        grid === undefined ? "flex flex-col gap-px" : "grid gap-1",
         className,
       )}
+      style={
+        grid === undefined
+          ? undefined
+          : { gridTemplateColumns: `repeat(${grid.columns}, minmax(0, 1fr))` }
+      }
     >
       {choices.map((choice) => {
         const selected = choice.id === value;
         return (
-          <li key={keyOf(choice.id)} className="contents">
+          <li key={keyOf(choice.id)} role="none" className="contents">
             <button
               type="button"
               role="option"
               aria-selected={selected}
-              aria-label={renderChoice === undefined ? undefined : choice.label}
+              aria-label={grid === undefined ? undefined : choice.label}
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(choice.id)}
               className={cn(
-                "cursor-pointer rounded-md text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                "cursor-pointer rounded-md text-muted-foreground hover:text-foreground",
                 FOCUS_RING,
-                renderChoice === undefined &&
-                  "flex h-7 w-full items-center gap-2 px-2.5 text-left",
-                renderChoice === undefined && LIST_TEXT,
-                renderChoice === undefined &&
-                  selected &&
-                  "bg-sidebar-accent text-foreground hover:bg-sidebar-accent",
+                grid === undefined
+                  ? cn(
+                      "flex h-7 w-full items-center gap-2 px-2.5 text-left",
+                      LIST_TEXT,
+                      rowFill(selected),
+                      selected && "text-foreground",
+                    )
+                  : ROW_HOVER,
               )}
             >
-              {renderChoice === undefined ? (
+              {grid === undefined ? (
                 <>
                   {choice.icon === undefined ? null : (
                     <Icon
@@ -130,7 +141,7 @@ export function ChoiceList<Id extends string | null>({
                   ) : null}
                 </>
               ) : (
-                renderChoice(choice, selected)
+                grid.render(choice, selected)
               )}
             </button>
           </li>

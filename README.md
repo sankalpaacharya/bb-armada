@@ -52,7 +52,9 @@ parks into what the list draws. It is pure and unit-tested.
   leaves its captain's list for the shelf. Snoozed is ordered by soonest wake,
   Settled by newest settle.
 - Records and parks whose thread is archived, hidden or gone are ignored. They
-  stay in KV until you remove them.
+  stay in KV until you remove them. A park that can never apply again, because
+  attention came after it or its snooze passed, is listed by the model as
+  expired, and the sidebar deletes it once.
 
 `lib/status.ts` is one table: each status has a rank, a word, a colour tone,
 a glyph, whether it counts as live, and whether a thread in it can be parked.
@@ -92,7 +94,9 @@ Nothing shows when that plugin is absent.
 
 The sidebar remembers three things in `localStorage`: `armada/thread-scope`
 (the project filter), `armada/captain-toggles` (which captains have their
-workers open) and `armada/shelves` (which shelves are open).
+workers open) and `armada/shelves` (which shelves are open). It removes
+`armada/captains`, the registry cache from before captains were read through
+RPC.
 
 ## Avatars
 
@@ -108,14 +112,18 @@ twelve more, and picking one stores its seed.
 Captains sit on one raised panel, the deck: a 28px Micah avatar, the
 name, and a one-line summary of the captain's tree ("2 working" in the
 working tone, "1 needs you" in the attention tone, else "Idle") with the
-shade grid while working or the age at the right. Active workers nest inside
+shade grid while working or the age at the right. "1 failed" shows in the
+failure tone, apart from "needs you". Until the captains read settles the deck
+says "Loading captains…", and after a failed read "Could not load captains",
+never the first-captain invitation. Active workers nest inside
 the deck under their captain as t3sidebar-style cards, indented to the
 captain's name. Threads stay flat on the sidebar background as the same
 three-line cards. Section headers are a `div` with a small semibold `h2`
 title, a muted count, and the actions beside it, with no divider lines. Every row shares `ThreadLink`, which
 owns bb's row contract: the full-bleed anchor, `data-sidebar-thread-id`, split
 on cmd-click, the jump shortcuts, bb's context menu and inline rename. Pickers
-are one `ChoiceList` with listbox semantics. Ages and "wakes in" labels come
+are one `ChoiceList` with listbox semantics; in the avatar grid up and down
+move by a row. Ages and "wakes in" labels come
 from one 30 s clock in `lib/clock.ts` through the `Age` and `WakesIn` leaves,
 so a tick re-renders only those leaves. The model is built from a separate
 wake time (`useWakeTime`) that moves only when the next snooze is due, so a

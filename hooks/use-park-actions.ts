@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 
 import type { ParkRecord } from "@/lib/lifecycle";
@@ -62,4 +63,24 @@ export function useParkActions(): ParkActions {
         );
     },
   };
+}
+
+/**
+ * Deletes parks the model found expired, once each, so the stored set stays
+ * small. A failed delete is left for the next session: an expired park
+ * changes nothing the list shows.
+ */
+export function usePruneParks(expired: readonly string[]): void {
+  const { mutate } = experimental_useRpcMutation({
+    contract: rpcContract,
+    method: "parks_unpark",
+  });
+  const tried = useRef(new Set<string>());
+  useEffect(() => {
+    for (const threadId of expired) {
+      if (tried.current.has(threadId)) continue;
+      tried.current.add(threadId);
+      mutate({ threadId }).catch(() => undefined);
+    }
+  }, [expired, mutate]);
 }

@@ -7,34 +7,17 @@ const FRONT = [1, 0.75, 0.5] as const;
 const TRACK = 0.22;
 const STEP_MS = 110;
 
-/** A bright anti-diagonal front sweeping from the top-left corner out the bottom-right. */
-function buildFrames(size: number): number[][] {
-  const frames: number[][] = [];
-  for (let front = -2; front <= 2 * (size - 1) + 2; front++) {
-    const cells: number[] = [];
-    for (let row = 0; row < size; row++) {
-      for (let column = 0; column < size; column++) {
-        cells.push(FRONT[Math.abs(row + column - front)] ?? TRACK);
-      }
-    }
-    frames.push(cells);
-  }
-  return frames;
+/** Fronts from just before the top-left corner to just past the bottom-right. */
+const frameCount = (size: number): number => 2 * (size - 1) + 5;
+
+/** A bright anti-diagonal front, `front` cells along from the top-left corner. */
+function frameAt(size: number, front: number): number[] {
+  return Array.from({ length: size * size }, (_, index) => {
+    const row = Math.floor(index / size);
+    const column = index % size;
+    return FRONT[Math.abs(row + column - front)] ?? TRACK;
+  });
 }
-
-const framesBySize = new Map<number, number[][]>();
-
-function framesFor(size: number): number[][] {
-  let frames = framesBySize.get(size);
-  if (frames === undefined) {
-    frames = buildFrames(size);
-    framesBySize.set(size, frames);
-  }
-  return frames;
-}
-
-/** Under reduced motion the front rests on the centre diagonal. */
-const stillFrame = (size: number): number[] => framesFor(size)[size + 1]!;
 
 let tick = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -75,8 +58,10 @@ export function ShadeGrid({
     getTick,
     () => 0,
   );
-  const frames = framesFor(size);
-  const frame = reduced ? stillFrame(size) : frames[step % frames.length]!;
+  const frame = frameAt(
+    size,
+    reduced ? size - 1 : (step % frameCount(size)) - 2,
+  );
   return (
     <span
       role={label === undefined ? undefined : "img"}
