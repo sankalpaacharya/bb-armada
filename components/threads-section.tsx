@@ -83,7 +83,7 @@ export function ThreadsSection({
   }, [open]);
 
   return (
-    <section ref={sectionRef} className="flex flex-col gap-1">
+    <section ref={sectionRef} className="relative flex flex-col gap-1">
       <SectionHeader
         title="Threads"
         count={scoped.length}
@@ -116,19 +116,21 @@ export function ThreadsSection({
         }
       />
       {open ? (
-        <ChoiceList
-          id={listId}
-          label="Show threads from"
-          choices={choices}
-          value={scope}
-          onChange={(next) => {
-            onScope(next);
-            close();
-          }}
-          onClose={close}
-          autoFocus
-          className="mb-2 max-h-64 overflow-y-auto"
-        />
+        <div className="absolute top-8 right-1 z-20 w-56 max-w-[calc(100%-0.5rem)] origin-top-right rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none starting:scale-95 starting:opacity-0">
+          <ChoiceList
+            id={listId}
+            label="Show threads from"
+            choices={choices}
+            value={scope}
+            onChange={(next) => {
+              onScope(next);
+              close();
+            }}
+            onClose={close}
+            autoFocus
+            className="max-h-64 overflow-y-auto"
+          />
+        </div>
       ) : null}
       {status === "loading" || status === "loading-captains" ? (
         <Note>Loading threads…</Note>
