@@ -19,5 +19,4 @@ describe("captain text", () => {
     expect(prompt).toContain("/captain");
     expect(prompt).toContain("~/.bb/captains/my-app.md");
   });
-
 });

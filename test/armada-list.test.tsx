@@ -314,7 +314,7 @@ describe("Armada thread list", () => {
     expect(stored.has("armada/captain-toggles")).toBe(false);
   });
 
-  it("draws a thread on one line, and shows where it runs once it is open", async () => {
+  it("draws every thread with its title and age, then project, place, PR and harness, whether or not it is open", async () => {
     const { view } = await render({
       threads: [
         thread("plain", {
@@ -349,49 +349,18 @@ describe("Armada thread list", () => {
       },
     });
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
-    const card = within(rowOf(view.container, "plain")!);
-    expect(card.queryByText("Beta")).toBeNull();
+    const row = rowOf(view.container, "plain")!;
+    const card = within(row);
     expect(card.getByRole("img", { name: "Working" })).toBeTruthy();
+    expect(card.getByText("Beta")).toBeTruthy();
+    expect(card.getByText("feat/loose-idea")).toBeTruthy();
+    expect(card.getByLabelText("Worktree")).toBeTruthy();
     expect(
-      rowOf(view.container, "plain")!.querySelector(
-        '[data-provider-id="claude-code"]',
-      ),
-    ).toBeNull();
+      row.querySelector('[data-provider-id="claude-code"]'),
+    ).not.toBeNull();
     expect(
       (await card.findByRole("link", { name: "#42" })).getAttribute("href"),
     ).toBe("https://github.com/acme/app/pull/42");
-    expect(card.queryByText("feat/loose-idea")).toBeNull();
-
-    expect(anchorOf(view.container, "plain")!.getAttribute("title")).toBe(
-      "Beta · Worktree feat/loose-idea",
-    );
-
-    cleanup();
-    const opened = await render({
-      activeThreadId: "plain",
-      threads: [
-        thread("plain", {
-          title: "Loose idea",
-          projectId: "proj_b",
-          environment: {
-            id: "env_1",
-            name: "loose-idea",
-            branchName: "feat/loose-idea",
-            path: null,
-            isWorktree: true,
-            providerId: null,
-            workspaceDisplayKind: null,
-          },
-        }),
-      ],
-    });
-    await waitFor(() =>
-      expect(rowOf(opened.view.container, "plain")).not.toBeNull(),
-    );
-    const open = within(rowOf(opened.view.container, "plain")!);
-    expect(open.getByText("feat/loose-idea")).toBeTruthy();
-    expect(open.getByLabelText("Worktree")).toBeTruthy();
-    expect(open.getByText("Beta")).toBeTruthy();
   });
 
   it("shows only the chosen project's threads, without repeating the project on each card", async () => {

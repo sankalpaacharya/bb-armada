@@ -3,7 +3,7 @@ import { experimental_ThreadStatusGlyph as ThreadStatusGlyph } from "@get-bb/plu
 import { STATUS, type Status } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { Age } from "./age";
-import { ShadeGrid } from "./shade-grid";
+import { WaveSpinner } from "./wave-spinner";
 
 type StatusVariant = "card" | "compact";
 
@@ -21,7 +21,7 @@ function StatusMark({
   const row = STATUS[status];
   const glyph =
     row.glyph.kind === "grid" ? (
-      <ShadeGrid label={row.word} className={row.tone} />
+      <WaveSpinner label={row.word} />
     ) : (
       <ThreadStatusGlyph indicator={row.glyph.indicator} size="compact" />
     );

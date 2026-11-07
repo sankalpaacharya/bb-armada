@@ -49,7 +49,9 @@ describe("captains and their workers", () => {
     ];
     const model = build(threads, registryOf(["cap"]));
     expect(threadIds(model)).toEqual(["plain", "w2", "w1"]);
-    expect(model.threads.find((entry) => entry.thread.id === "w1")).toMatchObject({
+    expect(
+      model.threads.find((entry) => entry.thread.id === "w1"),
+    ).toMatchObject({
       captain: badge("cap", "cops"),
       adoptable: false,
     });
@@ -232,10 +234,7 @@ describe("the thread list", () => {
         updatedAt: NOW - 1000,
       }),
     ];
-    expect(threadIds(build(threads, none))).toEqual([
-      "a-old",
-      "b-root",
-    ]);
+    expect(threadIds(build(threads, none))).toEqual(["a-old", "b-root"]);
   });
 
   it("puts pinned threads first in their manual order, then the rest newest first", () => {
@@ -273,9 +272,7 @@ describe("the thread list", () => {
   });
 
   it("still lists a thread whose project is not in the project list", () => {
-    const model = build([thread("lost", { projectId: "proj_unknown" })],
-      none,
-    );
+    const model = build([thread("lost", { projectId: "proj_unknown" })], none);
     expect(threadIds(model)).toEqual(["lost"]);
     expect(model.threads[0]!.projectName).toBeNull();
   });
@@ -285,38 +282,24 @@ describe("the thread list", () => {
       thread("a", { parentThreadId: "b" }),
       thread("b", { parentThreadId: "a" }),
     ];
-    expect(threadIds(build(threads, none)).sort()).toEqual([
-      "a",
-      "b",
-    ]);
+    expect(threadIds(build(threads, none)).sort()).toEqual(["a", "b"]);
   });
 
   it("names each thread's project", () => {
-    const model = build([thread("a", { projectId: "proj_b" })],
-      none,
-    );
+    const model = build([thread("a", { projectId: "proj_b" })], none);
     expect(model.threads[0]!.projectName).toBe("Beta");
   });
 });
 
 describe("shelves", () => {
   it("moves a settled root to the settled shelf and a snoozed one to snoozed, soonest wake first", () => {
-    const threads = [
-      thread("a"),
-      thread("b"),
-      thread("c"),
-      thread("d"),
-    ];
-    const model = build(
-      threads,
-      none,
-      [
-        settledAt("a", NOW - HOUR),
-        settledAt("b", NOW - 2 * HOUR),
-        snoozedUntil("c", NOW + 3 * HOUR),
-        snoozedUntil("d", NOW + HOUR),
-      ],
-    );
+    const threads = [thread("a"), thread("b"), thread("c"), thread("d")];
+    const model = build(threads, none, [
+      settledAt("a", NOW - HOUR),
+      settledAt("b", NOW - 2 * HOUR),
+      snoozedUntil("c", NOW + 3 * HOUR),
+      snoozedUntil("d", NOW + HOUR),
+    ]);
     expect(threadIds(model)).toEqual([]);
     expect(idsOf(model.settled)).toEqual(["a", "b"]);
     expect(idsOf(model.snoozed)).toEqual(["d", "c"]);
@@ -341,7 +324,10 @@ describe("shelves", () => {
     ];
     const model = build(threads, none, [settledAt("root", NOW - HOUR)]);
     expect(threadIds(model)).toEqual(["root"]);
-    expect(model.threads[0]).toMatchObject({ status: "failed", parkable: false });
+    expect(model.threads[0]).toMatchObject({
+      status: "failed",
+      parkable: false,
+    });
     expect(model.settled).toEqual([]);
   });
 
@@ -365,7 +351,10 @@ describe("shelves", () => {
     ];
     const model = build(threads, none, [snoozedUntil("t", NOW + HOUR)]);
     expect(threadIds(model)).toEqual(["t"]);
-    expect(model.threads[0]).toMatchObject({ status: "failed", parkable: false });
+    expect(model.threads[0]).toMatchObject({
+      status: "failed",
+      parkable: false,
+    });
     expect(model.snoozed).toEqual([]);
   });
 
@@ -376,7 +365,9 @@ describe("shelves", () => {
     ];
     const model = build(threads, none);
     expect(model.threads[0]!.parkable).toBe(true);
-    expect(build(threads, none, [settledAt("root", NOW - HOUR)]).settled).toHaveLength(1);
+    expect(
+      build(threads, none, [settledAt("root", NOW - HOUR)]).settled,
+    ).toHaveLength(1);
   });
 
   it("brings a settled root back when its subtree gets new attention", () => {

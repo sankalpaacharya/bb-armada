@@ -1,0 +1,35 @@
+/* The wave spinner from the user's beautiful-bb plugin (scripts/build-wave-spinner.mjs
+   there): a 3x3 grid pulsing from the top-left corner, in the beautiful-bb accent. */
+.armada-wave {
+  --armada-wave: var(--bbb-accent, oklch(0.55 0.17 295));
+  display: inline-grid;
+  flex-shrink: 0;
+  grid-template-columns: repeat(3, 4px);
+  grid-auto-rows: 4px;
+  gap: 1.5px;
+}
+.dark .armada-wave {
+  --armada-wave: var(--bbb-accent, oklch(0.78 0.11 295));
+}
+.armada-wave > span {
+  border-radius: 1px;
+  background: var(--armada-wave);
+  animation: armada-wave-pulse 0.7s ease-in-out infinite;
+}
+@keyframes armada-wave-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .armada-wave > span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
