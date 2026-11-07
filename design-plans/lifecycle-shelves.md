@@ -102,3 +102,33 @@ Settle and snooze overwrite any existing park for that thread. The server doesn'
 ## SDK note (checked in 0.6.104)
 
 `PluginThreadAction` has `choices?: PluginThreadActionChoices` (a choice list rendered as a submenu, picked value passed to `run(input)`). Use ONE "Snooze" inline item with the presets as `choices`, not four flat items.
+
+## Revision: automatic Inactive shelf (user)
+
+The user saw every one of 176 threads as a full card and expected T3 Code's behaviour: threads you are done with leave the live list on their own.
+
+- **New computed shelf `inactive`.** It is derived on read, never stored. A thread with no stored park is inactive when all four hold:
+  - its whole folded subtree is parkable (not live)
+  - it is not unread
+  - it is not pinned
+  - its activity time is older than the threshold
+- **Resolution order:**
+  1. live or attention → active
+  2. stored snooze → snoozed, if not woken
+  3. stored settle → settled, if no new attention
+  4. inactive by age
+  5. active
+- **Threshold:** a plugin setting `inactiveAfterHours` (number, default 24; 0 turns the shelf off). Declare it the way bb plugins declare settings (see the SDK docs for settings definitions; chat-sidebar at `/Users/sanku/.bb/plugins/cache/git/github.com/seoperin/bb-plugin-chat-sidebar/121dbe761f4203fa8cbc6d877f3551feae765481/server.ts` and `lib/settings.ts` is an example). The client reads it reactively. The re-render tick must also move a thread to inactive when it crosses the threshold.
+- **UI.** Threads shows active cards, then an "Inactive N" section of one-line `ShelfRow`s.
+  - A row shows the title, then the project as a small muted label, and the age at the right edge.
+  - Inactive is open by default; Snoozed and Settled stay collapsed by default. Open states persist.
+  - On hover, an inactive row offers Settle.
+  - Opening an inactive thread doesn't move it; new activity moves it back automatically.
+- **Scope filter** applies to Inactive too. Captains are never inactive.
+- **Tests:**
+  - age crossing the threshold
+  - pinned and unread exempt
+  - live subtree exempt
+  - setting 0 disables the shelf
+  - a stored park beats inactive
+  - new activity returns the thread to active
