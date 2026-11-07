@@ -2,9 +2,9 @@
 
 ## Chat Sidebar
 
-`lib/status.ts` (how a thread's state maps to a lane) and the thread-row
-patterns in `components/thread-row.tsx` and `components/rename-input.tsx` are
-adapted from bb-plugin-chat-sidebar by Evgeniy Perin.
+`statusOf` in `lib/status.ts` (how a thread's state maps to a status) and the
+row patterns in `components/thread-link.tsx` and `components/rename-input.tsx`
+are adapted from bb-plugin-chat-sidebar by Evgeniy Perin.
 
 Source: <https://github.com/seoperin/bb-plugin-chat-sidebar>
 
@@ -36,9 +36,9 @@ SOFTWARE.
 
 MIT License, Copyright (c) 2026 Michael Yong.
 
-The thread cards in `components/thread-row.tsx` (their markup, type scale,
-status slot, branch line and pull request colours)
-are adapted from t3sidebar.
+The thread cards in `components/thread-card.tsx`, `components/worker-card.tsx`
+and `components/place-line.tsx` (their markup, type scale, status slot, branch
+line and pull request colours) are adapted from t3sidebar.
 
 Source: <https://github.com/SawyerHood/sawyer-plugins/tree/main/plugins/t3sidebar>
 
@@ -55,7 +55,8 @@ Source: <https://github.com/hugeicons/hugeicons>
 
 MIT License, Copyright (c) 2026 Michael Yong.
 
-The components under `components/ui/` and `lib/portal-scope.ts` come from bb's
-plugin component registry, scaffolded by `bb plugin new`.
+The components under `components/ui/`, `hooks/use-browser-dimming-modal.ts`,
+`lib/portal-scope.ts` and `cn` in `lib/utils.ts` come from bb's plugin
+component registry, scaffolded by `bb plugin new`.
 
 Source: <https://github.com/get-bb/bb>

@@ -18,7 +18,6 @@ export function CaptainRow({
   entry,
   title,
   active,
-  now,
   expanded,
   onToggle,
   inline,
@@ -28,7 +27,6 @@ export function CaptainRow({
   entry: CaptainEntry;
   title: string;
   active: boolean;
-  now: number;
   /** Null when the captain has no workers to show. */
   expanded: boolean | null;
   onToggle: () => void;
@@ -85,7 +83,6 @@ export function CaptainRow({
                   <StatusOrAge
                     status={entry.status}
                     activityAt={entry.activityAt}
-                    now={now}
                     variant="compact"
                   />
                 )}

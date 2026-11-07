@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAge } from "../lib/time";
+import { formatAge, formatDuration } from "../lib/time";
 import { NOW } from "./fixtures";
 
 const ago = (ms: number) => formatAge(NOW - ms, NOW);
@@ -20,5 +20,14 @@ describe("formatAge", () => {
 
   it("says nothing for a missing timestamp", () => {
     expect(formatAge(0, NOW)).toBe("");
+  });
+});
+
+describe("formatDuration", () => {
+  it("reads a span ahead the same way as an age behind", () => {
+    expect(formatDuration(5 * MINUTE)).toBe("5m");
+    expect(formatDuration(2 * 60 * MINUTE)).toBe("2h");
+    expect(formatDuration(3 * DAY)).toBe("3d");
+    expect(formatDuration(-1)).toBe("now");
   });
 });

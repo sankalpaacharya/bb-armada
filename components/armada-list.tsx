@@ -7,7 +7,6 @@ import {
 
 import { useArrowKeyRows } from "@/hooks/use-arrow-key-rows";
 import { useCaptains } from "@/hooks/use-captains";
-import { useNow } from "@/hooks/use-now";
 import { buildArmada } from "@/lib/model";
 import { pickableProjects } from "@/lib/scope";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
@@ -23,7 +22,6 @@ export function ArmadaList({
   const { status, threads, projects } = experimental_useSidebarThreads();
   const captains = useCaptains();
   const navigate = useBbNavigate();
-  const now = useNow(30_000);
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
   const rows = useArrowKeyRows();
 
@@ -47,7 +45,6 @@ export function ArmadaList({
       <CaptainsSection
         captains={model.captains}
         activeThreadId={activeThreadId}
-        now={now}
         onOpen={open}
         onDialog={setDialog}
       />
@@ -56,7 +53,6 @@ export function ArmadaList({
         projects={pickable}
         status={captains === undefined ? "loading-captains" : status}
         activeThreadId={activeThreadId}
-        now={now}
         onOpen={open}
         onAdopt={(thread) => setDialog({ kind: "adopt", thread })}
       />

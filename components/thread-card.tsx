@@ -10,7 +10,6 @@ export function ThreadCard({
   entry,
   active,
   showProject,
-  now,
   inline,
   onOpen,
 }: {
@@ -18,7 +17,6 @@ export function ThreadCard({
   active: boolean;
   /** Off when the list is already scoped to one project. */
   showProject: boolean;
-  now: number;
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
 }) {
@@ -27,7 +25,6 @@ export function ThreadCard({
       <StatusOrAge
         status={entry.status}
         activityAt={entry.activityAt}
-        now={now}
         variant="card"
       />
     );

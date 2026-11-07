@@ -29,7 +29,6 @@ export function ThreadsSection({
   projects,
   status,
   activeThreadId,
-  now,
   onOpen,
   onAdopt,
 }: {
@@ -38,7 +37,6 @@ export function ThreadsSection({
   projects: readonly PluginSidebarProject[];
   status: PluginSidebarThreadsState["status"] | "loading-captains";
   activeThreadId: string | null;
-  now: number;
   onOpen: OpenThread;
   onAdopt: (thread: PluginSidebarThread) => void;
 }) {
@@ -144,7 +142,6 @@ export function ThreadsSection({
               entry={entry}
               active={entry.thread.id === activeThreadId}
               showProject={scope === null}
-              now={now}
               inline={
                 entry.adoptable
                   ? [makeCaptainItem(() => onAdopt(entry.thread))]

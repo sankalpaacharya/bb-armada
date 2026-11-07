@@ -9,7 +9,7 @@ export function thread(
   id: string,
   overrides: Partial<PluginSidebarThread> = {},
 ): PluginSidebarThread {
-  return {
+  const base = {
     id,
     projectId: "proj_a",
     title: id,
@@ -50,8 +50,8 @@ export function thread(
     updatedAt: NOW - 3_600_000,
     lastReadAt: null,
     latestAttentionAt: 0,
-    ...overrides,
-  } as PluginSidebarThread;
+  } satisfies PluginSidebarThread;
+  return { ...base, ...overrides };
 }
 
 export function project(

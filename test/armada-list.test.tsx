@@ -139,20 +139,30 @@ describe("Armada thread list", () => {
     ).toEqual(["Captains", "Threads"]);
   });
 
-  it("draws the captain as a small rounded square in its colour, without the title's emoji", async () => {
+  it("names the captain without the title's emoji", async () => {
     const { view } = await render({
       threads: [
         thread("cap", { title: "🧭 Captain · Alpha", projectId: "proj_a" }),
       ],
     });
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
-    const row = rowOf(view.container, "cap")!;
-    const tile = row.querySelector<HTMLElement>(".bg-emerald-600");
-    expect(tile).not.toBeNull();
-    expect(tile!.className).toContain("size-[18px]");
-    expect(tile!.className).not.toContain("rounded-full");
-    expect(within(row).getByText("Captain · Alpha")).toBeTruthy();
-    expect(within(row).queryByText(/🧭/)).toBeNull();
+    const row = within(rowOf(view.container, "cap")!);
+    expect(row.getByText("Captain · Alpha")).toBeTruthy();
+    expect(row.queryByText(/🧭/)).toBeNull();
+    expect(row.getByRole("link", { name: "Captain · Alpha" })).toBeTruthy();
+  });
+
+  it("still lists every thread when the captains read fails", async () => {
+    const { view } = await render({
+      rpc: {
+        captains_list: () => {
+          throw new Error("kv unavailable");
+        },
+      },
+    });
+    await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
+    expect(listOf(view.container, "cap")).toBe("Threads");
+    expect(listOf(view.container, "plain")).toBe("Threads");
   });
 
   it("shows bb's waiting glyph on a captain whose worker needs you", async () => {
@@ -544,6 +554,22 @@ describe("thread menu", () => {
         logo: "crown",
       }),
     );
+  });
+
+  it("offers it on a root whose parent is archived", async () => {
+    const { view } = await render({
+      threads: [
+        thread("parent", { isArchived: true, archivedAt: NOW }),
+        thread("orphan", { title: "Orphan", parentThreadId: "parent" }),
+      ],
+    });
+    await waitFor(() =>
+      expect(anchorOf(view.container, "orphan")).not.toBeNull(),
+    );
+    rightClick(anchorOf(view.container, "orphan")!);
+    expect(
+      await screen.findByRole("menuitem", { name: /Make captain/ }),
+    ).toBeTruthy();
   });
 
   it("does not offer it on a worker", async () => {

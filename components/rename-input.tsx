@@ -4,6 +4,9 @@ import { useSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
+/** bb's closing context menu hands focus back to the row; the field takes it after. */
+const MENU_CLOSE_REFOCUS_MS = 60;
+
 export function RenameInput({
   thread,
   onDone,
@@ -20,11 +23,10 @@ export function RenameInput({
   const finished = useRef(false);
 
   useEffect(() => {
-    // A closing context menu hands focus back to its trigger; take it after.
     const timer = setTimeout(() => {
       ref.current?.focus();
       ref.current?.select();
-    }, 60);
+    }, MENU_CLOSE_REFOCUS_MS);
     return () => clearTimeout(timer);
   }, []);
 

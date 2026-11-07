@@ -21,16 +21,30 @@ import { WorkerCard } from "./worker-card";
 const TOGGLES_KEY = "armada/captain-toggles";
 const WORKER_PREVIEW = 5;
 
+/** Keeps only toggles for captains that still exist, plus the one just set. */
+function pruneToggles(
+  toggles: Record<string, boolean>,
+  captains: readonly CaptainEntry[],
+  threadId: string,
+  value: boolean,
+): Record<string, boolean> {
+  const next: Record<string, boolean> = {};
+  for (const captain of captains) {
+    const kept = toggles[captain.thread.id];
+    if (kept !== undefined) next[captain.thread.id] = kept;
+  }
+  next[threadId] = value;
+  return next;
+}
+
 export function CaptainsSection({
   captains,
   activeThreadId,
-  now,
   onOpen,
   onDialog,
 }: {
   captains: readonly CaptainEntry[];
   activeThreadId: string | null;
-  now: number;
   onOpen: OpenThread;
   onDialog: (state: CaptainDialogState) => void;
 }) {
@@ -85,10 +99,9 @@ export function CaptainsSection({
                 entry={entry}
                 title={title}
                 active={thread.id === activeThreadId}
-                now={now}
                 expanded={expanded}
                 onToggle={() =>
-                  setToggles({ ...toggles, [thread.id]: !expanded })
+                  setToggles(pruneToggles(toggles, captains, thread.id, !expanded))
                 }
                 inline={captainItems(record, {
                   changeLogo: () => onDialog({ kind: "edit", thread, record }),
@@ -111,7 +124,6 @@ export function CaptainsSection({
                         key={worker.thread.id}
                         entry={worker}
                         active={worker.thread.id === activeThreadId}
-                        now={now}
                         onOpen={onOpen}
                       />
                     ))}

@@ -16,15 +16,8 @@ export function writeStored(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
   } catch {
-    // Not remembered; nothing else depends on it.
+    return;
   }
-}
-
-export function parseStringArray(raw: string): string[] | undefined {
-  const value: unknown = JSON.parse(raw);
-  return Array.isArray(value) && value.every((item) => typeof item === "string")
-    ? value
-    : undefined;
 }
 
 export function parseBooleanMap(

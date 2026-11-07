@@ -1,38 +1,45 @@
 # bb-plugin-armada
 
 A sidebar for people who run many bb threads. Long-lived **captain** threads sit
-at the top, each with a logo in a rounded-square tile and its workers nested
-underneath. Every other thread is grouped by project below.
+at the top with their workers nested underneath, and every other thread sits in
+one list you can filter by project.
 
 - `app.tsx` registers the thread list (`app.slots.experimental_threadList`).
-- `server.ts` owns the captain registry in plugin KV and exposes it over RPC.
+- `server.ts` owns the captain records in plugin KV and exposes them over RPC.
 - `PLUGIN_OVERVIEW.md` is the store listing text.
 
 ## How it works
 
-The server keeps one record per captain in `bb.storage.kv` under `captains`:
-the thread id, a logo, a colour, and when it was made. It is the only writer,
-and it publishes the registry on the `captains` realtime channel after every
-write. The sidebar loads it over RPC on mount and again whenever the realtime
-connection comes back.
+The server keeps one KV record per captain at `captain:<threadId>`: the thread
+id, a logo, a colour, and when it was made. `captains_list` declares the
+`captains` tag and every write calls `bb.rpc.experimental_invalidate`, so the
+sidebar reads through `experimental_useRpcQuery` and refreshes on each write,
+on reconnect, and from any client. Records that cannot be parsed are skipped
+and logged. On start the server moves records out of the old single
+`captains` key, then deletes it.
 
-`lib/model.ts` turns the sidebar's threads, projects and the registry into what
-the list draws. It is pure and unit-tested.
+`lib/model.ts` turns the sidebar's threads, projects and the captain records
+into what the list draws. It is pure and unit-tested.
 
-- A captain's workers are all its descendants, through `parentThreadId` or
-  `lifecycleOwnerThreadId`, newest activity first. A captain nested under another
-  captain keeps its own workers.
-- A captain's status is the most urgent one among itself and its workers.
-- Captains and their workers never appear under a project. Other threads show
-  only as roots, and their children fold into them.
-- Registry records whose thread is archived, hidden or gone are ignored. The
-  record stays until you remove it.
+- A captain's workers are its children, through `parentThreadId` or
+  `lifecycleOwnerThreadId`. Each worker folds its own descendants, the same way
+  a root card folds its subtree. A captain nested under another captain keeps
+  its own workers.
+- Every entry carries a folded status, the newest activity and the newest
+  attention time of its subtree. A captain folds itself and all its workers.
+- Root cards can be made captains; workers cannot.
+- Records whose thread is archived, hidden or gone are ignored. The record
+  stays until you remove it.
+
+`lib/status.ts` is one table: each status has a rank, a word, a colour tone,
+a glyph, whether it counts as live, and whether a thread in it can be parked.
+Every row reads from the table through `StatusMark`.
 
 ### RPC
 
 | method            | input                                       | output         |
 | ----------------- | ------------------------------------------- | -------------- |
-| `captains_list`   | none                                        | registry       |
+| `captains_list`   | none                                        | captain records |
 | `captains_create` | `projectId`, `projectName`, `logo`, `color` | captain record |
 | `captains_adopt`  | `threadId`, `logo`, `color`                 | captain record |
 | `captains_update` | `threadId`, optional `logo`, `color`        | captain record |
@@ -40,14 +47,37 @@ the list draws. It is pure and unit-tested.
 
 `captains_create` spawns a thread titled `🧭 Captain · <project>` whose first
 prompt tells the agent to follow the `/captain` skill and keep notes in
-`~/.bb/captains/<project>.md`.
+`~/.bb/captains/<project>.md`. The thread is spawned first and recorded after,
+with three attempts; if recording still fails the error names the thread so
+you can adopt it with **Make captain…**.
+
+### Pull requests
+
+Cards show the pull request number for their environment by reading the GitHub
+PR Status plugin (`bb--github-pr-status`) through `experimental_useRpcKeyedQuery`.
+Nothing shows when that plugin is absent.
+
+### Local state
+
+The sidebar remembers two things in `localStorage`: `armada/thread-scope` (the
+project filter) and `armada/captain-toggles` (which captains have their workers
+open).
 
 ## Logos and colours
 
 Logos are the icons declared under `bb.branding.experimental_icons` in
 `package.json`; `lib/logos.ts` lists the same names, and a test keeps the two
-in step. To add one, drop the SVG in `assets/icons/`, declare it in the
-manifest, and add its name to `LOGOS`. Colours are the table in `lib/colors.ts`.
+in step. Colours are the table in `lib/colors.ts`.
+
+## Design
+
+Captain rows are one compact line in the style of Capy's sidebar; thread and
+worker cards use t3sidebar's three-line card. Section headers are a `div` with
+an `h2` title and the actions beside it. Every row shares `ThreadLink`, which
+owns bb's row contract: the full-bleed anchor, `data-sidebar-thread-id`, split
+on cmd-click, the jump shortcuts, bb's context menu and inline rename. Pickers
+are one `ChoiceList` with listbox semantics. Ages come from one clock in
+`lib/clock.ts` through the `Age` leaf, so a tick re-renders only ages.
 
 ## Develop
 
@@ -64,12 +94,12 @@ Then pick **Armada** under Settings, Appearance, Sidebar.
 
 ```
 app.tsx               registers the thread list
-server.ts             captain registry and RPC handlers
-lib/                  model, registry types and schemas, logos, colours, status
-hooks/                registry loading and live updates
-components/           list, shared thread row, create and edit dialog
-components/ui/        vendored bb components (dialog, button, icon)
-test/                 model, server and rendered-list tests
+server.ts             captain records, migration and RPC handlers
+lib/                  model, status table, captain schema, scope, clock, styles
+hooks/                captains query, stored state, arrow-key rows
+components/           sections, row layouts, ThreadLink, ChoiceList, dialog
+components/ui/        vendored bb components (dialog, button, icon, hooks)
+test/                 model, server, status and rendered-list tests
 ```
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for what is adapted from

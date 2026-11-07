@@ -1,24 +1,40 @@
 import { useSyncExternalStore } from "react";
 
+import { usePrefersReducedMotion } from "@/components/ui/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
 const FRONT = [1, 0.75, 0.5] as const;
 const TRACK = 0.22;
 const STEP_MS = 110;
 
-export function shadeGridFrames(size: number): number[][] {
+/** A bright anti-diagonal front sweeping from the top-left corner out the bottom-right. */
+function buildFrames(size: number): number[][] {
   const frames: number[][] = [];
-  for (let p = -2; p <= 2 * (size - 1) + 2; p++) {
+  for (let front = -2; front <= 2 * (size - 1) + 2; front++) {
     const cells: number[] = [];
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) {
-        cells.push(FRONT[Math.abs(r + c - p)] ?? TRACK);
+    for (let row = 0; row < size; row++) {
+      for (let column = 0; column < size; column++) {
+        cells.push(FRONT[Math.abs(row + column - front)] ?? TRACK);
       }
     }
     frames.push(cells);
   }
   return frames;
 }
+
+const framesBySize = new Map<number, number[][]>();
+
+function framesFor(size: number): number[][] {
+  let frames = framesBySize.get(size);
+  if (frames === undefined) {
+    frames = buildFrames(size);
+    framesBySize.set(size, frames);
+  }
+  return frames;
+}
+
+/** Under reduced motion the front rests on the centre diagonal. */
+const stillFrame = (size: number): number[] => framesFor(size)[size + 1]!;
 
 let tick = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -42,17 +58,6 @@ function subscribe(listener: () => void) {
 }
 
 const getTick = () => tick;
-
-const REDUCED = "(prefers-reduced-motion: reduce)";
-
-function subscribeReducedMotion(listener: () => void) {
-  const query = window.matchMedia(REDUCED);
-  query.addEventListener("change", listener);
-  return () => query.removeEventListener("change", listener);
-}
-
-const prefersReducedMotion = () => window.matchMedia(REDUCED).matches;
-
 const noopSubscribe = () => () => {};
 
 export function ShadeGrid({
@@ -64,18 +69,14 @@ export function ShadeGrid({
   label?: string;
   className?: string;
 }) {
-  const reduced = useSyncExternalStore(
-    subscribeReducedMotion,
-    prefersReducedMotion,
-    () => false,
-  );
-  const now = useSyncExternalStore(
+  const reduced = usePrefersReducedMotion();
+  const step = useSyncExternalStore(
     reduced ? noopSubscribe : subscribe,
     getTick,
     () => 0,
   );
-  const frames = shadeGridFrames(size);
-  const frame = frames[reduced ? size : now % frames.length] ?? [];
+  const frames = framesFor(size);
+  const frame = reduced ? stillFrame(size) : frames[step % frames.length]!;
   return (
     <span
       role={label === undefined ? undefined : "img"}

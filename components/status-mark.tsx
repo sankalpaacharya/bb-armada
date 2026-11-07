@@ -1,9 +1,8 @@
 import { experimental_ThreadStatusGlyph as ThreadStatusGlyph } from "@get-bb/plugin-sdk/app";
 
 import { STATUS, type Status } from "@/lib/status";
-import { AGE_TEXT } from "@/lib/styles";
-import { formatAge } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { Age } from "./age";
 import { ShadeGrid } from "./shade-grid";
 
 export type StatusVariant = "card" | "compact";
@@ -12,7 +11,7 @@ export type StatusVariant = "card" | "compact";
  * One status, drawn from the status table. "compact" is the glyph alone, for
  * one-line rows; "card" adds the word in the status tone.
  */
-export function StatusMark({
+function StatusMark({
   status,
   variant,
 }: {
@@ -39,15 +38,13 @@ export function StatusMark({
 export function StatusOrAge({
   status,
   activityAt,
-  now,
   variant,
 }: {
   status: Status | null;
   activityAt: number;
-  now: number;
   variant: StatusVariant;
 }) {
   if (status !== null && (variant === "card" || STATUS[status].live))
     return <StatusMark status={status} variant={variant} />;
-  return <span className={AGE_TEXT}>{formatAge(activityAt, now)}</span>;
+  return <Age at={activityAt} />;
 }

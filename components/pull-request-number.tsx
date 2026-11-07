@@ -4,10 +4,18 @@ import { experimental_useRpcKeyedQuery } from "@get-bb/plugin-sdk/app";
 import {
   PULL_REQUESTS_PLUGIN_ID,
   pullRequestContract,
+  type PrAttention,
 } from "@/lib/pull-requests";
 import { cn } from "@/lib/utils";
 
 const NO_KEYS: readonly string[] = [];
+
+const ATTENTION_TONE: Record<PrAttention, string> = {
+  none: "text-muted-foreground",
+  checks_failed: "text-destructive-text",
+  conflicts: "text-destructive-text",
+  ready_to_merge: "text-success-foreground",
+};
 
 export function PullRequestNumber({
   environmentId,
@@ -38,12 +46,7 @@ export function PullRequestNumber({
         "pointer-events-auto relative shrink-0 font-mono hover:underline",
         pullRequest.state === "merged"
           ? "text-[color:var(--pr-merged)]"
-          : pullRequest.attention === "checks_failed" ||
-              pullRequest.attention === "conflicts"
-            ? "text-destructive-text"
-            : pullRequest.attention === "ready_to_merge"
-              ? "text-success-foreground"
-              : "text-muted-foreground",
+          : ATTENTION_TONE[pullRequest.attention],
       )}
     >
       #{pullRequest.number}

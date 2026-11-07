@@ -7,12 +7,10 @@ import { ThreadLink, type OpenThread } from "./thread-link";
 export function WorkerCard({
   entry,
   active,
-  now,
   onOpen,
 }: {
   entry: ThreadEntry;
   active: boolean;
-  now: number;
   onOpen: OpenThread;
 }) {
   return (
@@ -31,7 +29,6 @@ export function WorkerCard({
                 <StatusOrAge
                   status={entry.status}
                   activityAt={entry.activityAt}
-                  now={now}
                   variant="card"
                 />
               )}

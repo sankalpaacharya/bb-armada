@@ -4,7 +4,7 @@ import { Slot } from "@radix-ui/react-slot";
 
 import { cn } from "../../lib/utils";
 import { usePortalScopeProps } from "../../lib/portal-scope";
-import { useBrowserDimmingModal } from "../../hooks/useBrowserDimmingModal";
+import { useBrowserDimmingModal } from "../../hooks/use-browser-dimming-modal";
 import {
   type ResponsiveOverlayContextValue,
   useResponsiveRoot,
