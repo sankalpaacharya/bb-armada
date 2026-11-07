@@ -346,7 +346,7 @@ describe("Armada thread list", () => {
     expect(stored.has("armada/captain-toggles")).toBe(false);
   });
 
-  it("draws every thread with its project, where it runs and its PR under the title, leaves when to the tooltip, and adds the harness once it is open", async () => {
+  it("draws every thread with its project, where it runs and its PR under the title, with no tooltip, and adds the harness once it is open", async () => {
     vi.useFakeTimers({ toFake: ["Date"], now: NOW });
     const { view } = await render({
       threads: [
@@ -397,8 +397,8 @@ describe("Armada thread list", () => {
     expect(card.getByText("feat/loose-idea")).toBeTruthy();
     expect(card.getByLabelText("Worktree")).toBeTruthy();
 
-    expect(anchorOf(view.container, "plain")!.getAttribute("title")).toBe(
-      "Beta · Worktree feat/loose-idea · 1h ago",
+    expect(anchorOf(view.container, "plain")!.hasAttribute("title")).toBe(
+      false,
     );
 
     cleanup();

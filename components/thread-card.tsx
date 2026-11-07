@@ -1,11 +1,9 @@
 import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
-import { useNow } from "@/lib/clock";
 import { tomorrowMorning } from "@/lib/lifecycle";
 import type { ThreadEntry } from "@/lib/model";
-import { rowHint } from "@/lib/place";
-import { formatAgo } from "@/lib/time";
+import { STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
 import { RowActions } from "./row-actions";
@@ -58,13 +56,14 @@ export function ThreadCard({
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
 }) {
-  const now = useNow();
   const environmentId = entry.thread.environment?.id ?? null;
   const project =
     showProject && entry.projectName !== entry.captain?.name
       ? entry.projectName
       : null;
   const threadId = entry.thread.id;
+  const badge =
+    entry.status !== null && STATUS[entry.status].glyph.kind === "word";
   return (
     <li className="list-none">
       <ThreadLink
@@ -75,7 +74,6 @@ export function ThreadCard({
         titleClassName={
           entry.thread.isUnread ? undefined : "text-foreground/85"
         }
-        hint={rowHint(entry.thread, project, formatAgo(entry.activityAt, now))}
         className="px-2"
       >
         {({ title, shortcut }) => (
@@ -84,6 +82,7 @@ export function ThreadCard({
               className={cn(
                 "pointer-events-none relative flex h-8 items-center gap-2",
                 entry.parkable &&
+                  !badge &&
                   "group-focus-within/row:pr-11 group-hover/row:pr-11",
               )}
             >
@@ -92,7 +91,13 @@ export function ThreadCard({
               </span>
               {title}
               {entry.status === null ? null : (
-                <span className="grid h-4 min-w-4 shrink-0 place-items-center">
+                <span
+                  className={cn(
+                    "grid h-4 min-w-4 shrink-0 place-items-center",
+                    entry.parkable &&
+                      "transition-opacity duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-focus-within/row:opacity-0 group-hover/row:opacity-0 motion-reduce:transition-none",
+                  )}
+                >
                   <StatusGlyph status={entry.status} />
                 </span>
               )}

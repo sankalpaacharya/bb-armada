@@ -36,10 +36,3 @@ export function formatDuration(
 export function formatAge(at: number, now: number): string {
   return at <= 0 ? "" : formatDuration(now - at);
 }
-
-/** An age as a phrase for a tooltip: "just now", "3h ago", or null when unknown. */
-export function formatAgo(at: number, now: number): string | null {
-  const age = formatAge(at, now);
-  if (age === "") return null;
-  return age === "now" ? "just now" : `${age} ago`;
-}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAge, formatAgo, formatDuration } from "../lib/time";
+import { formatAge, formatDuration } from "../lib/time";
 import { NOW } from "./fixtures";
 
 const ago = (ms: number) => formatAge(NOW - ms, NOW);
@@ -40,13 +40,5 @@ describe("formatDuration rounding up", () => {
     expect(formatDuration(90 * MINUTE, "up")).toBe("2h");
     expect(formatDuration(6 * DAY + 1, "up")).toBe("1w");
     expect(formatDuration(0, "up")).toBe("now");
-  });
-});
-
-describe("formatAgo", () => {
-  it("phrases an age for a tooltip, and says nothing for an unknown time", () => {
-    expect(formatAgo(NOW - 10_000, NOW)).toBe("just now");
-    expect(formatAgo(NOW - 3 * 60 * MINUTE, NOW)).toBe("3h ago");
-    expect(formatAgo(0, NOW)).toBeNull();
   });
 });

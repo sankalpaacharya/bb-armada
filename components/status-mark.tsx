@@ -24,7 +24,10 @@ function StatusMark({
       <ShadeGrid label={row.word} className={row.tone} />
     ) : row.glyph.kind === "word" ? (
       <span
-        className={cn("shrink-0 text-2xs font-medium leading-none", row.tone)}
+        className={cn(
+          "inline-flex h-3.5 shrink-0 items-center rounded-[4px] bg-[color-mix(in_oklch,currentColor_11%,transparent)] px-1 text-[9.5px] leading-none font-medium tracking-[0.02em]",
+          row.tone,
+        )}
       >
         {row.word}
       </span>
