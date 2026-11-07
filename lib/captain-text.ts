@@ -19,3 +19,11 @@ export function captainPrompt(projectName: string): string {
     'Then reply with a 3-line hello: what you understood the project to be, and that the user can now say "hey captain, ..." to give you work.',
   ].join(" ");
 }
+
+const LEADING_EMOJI =
+  /^\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}|\p{Emoji_Modifier})*\s*/u;
+
+export function withoutLeadingEmoji(title: string): string {
+  const stripped = title.replace(LEADING_EMOJI, "");
+  return stripped === "" ? title : stripped;
+}
