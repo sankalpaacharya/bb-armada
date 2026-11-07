@@ -21,7 +21,10 @@ export async function listRecords<T>(
  * Runs the tasks for one key one after another, so a read-then-write on a
  * record cannot interleave with another write to it from a second client.
  */
-export function queueByKey(): <T>(key: string, task: () => Promise<T>) => Promise<T> {
+export function queueByKey(): <T>(
+  key: string,
+  task: () => Promise<T>,
+) => Promise<T> {
   const tails = new Map<string, Promise<unknown>>();
   return (key, task) => {
     const result = (tails.get(key) ?? Promise.resolve()).then(task);

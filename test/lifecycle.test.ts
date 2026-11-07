@@ -104,8 +104,12 @@ describe("parseStoredPark", () => {
       threadId: "t",
       ...snoozed,
     });
-    expect(parseStoredPark({ threadId: "t", kind: "snoozed", at: NOW })).toBeNull();
-    expect(parseStoredPark({ threadId: "t", kind: "paused", at: NOW })).toBeNull();
+    expect(
+      parseStoredPark({ threadId: "t", kind: "snoozed", at: NOW }),
+    ).toBeNull();
+    expect(
+      parseStoredPark({ threadId: "t", kind: "paused", at: NOW }),
+    ).toBeNull();
     expect(parseStoredPark("garbage")).toBeNull();
   });
 });

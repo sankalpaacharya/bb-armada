@@ -5,7 +5,14 @@ import type { Avatar } from "./captains";
 
 const STYLES = { micah } satisfies Record<Avatar["style"], unknown>;
 
-const BACKGROUNDS = ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf", "c1f4c5"];
+const BACKGROUNDS = [
+  "b6e3f4",
+  "c0aede",
+  "d1d4f9",
+  "ffd5dc",
+  "ffdfbf",
+  "c1f4c5",
+];
 
 const rendered = new Map<string, string>();
 
@@ -29,6 +36,9 @@ const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 export function randomAvatar(): Avatar {
   const bytes = crypto.getRandomValues(new Uint8Array(SEED_LENGTH));
-  const seed = Array.from(bytes, (byte) => ALPHABET[byte % ALPHABET.length]).join("");
+  const seed = Array.from(
+    bytes,
+    (byte) => ALPHABET[byte % ALPHABET.length],
+  ).join("");
   return { style: "micah", seed };
 }

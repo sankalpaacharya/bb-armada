@@ -139,9 +139,7 @@ describe("Armada thread list", () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "w_wait")).not.toBeNull());
     const card = within(rowOf(view.container, "w_wait")!);
-    expect(
-      card.getByText("Launched by Captain Alpha"),
-    ).toBeTruthy();
+    expect(card.getByText("Launched by Captain Alpha")).toBeTruthy();
     const face = rowOf(view.container, "w_wait")!.querySelector("img");
     expect(face?.getAttribute("alt")).toBe("");
     expect(face?.getAttribute("src")).toBe(
@@ -164,9 +162,12 @@ describe("Armada thread list", () => {
       ],
     });
     await waitFor(() => expect(rowOf(view.container, "w")).not.toBeNull());
-    expect(
-      within(rowOf(view.container, "w")!).getAllByText(/Alpha/),
-    ).toHaveLength(1);
+    const row = rowOf(view.container, "w")!;
+    expect(within(row).getByText("Launched by Alpha")).toBeTruthy();
+    const visibleAlpha = Array.from(row.querySelectorAll("span")).filter(
+      (span) => span.textContent === "Alpha" && !span.closest(".sr-only"),
+    );
+    expect(visibleAlpha).toHaveLength(1);
   });
 
   it("keeps the captain on a worker's card when the scope hides the project", async () => {
@@ -174,7 +175,7 @@ describe("Armada thread list", () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "w_wait")).not.toBeNull());
     const card = within(rowOf(view.container, "w_wait")!);
-    expect(card.getByText(/Captain Alpha/)).toBeTruthy();
+    expect(card.getByText("Launched by Captain Alpha")).toBeTruthy();
     expect(card.queryByText("Alpha")).toBeNull();
   });
 
@@ -292,7 +293,7 @@ describe("Armada thread list", () => {
     expect(stored.has("armada/captain-toggles")).toBe(false);
   });
 
-  it("draws a thread on one line, and adds where it runs only once it is open", async () => {
+  it("draws every thread as the same two lines: status, title, PR, place and age; then project and harness", async () => {
     const { view } = await render({
       threads: [
         thread("plain", {
@@ -327,45 +328,20 @@ describe("Armada thread list", () => {
       },
     });
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
-    const card = within(rowOf(view.container, "plain")!);
-    expect(card.queryByText("Beta")).toBeNull();
+    const row = rowOf(view.container, "plain")!;
+    const card = within(row);
+    expect(card.getByText("Beta")).toBeTruthy();
     expect(card.getByRole("img", { name: "Working" })).toBeTruthy();
+    expect(card.getByLabelText("Worktree feat/loose-idea")).toBeTruthy();
     expect(
-      rowOf(view.container, "plain")!.querySelector(
-        '[data-provider-id="claude-code"]',
-      ),
+      row.querySelector('[data-provider-id="claude-code"]'),
     ).not.toBeNull();
     expect(
       (await card.findByRole("link", { name: "#42" })).getAttribute("href"),
     ).toBe("https://github.com/acme/app/pull/42");
-    expect(card.queryByText("feat/loose-idea")).toBeNull();
-
-    cleanup();
-    const opened = await render({
-      activeThreadId: "plain",
-      threads: [
-        thread("plain", {
-          title: "Loose idea",
-          projectId: "proj_b",
-          environment: {
-            id: "env_1",
-            name: "loose-idea",
-            branchName: "feat/loose-idea",
-            path: null,
-            isWorktree: true,
-            providerId: null,
-            workspaceDisplayKind: null,
-          },
-        }),
-      ],
-    });
-    await waitFor(() =>
-      expect(rowOf(opened.view.container, "plain")).not.toBeNull(),
+    expect(anchorOf(view.container, "plain")!.getAttribute("title")).toBe(
+      "Worktree feat/loose-idea",
     );
-    const open = within(rowOf(opened.view.container, "plain")!);
-    expect(open.getByText("feat/loose-idea")).toBeTruthy();
-    expect(open.getByText("Beta")).toBeTruthy();
-    expect(open.getByLabelText("Worktree")).toBeTruthy();
   });
 
   it("shows only the chosen project's threads, without repeating the project on each card", async () => {

@@ -18,14 +18,18 @@ const UNITS = [
  * "1m" while any is left, and a rounded-up value that fills the next unit
  * reads in that unit ("1h", not "60m").
  */
-export function formatDuration(ms: number, round: "down" | "up" = "down"): string {
+export function formatDuration(
+  ms: number,
+  round: "down" | "up" = "down",
+): string {
   if (round === "down" ? ms < MINUTE : ms <= 0) return "now";
   let unit: (typeof UNITS)[number] = UNITS[0];
   for (const candidate of UNITS) if (candidate.ms <= ms) unit = candidate;
   if (round === "down") return `${Math.floor(ms / unit.ms)}${unit.suffix}`;
   const value = Math.ceil(ms / unit.ms);
   const larger = UNITS.find((candidate) => candidate.ms > unit.ms);
-  if (larger !== undefined && value * unit.ms >= larger.ms) return `1${larger.suffix}`;
+  if (larger !== undefined && value * unit.ms >= larger.ms)
+    return `1${larger.suffix}`;
   return `${value}${unit.suffix}`;
 }
 

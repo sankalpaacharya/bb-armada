@@ -48,7 +48,11 @@ export type ThreadEntry = Fold & {
 
 export type ParkedEntry<Kind extends Park> = ThreadEntry & { park: Kind };
 
-export type CaptainCounts = { working: number; needsYou: number; failed: number };
+export type CaptainCounts = {
+  working: number;
+  needsYou: number;
+  failed: number;
+};
 
 export type CaptainEntry = Fold & {
   record: CaptainRecord;
@@ -188,7 +192,8 @@ export function buildArmada(
     if (park !== null && isExpired(park, folded.latestAttentionAt, now))
       expiredParks.push(thread.id);
     const parentId = parentIdOf(thread);
-    const captain = (parentId === null ? undefined : badgeOf.get(parentId)) ?? null;
+    const captain =
+      (parentId === null ? undefined : badgeOf.get(parentId)) ?? null;
     return {
       thread,
       projectName: projectNames.get(thread.projectId) ?? null,
@@ -240,8 +245,12 @@ export function buildArmada(
 
   return {
     captains,
-    threads: entries.filter((entry) => entry.shelf === "active").sort(entryOrder),
-    snoozed: parked.filter(isSnoozed).sort((a, b) => a.park.until - b.park.until),
+    threads: entries
+      .filter((entry) => entry.shelf === "active")
+      .sort(entryOrder),
+    snoozed: parked
+      .filter(isSnoozed)
+      .sort((a, b) => a.park.until - b.park.until),
     settled: parked.filter(isSettled).sort((a, b) => b.park.at - a.park.at),
     expiredParks,
   };

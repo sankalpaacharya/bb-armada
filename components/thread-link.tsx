@@ -35,6 +35,7 @@ export function ThreadLink({
   thread,
   active,
   label,
+  hint,
   inline = NO_INLINE,
   onOpen,
   className,
@@ -45,6 +46,8 @@ export function ThreadLink({
   active: boolean;
   /** Accessible name and visible title when it is not bb's own title. */
   label?: string;
+  /** Tooltip with what the row leaves out, such as where the thread runs. */
+  hint?: string;
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
   className?: string;
@@ -100,6 +103,7 @@ export function ThreadLink({
           data-sidebar-thread-id={thread.id}
           {...{ [ROW_ANCHOR]: "" }}
           aria-label={label ?? thread.displayTitle}
+          title={hint === "" ? undefined : hint}
           aria-current={active ? "page" : undefined}
           aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
           draggable={false}
