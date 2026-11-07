@@ -1,21 +1,27 @@
-Keep a todo list beside the work it belongs to, in the sidebar and in
-your agent threads.
+Run many threads without losing the long-lived ones. Armada replaces the
+sidebar thread list with captains on top and everything else grouped by project.
 
 ## What you get
 
-- An **Example todos** page in the left sidebar that adds, completes, and
-  removes todos.
-- A `bb armada` command that does the same from a terminal.
-- Live updates, so a change made in one place reaches every open page at once.
+- **Captains.** A captain is a long-lived thread for a project. It sits at the
+  top of the sidebar as a rounded-square tile in the logo and colour you chose.
+- **Workers underneath.** Every thread a captain starts, and every thread those
+  start in turn, nests under it. The captain shows how many are working and how
+  many need you, and opens by itself when something is going on.
+- **Threads by project.** Every other thread sits under its project. Sub-threads
+  fold into their parent, which takes on the most urgent status among them.
+  Collapse a project and a dot still tells you if it needs attention.
+- **One click to start.** The **+** next to Captains asks for a project, a logo
+  and a colour, then starts a captain thread that sets up its own notes file.
 
-## How it works
+## Make a captain from any thread
 
-The todos live in this plugin's own storage on the BB server, one list per
-installation. Nothing leaves the machine, and the plugin needs no account, API
-key, or external service.
+Right-click a thread and choose **Make captain…**. A captain's menu has
+**Change logo…** and **Remove from captains**. Removing only forgets the
+captain; the thread stays.
 
-## For agents
+## Good to know
 
-The bundled skill tells an agent to read the list with `bb armada list`, add
-one todo at a time with `bb armada add`, and close finished work with
-`bb armada done`.
+Rows behave like bb's own: click to open, cmd-click to open in a split, the
+jump-to-thread shortcuts, bb's thread menu, and rename in place. Captains are
+stored by the plugin on your bb server, so every device sees the same ones.
