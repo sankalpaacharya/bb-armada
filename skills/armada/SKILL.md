@@ -57,6 +57,8 @@ compacted; the home does not.
 - If the home is missing, create it. If a legacy single file
   `~/.bb/captains/<project>.md` exists, split it into the new files, then add it
   verbatim to the end of `archive.md`.
+- An older `backlog.md` may have `## Waiting on captain`. Read it as
+  `## Waiting on the user`, and rename it the next time you edit the file.
 - Never store secrets, tokens, or personal data.
 
 ### What goes where
@@ -77,9 +79,11 @@ edit it in place. Never blindly append.
 
 - `captain.md` entries never expire. They change only when the user or
   reality changes them.
-- Each `learnings.md` entry ends with `(seen YYYY-MM-DD)`. An entry 30 or more
-  days old is re-checked (refresh the date) or moved to `archive.md`, never kept
-  by inertia.
+- Each `learnings.md` entry ends with `(seen YYYY-MM-DD)`. Refresh the date
+  only when this session produced evidence for the entry that you can name: you
+  hit it, checked it, or re-derived it. Its own text, or that it sounds right,
+  is not evidence. An entry 30 or more days old is re-checked or moved to
+  `archive.md`, never kept by inertia.
 - Done in `backlog.md` keeps about two weeks. Older entries move to
   `archive.md`. Archive material instead of deleting it.
 
@@ -237,12 +241,16 @@ are still over.
 
 ## Bearings
 
-When the user says "bearings" or "status", answer from the home and from
-`bb thread list` in four short sections: **In flight**, **User's call**,
-**Done since last time**, **Next up**. Include PR URLs in full.
+When the user says "bearings" or "status", handle the outbox first, then
+answer from the home and `bb thread list` with the full current picture, never
+a list of changes since an earlier answer. Always give all four short
+sections, saying "nothing" in one that is empty: **In flight**, **User's
+call** (every open line in Waiting on the user), **Recently done** (Done in
+`backlog.md`), **Next up** (Queue). Include PR URLs in full.
 
 ## Recovery
 
-After a compaction or `bb thread clear`, re-read startup memory and
-`bb thread list`, check that the supervisor is alive, compare In flight with
-`supervisor.md`, then carry on.
+After a compaction or `bb thread clear`, before you answer anything, run the
+start-of-turn steps: the ownership check, the three startup files, and the
+outbox lines past the cursor. Then read `bb thread list`, check that the
+supervisor is live, compare In flight with `supervisor.md`, and carry on.

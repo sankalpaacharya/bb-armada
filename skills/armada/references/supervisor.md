@@ -107,6 +107,8 @@ never cover anything on the escalate list in `supervision.md`.
 
 ## Recovery
 
-After a compaction or a clear, re-read `supervisor.md`, the briefs of the tasks
-it lists, and `bb thread list --project "$BB_PROJECT_ID"`. Check each task's real
-status, including pending interactions, then carry on.
+After a compaction or a clear, check you are still the supervisor
+(`ownership.md`), then re-read `supervisor.md`, the briefs of the tasks it
+lists, and `bb thread list --project "$BB_PROJECT_ID"`. Run the adopt step of
+your loop. Check each task's real status, including pending interactions, then
+carry on.
