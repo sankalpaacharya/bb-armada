@@ -327,7 +327,8 @@ describe("Armada thread list", () => {
     expect(stored.has("armada/captain-toggles")).toBe(false);
   });
 
-  it("draws a thread on one line, and shows where it runs once it is open", async () => {
+  it("draws a thread as its title and PR alone, leaves where and when to the tooltip, and shows where it runs once it is open", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOW });
     const { view } = await render({
       threads: [
         thread("plain", {
@@ -363,7 +364,8 @@ describe("Armada thread list", () => {
     });
     await waitFor(() => expect(rowOf(view.container, "plain")).not.toBeNull());
     const card = within(rowOf(view.container, "plain")!);
-    expect(card.getByText("Beta")).toBeTruthy();
+    expect(card.queryByText("Beta")).toBeNull();
+    expect(card.queryByText("1h")).toBeNull();
     expect(card.getByRole("img", { name: "Working" })).toBeTruthy();
     expect(
       rowOf(view.container, "plain")!.querySelector(
@@ -376,7 +378,7 @@ describe("Armada thread list", () => {
     expect(card.queryByText("feat/loose-idea")).toBeNull();
 
     expect(anchorOf(view.container, "plain")!.getAttribute("title")).toBe(
-      "Beta · Worktree feat/loose-idea",
+      "Beta · Worktree feat/loose-idea · 1h ago",
     );
 
     cleanup();
@@ -1130,18 +1132,20 @@ describe("shelves", () => {
     ).toEqual({ threadId: "done", at: expect.any(Number) });
   });
 
-  it("keeps the age and the park actions mounted in one trailing slot, and the actions reachable by keyboard", async () => {
+  it("shows no age on a card at rest, and keeps its park actions reachable by keyboard in a strip of their own", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOW });
     const { view } = await render({
       threads: [thread("a", { title: "First", projectId: "proj_b" })],
     });
     await waitFor(() => expect(rowOf(view.container, "a")).not.toBeNull());
-    const card = within(rowOf(view.container, "a")!);
-    const settle = card.getByRole("button", { name: "Settle" });
+    const row = rowOf(view.container, "a")!;
+    const card = within(row);
+    expect(card.queryByText(/^(now|\d+[a-z]+)$/)).toBeNull();
     const snooze = card.getByRole("button", { name: "Snooze until tomorrow" });
-    const age = card.getByText(/^(now|\d+[a-z]+)$/);
-    const slot = settle.parentElement!.parentElement!;
-    expect(slot.contains(age)).toBe(true);
-    expect(slot.contains(snooze)).toBe(true);
+    const settle = card.getByRole("button", { name: "Settle" });
+    const strip = settle.parentElement!;
+    expect(Array.from(strip.children)).toEqual([snooze, settle]);
+    expect(strip.textContent).toBe("");
 
     for (const button of [snooze, settle]) {
       button.focus();

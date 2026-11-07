@@ -1,12 +1,13 @@
 import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
+import { useNow } from "@/lib/clock";
+import { tomorrowMorning } from "@/lib/lifecycle";
 import type { ThreadEntry } from "@/lib/model";
-import { cn } from "@/lib/utils";
-import { placeHint } from "@/lib/place";
-import { Age } from "./age";
+import { rowHint } from "@/lib/place";
+import { formatAgo } from "@/lib/time";
 import { CaptainTile } from "./captain-tile";
-import { ParkableSlot } from "./park-buttons";
+import { RowActions } from "./row-actions";
 import { PlaceLine } from "./place-line";
 import { PullRequestNumber } from "./pull-request-number";
 import { StatusGlyph } from "./status-mark";
@@ -40,7 +41,11 @@ function LeadMark({ entry }: { entry: ThreadEntry }) {
   );
 }
 
-/** A thread as one line: status or origin on the left, PR and age on the right; the open thread also shows where it runs. */
+/**
+ * A thread as one line: status or origin, the title, and the PR number when
+ * there is one. The tooltip carries where it runs and its age, and the open
+ * thread shows where it runs below.
+ */
 export function ThreadCard({
   entry,
   active,
@@ -57,11 +62,13 @@ export function ThreadCard({
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
 }) {
+  const now = useNow();
   const environmentId = entry.thread.environment?.id ?? null;
   const project =
     showProject && entry.projectName !== entry.captain?.name
       ? entry.projectName
       : null;
+  const threadId = entry.thread.id;
   return (
     <li className="list-none">
       <ThreadLink
@@ -69,11 +76,10 @@ export function ThreadCard({
         active={active}
         inline={inline}
         onOpen={onOpen}
-        titleClassName={cn(
-          "flex-initial",
-          entry.thread.isUnread ? undefined : "text-foreground/85",
-        )}
-        hint={placeHint(entry.thread, project)}
+        titleClassName={
+          entry.thread.isUnread ? undefined : "text-foreground/85"
+        }
+        hint={rowHint(entry.thread, project, formatAgo(entry.activityAt, now))}
         className="px-2"
       >
         {({ title, shortcut }) => (
@@ -83,20 +89,32 @@ export function ThreadCard({
                 <LeadMark entry={entry} />
               </span>
               {title}
-              {project === null || active ? null : (
-                <span className="min-w-0 shrink-[100] truncate text-2xs text-muted-foreground/70">
-                  {project}
+              {active ? null : (
+                <span className="contents text-2xs">
+                  <PullRequestNumber environmentId={environmentId} />
                 </span>
               )}
-              <span className="flex-1" />
-              <ParkableSlot entry={entry} actions={parkActions}>
-                {active ? null : (
-                  <span className="pointer-events-auto shrink-0 text-2xs">
-                    <PullRequestNumber environmentId={environmentId} />
-                  </span>
-                )}
-                {shortcut ?? <Age at={entry.activityAt} />}
-              </ParkableSlot>
+              {shortcut}
+              {entry.parkable ? (
+                <RowActions
+                  actions={[
+                    {
+                      label: "Snooze until tomorrow",
+                      icon: "Clock",
+                      run: () =>
+                        parkActions.snooze(
+                          threadId,
+                          tomorrowMorning(new Date()),
+                        ),
+                    },
+                    {
+                      label: "Settle",
+                      icon: "Check",
+                      run: () => parkActions.settle(threadId),
+                    },
+                  ]}
+                />
+              ) : null}
             </div>
             {active ? (
               <div className="pointer-events-none relative -mt-1 pb-1">

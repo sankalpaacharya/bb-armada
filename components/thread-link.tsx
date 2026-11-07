@@ -10,7 +10,7 @@ import {
 
 import { ROW_ANCHOR } from "@/hooks/use-arrow-key-rows";
 import { toActionTarget } from "@/lib/action-target";
-import { FOCUS_RING, rowFill } from "@/lib/styles";
+import { FOCUS_RING, threadRowFill } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { RenameInput } from "./rename-input";
 
@@ -87,7 +87,7 @@ export function ThreadLink({
     <div
       className={cn(
         "group/row relative rounded-md transition-colors",
-        rowFill(active),
+        threadRowFill(active),
         className,
       )}
     >
