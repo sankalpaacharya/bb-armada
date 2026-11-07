@@ -258,7 +258,7 @@ export function CaptainDialog({
             className="grid grid-cols-6 gap-1"
             renderChoice={(choice, selected) => (
               <CaptainTile
-                avatar={{ style: "adventurer", seed: choice.id }}
+                avatar={{ style: "micah", seed: choice.id }}
                 size="preview"
                 className={selected ? "ring-2 ring-ring" : undefined}
               />

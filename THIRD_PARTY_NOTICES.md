@@ -45,17 +45,17 @@ line and pull request colours), the hover park buttons in
 
 Source: <https://github.com/SawyerHood/sawyer-plugins/tree/main/plugins/t3sidebar>
 
-## DiceBear and the Adventurer style
+## DiceBear and the Micah style
 
-Captain avatars are generated with `@dicebear/core` and `@dicebear/adventurer`.
+Captain avatars are generated with `@dicebear/core` and `@dicebear/micah`.
 
 DiceBear code: MIT License, Copyright (c) 2024 Florian Körner.
 Source: <https://github.com/dicebear/dicebear>
 
-Design "Adventurer" by Lisa Wischofsky, licensed under CC BY 4.0. Remix of
-the original.
-Source: <https://www.figma.com/community/file/1184595184137881796>
-Homepage: <https://www.instagram.com/lischi_art/>
+Design "Avatar Illustration System" by Micah Lanier, licensed under CC BY 4.0.
+Remix of the original.
+Source: <https://www.figma.com/community/file/829741575478342595>
+Homepage: <https://dribbble.com/micahlanier>
 License: <https://creativecommons.org/licenses/by/4.0/>
 
 ## Hugeicons

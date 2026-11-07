@@ -16,7 +16,7 @@ export function CaptainTile({
   return (
     <span
       className={cn(
-        "block shrink-0 overflow-hidden bg-sidebar-accent",
+        "block shrink-0 overflow-hidden",
         TILE[size],
         className,
       )}

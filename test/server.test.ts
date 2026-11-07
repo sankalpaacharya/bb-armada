@@ -21,7 +21,7 @@ async function load(options: { seed?: (kv: Kv) => Promise<void> } = {}) {
 
 type Kv = ReturnType<typeof createFakePluginHost>["bb"]["storage"]["kv"];
 
-const avatar = (seed: string) => ({ style: "adventurer", seed });
+const avatar = (seed: string) => ({ style: "micah", seed });
 const adopt = (threadId: string, seed = "one") => ({
   threadId,
   avatar: avatar(seed),
@@ -164,14 +164,34 @@ describe("captain records", () => {
     expect(await ids()).toEqual(["a", "b", "c", "d"]);
   });
 
-  it("rejects an avatar style it does not draw", async () => {
+  it("rejects an avatar style it does not draw, the retired adventurer included", async () => {
     const { harness } = await load();
-    await expect(
-      harness.callRpc("captains_adopt", {
-        threadId: "thr_x",
-        avatar: { style: "pixel-art", seed: "x" },
-      }),
-    ).rejects.toThrow();
+    for (const style of ["pixel-art", "adventurer"]) {
+      await expect(
+        harness.callRpc("captains_adopt", {
+          threadId: "thr_x",
+          avatar: { style, seed: "x" },
+        }),
+      ).rejects.toThrow();
+    }
+  });
+
+  it("reads a stored adventurer avatar as micah with the same seed", async () => {
+    const { list } = await load({
+      seed: (kv) =>
+        kv.set("captain:old", {
+          threadId: "old",
+          avatar: { style: "adventurer", seed: "thr_xi84gbn3wi" },
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
+    });
+    expect(await list()).toEqual([
+      {
+        threadId: "old",
+        avatar: avatar("thr_xi84gbn3wi"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
   });
 
   it("gives a logo-and-colour record an avatar seeded by its thread, and skips a record it cannot read, with a log line", async () => {

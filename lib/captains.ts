@@ -3,7 +3,7 @@ import { z } from "zod";
 export const threadIdSchema = z.string().min(1).max(200);
 
 export const avatarSchema = z.object({
-  style: z.literal("adventurer"),
+  style: z.literal("micah"),
   seed: z.string().min(1).max(64),
 });
 
@@ -17,17 +17,25 @@ export const captainRecordSchema = z.object({
 
 export type CaptainRecord = z.infer<typeof captainRecordSchema>;
 
-/** Records from before avatars carried a logo and colour; they get an avatar seeded by their thread. */
+const storedAvatarSchema = z.object({
+  style: z.enum(["adventurer", "micah"]),
+  seed: avatarSchema.shape.seed,
+});
+
+/**
+ * Stored records may predate avatars (a logo and colour, seeded by their thread)
+ * or carry the retired Adventurer style; both read as Micah and keep their seed.
+ */
 const storedCaptainSchema = z
   .object({
     threadId: threadIdSchema,
-    avatar: avatarSchema.optional(),
+    avatar: storedAvatarSchema.optional(),
     createdAt: z.string(),
   })
   .transform(
     ({ threadId, avatar, createdAt }): CaptainRecord => ({
       threadId,
-      avatar: avatar ?? { style: "adventurer", seed: threadId },
+      avatar: { style: "micah", seed: avatar?.seed ?? threadId },
       createdAt,
     }),
   );

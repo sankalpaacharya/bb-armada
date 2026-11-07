@@ -42,7 +42,7 @@ const projects = [
 const registry = (...ids: string[]): CaptainRecord[] =>
   ids.map((id) => ({
     threadId: id,
-    avatar: { style: "adventurer", seed: id },
+    avatar: { style: "micah", seed: id },
     createdAt: "2026-01-01T00:00:00.000Z",
   }));
 
@@ -471,7 +471,7 @@ describe("creating a captain", () => {
   it("creates it from the dialog with the typed name, chosen project and avatar, then opens it", async () => {
     const created = {
       threadId: "thr_new",
-      avatar: { style: "adventurer", seed: "x" },
+      avatar: { style: "micah", seed: "x" },
       createdAt: "2026-02-01T00:00:00.000Z",
     };
     const { view, onNavigate } = await render({
@@ -523,7 +523,7 @@ describe("creating a captain", () => {
       projectId: "proj_a",
       projectName: "Alpha",
       name: "Fleet",
-      avatar: { style: "adventurer", seed: expect.stringMatching(/^[a-z0-9]{10}$/) },
+      avatar: { style: "micah", seed: expect.stringMatching(/^[a-z0-9]{10}$/) },
     });
     expect(onNavigate).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -616,7 +616,7 @@ describe("thread menu", () => {
         view.inspection.rpcCalls.find(
           (call) => call.method === "captains_adopt",
         )?.input,
-      ).toMatchObject({ threadId: "plain", avatar: { style: "adventurer" } }),
+      ).toMatchObject({ threadId: "plain", avatar: { style: "micah" } }),
     );
     expect(pickedSrc).toBeTruthy();
     expect(view.inspection.sdkCalls).toEqual([]);
@@ -724,7 +724,7 @@ describe("thread menu", () => {
         view.inspection.rpcCalls.find(
           (call) => call.method === "captains_update",
         )?.input,
-      ).toMatchObject({ threadId: "cap", avatar: { style: "adventurer" } }),
+      ).toMatchObject({ threadId: "cap", avatar: { style: "micah" } }),
     );
     expect(
       (

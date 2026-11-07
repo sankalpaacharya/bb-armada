@@ -13,9 +13,9 @@ onto quiet shelves below it.
 ## How it works
 
 The server keeps one KV record per captain at `captain:<threadId>`: the thread
-id, an avatar (`{ style: "adventurer", seed }`), and when it was made. A record
-from before avatars, with a logo and colour, reads as an Adventurer avatar
-seeded by its thread id. `captains_list` declares the
+id, an avatar (`{ style: "micah", seed }`), and when it was made. A record
+from before avatars, with a logo and colour, reads as a Micah avatar seeded by
+its thread id, and a stored Adventurer avatar reads as Micah with the same seed. `captains_list` declares the
 `captains` tag and every write calls `bb.rpc.experimental_invalidate`, so the
 sidebar reads through `experimental_useRpcQuery` and refreshes on each write,
 on reconnect, and from any client. Records that cannot be parsed are skipped
@@ -85,8 +85,8 @@ workers open) and `armada/shelves` (which shelves are open).
 
 ## Avatars
 
-Captain avatars are DiceBear's **Adventurer** style, generated locally by
-`@dicebear/core` and `@dicebear/adventurer` from the record's seed
+Captain avatars are DiceBear's **Micah** style on a solid pastel background picked by the seed, generated
+locally by `@dicebear/core` and `@dicebear/micah` from the record's seed
 (`lib/avatar.ts`, memoised per style and seed, no network). `CaptainTile` is
 the one owner of avatar rendering: a decorative `<img alt="">` inside a
 rounded-square tile. The dialog offers twelve random seeds, **Shuffle** draws
@@ -94,7 +94,7 @@ twelve more, and picking one stores its seed.
 
 ## Design
 
-Captains sit on one raised panel, the deck: a 28px Adventurer avatar, the
+Captains sit on one raised panel, the deck: a 28px Micah avatar, the
 name, and a one-line summary of the captain's tree ("2 working" in the
 working tone, "1 needs you" in the attention tone, else "Idle") with the
 shade grid while working or the age at the right. Active workers nest inside
