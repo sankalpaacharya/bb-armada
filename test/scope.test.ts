@@ -6,6 +6,7 @@ import {
   parseScope,
   resolveScope,
   scopeThreads,
+  toggleScope,
 } from "../lib/scope";
 import { project, thread } from "./fixtures";
 
@@ -28,10 +29,21 @@ const ids = (entries: ReturnType<typeof scopeThreads>) =>
   entries.map((entry) => entry.thread.id).sort();
 
 describe("thread scope", () => {
-  it("keeps every thread for all projects and one project's threads otherwise", () => {
-    expect(ids(scopeThreads(threads, null))).toEqual(["a1", "a2", "b1"]);
-    expect(ids(scopeThreads(threads, "proj_a"))).toEqual(["a1", "a2"]);
-    expect(ids(scopeThreads(threads, "proj_gone"))).toEqual([]);
+  it("keeps every thread when no project is chosen, and the chosen projects' threads otherwise", () => {
+    expect(ids(scopeThreads(threads, []))).toEqual(["a1", "a2", "b1"]);
+    expect(ids(scopeThreads(threads, ["proj_a"]))).toEqual(["a1", "a2"]);
+    expect(ids(scopeThreads(threads, ["proj_a", "proj_b"]))).toEqual([
+      "a1",
+      "a2",
+      "b1",
+    ]);
+    expect(ids(scopeThreads(threads, ["proj_gone"]))).toEqual([]);
+  });
+
+  it("adds a project to the scope, and takes it out again", () => {
+    expect(toggleScope([], "proj_a")).toEqual(["proj_a"]);
+    expect(toggleScope(["proj_a"], "proj_b")).toEqual(["proj_a", "proj_b"]);
+    expect(toggleScope(["proj_a", "proj_b"], "proj_a")).toEqual(["proj_b"]);
   });
 
   it("counts each project's threads and leaves out projects with none", () => {
@@ -41,15 +53,20 @@ describe("thread scope", () => {
     expect(counts.has("proj_gone")).toBe(false);
   });
 
-  it("falls back to all projects when the stored project is gone", () => {
-    expect(resolveScope("proj_b", projects)).toBe("proj_b");
-    expect(resolveScope("proj_gone", projects)).toBeNull();
-    expect(resolveScope(null, projects)).toBeNull();
+  it("drops chosen projects that are gone, falling back to all projects when none remain", () => {
+    expect(resolveScope(["proj_b"], projects)).toEqual(["proj_b"]);
+    expect(resolveScope(["proj_gone", "proj_b"], projects)).toEqual([
+      "proj_b",
+    ]);
+    expect(resolveScope(["proj_gone"], projects)).toEqual([]);
+    expect(resolveScope([], projects)).toEqual([]);
   });
 
-  it("reads only a project id or all projects from storage", () => {
-    expect(parseScope('"proj_a"')).toBe("proj_a");
-    expect(parseScope("null")).toBeNull();
+  it("reads a list of projects from storage, and the single project or all projects stored before", () => {
+    expect(parseScope('["proj_a","proj_b"]')).toEqual(["proj_a", "proj_b"]);
+    expect(parseScope('"proj_a"')).toEqual(["proj_a"]);
+    expect(parseScope("null")).toEqual([]);
     expect(parseScope("3")).toBeUndefined();
+    expect(parseScope('["proj_a",3]')).toBeUndefined();
   });
 });

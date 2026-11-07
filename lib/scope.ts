@@ -2,30 +2,47 @@ import type { PluginSidebarProject } from "@get-bb/plugin-sdk/app";
 
 import type { ThreadEntry } from "./model";
 
-/** A project id, or null for every project. */
-export type ThreadScope = string | null;
+/** The projects whose threads show; none chosen shows every project. */
+export type ThreadScope = readonly string[];
 
+export const ALL_PROJECTS: ThreadScope = [];
+
+/** The chosen projects that still exist, in picker order. */
 export function resolveScope(
   stored: ThreadScope,
   projects: readonly PluginSidebarProject[],
 ): ThreadScope {
-  return stored !== null && projects.some((project) => project.id === stored)
-    ? stored
-    : null;
+  const chosen = new Set(stored);
+  return projects
+    .filter((project) => chosen.has(project.id))
+    .map((project) => project.id);
 }
 
 export function scopeThreads<Entry extends ThreadEntry>(
   entries: readonly Entry[],
   scope: ThreadScope,
 ): readonly Entry[] {
-  return scope === null
-    ? entries
-    : entries.filter((entry) => entry.thread.projectId === scope);
+  if (scope.length === 0) return entries;
+  const chosen = new Set(scope);
+  return entries.filter((entry) => chosen.has(entry.thread.projectId));
 }
 
+/** The project added to or taken out of the scope. */
+export function toggleScope(scope: ThreadScope, projectId: string): ThreadScope {
+  return scope.includes(projectId)
+    ? scope.filter((id) => id !== projectId)
+    : [...scope, projectId];
+}
+
+/** Reads a stored scope, including the single project id or null stored before more than one could be chosen. */
 export function parseScope(raw: string): ThreadScope | undefined {
   const value: unknown = JSON.parse(raw);
-  return value === null || typeof value === "string" ? value : undefined;
+  if (value === null) return ALL_PROJECTS;
+  if (typeof value === "string") return [value];
+  return Array.isArray(value) &&
+    value.every((id): id is string => typeof id === "string")
+    ? value
+    : undefined;
 }
 
 export function pickableProjects(

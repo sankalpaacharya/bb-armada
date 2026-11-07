@@ -13,6 +13,7 @@ import {
 } from "@/hooks/use-park-actions";
 import { useStoredState } from "@/hooks/use-stored-state";
 import {
+  ALL_PROJECTS,
   parseScope,
   pickableProjects,
   resolveScope,
@@ -39,7 +40,7 @@ export function ArmadaList({
   const parkActions = useParkActions();
   const navigate = useBbNavigate();
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
-  const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, null);
+  const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, ALL_PROJECTS);
   const [shelves, setShelves] = useStoredState(
     SHELVES_KEY,
     parseBooleanMap,

@@ -135,7 +135,7 @@ function atHour(base: Date, hour: number, addDays = 0): number {
   return next.getTime();
 }
 
-export const tomorrowMorning = (now: Date): number =>
+const tomorrowMorning = (now: Date): number =>
   atHour(now, MORNING_HOUR, 1);
 
 /** "This evening" only while it is more than an hour before 18:00. */

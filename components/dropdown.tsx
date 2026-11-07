@@ -10,7 +10,8 @@ const ALIGN = {
 } as const;
 
 /**
- * A single-select dropdown: a trigger that opens a listbox panel below it.
+ * A dropdown: a trigger that opens a listbox panel below it. A pick closes it
+ * unless `keepOpen` says that pick toggles one of several.
  * `stretch` makes the panel as wide as the trigger. `end` hangs it from the
  * right edge of the nearest positioned ancestor, which the caller sizes with
  * `panelClassName`.
@@ -19,8 +20,10 @@ export function Dropdown<Id extends string | null>({
   label,
   triggerLabel,
   choices,
-  value,
-  onChange,
+  isSelected,
+  onPick,
+  multiselectable = false,
+  keepOpen,
   align,
   triggerClassName,
   panelClassName,
@@ -32,8 +35,11 @@ export function Dropdown<Id extends string | null>({
   /** Names the trigger when its content alone would not. */
   triggerLabel?: string;
   choices: readonly Choice<Id>[];
-  value: Id;
-  onChange: (id: Id) => void;
+  isSelected: (id: Id) => boolean;
+  onPick: (id: Id) => void;
+  multiselectable?: boolean;
+  /** Whether picking this choice leaves the panel open. */
+  keepOpen?: (id: Id) => boolean;
   align: keyof typeof ALIGN;
   triggerClassName?: string;
   panelClassName?: string;
@@ -97,10 +103,11 @@ export function Dropdown<Id extends string | null>({
             id={listId}
             label={label}
             choices={choices}
-            value={value}
-            onChange={(next) => {
-              onChange(next);
-              close();
+            isSelected={isSelected}
+            multiselectable={multiselectable}
+            onPick={(next) => {
+              onPick(next);
+              if (keepOpen?.(next) !== true) close();
             }}
             onClose={close}
             autoFocus

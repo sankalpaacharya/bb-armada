@@ -488,11 +488,12 @@ describe("Armada thread list", () => {
     expect(within(rowOf(view.container, "b")!).queryByText("Beta")).toBeNull();
   });
 
-  it("picks a project from a list that opens inside the sidebar", async () => {
+  it("picks several projects from a list that opens inside the sidebar and stays open, and All projects clears them", async () => {
     const { view } = await render({
       threads: [
         thread("a", { title: "Alpha work", projectId: "proj_a" }),
         thread("b", { title: "Beta work", projectId: "proj_b" }),
+        thread("me", { title: "Mine", projectId: "proj_me" }),
       ],
     });
     await waitFor(() => expect(rowOf(view.container, "a")).not.toBeNull());
@@ -501,14 +502,37 @@ describe("Armada thread list", () => {
     );
     const list = screen.getByRole("listbox", { name: "Show threads from" });
     expect(view.container.contains(list)).toBe(true);
-    fireEvent.click(within(list).getByRole("option", { name: "Beta" }));
+    expect(list.getAttribute("aria-multiselectable")).toBe("true");
+
+    fireEvent.click(within(list).getByRole("option", { name: /^Beta/ }));
     await waitFor(() => expect(rowOf(view.container, "a")).toBeNull());
     expect(rowOf(view.container, "b")).not.toBeNull();
+    expect(rowOf(view.container, "me")).toBeNull();
+    expect(
+      screen.getByRole("listbox", { name: "Show threads from" }),
+    ).toBeTruthy();
+
+    fireEvent.click(within(list).getByRole("option", { name: /^Alpha/ }));
+    await waitFor(() => expect(rowOf(view.container, "a")).not.toBeNull());
+    expect(rowOf(view.container, "b")).not.toBeNull();
+    expect(rowOf(view.container, "me")).toBeNull();
+    expect(
+      within(list)
+        .getAllByRole("option")
+        .filter((option) => option.getAttribute("aria-selected") === "true")
+        .map((option) => option.textContent),
+    ).toEqual(["Alpha1", "Beta1"]);
+    expect(
+      screen.getByRole("button", { name: "Threads from Alpha +1" }),
+    ).toBeTruthy();
+
+    fireEvent.click(within(list).getByRole("option", { name: /^All projects/ }));
+    await waitFor(() => expect(rowOf(view.container, "me")).not.toBeNull());
     expect(
       screen.queryByRole("listbox", { name: "Show threads from" }),
     ).toBeNull();
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Threads from Beta" }),
+      screen.getByRole("button", { name: "Threads from All projects" }),
     );
   });
 

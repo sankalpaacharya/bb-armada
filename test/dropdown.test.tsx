@@ -22,8 +22,8 @@ function Harness({ onChange }: { onChange: (id: string) => void }) {
       <Dropdown
         label="Pick one"
         choices={CHOICES}
-        value={value}
-        onChange={(id) => {
+        isSelected={(id) => id === value}
+        onPick={(id) => {
           setValue(id);
           onChange(id);
         }}

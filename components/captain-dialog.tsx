@@ -318,8 +318,8 @@ export function CaptainDialog({
                   ? "has a captain"
                   : undefined,
               }))}
-              value={projectId}
-              onChange={setProjectId}
+              isSelected={(id) => id === projectId}
+              onPick={setProjectId}
               align="stretch"
               triggerClassName={`flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-left text-sm text-foreground ${FOCUS_RING}`}
               listClassName="max-h-48 overflow-y-auto"

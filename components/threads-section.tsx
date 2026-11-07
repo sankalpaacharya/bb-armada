@@ -7,7 +7,12 @@ import type {
 
 import type { ParkActions } from "@/hooks/use-park-actions";
 import type { ThreadEntry } from "@/lib/model";
-import { countByProject, type ThreadScope } from "@/lib/scope";
+import {
+  ALL_PROJECTS,
+  countByProject,
+  toggleScope,
+  type ThreadScope,
+} from "@/lib/scope";
 import { HEADER_ACTION, SECTION_TEXT } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import type { Choice } from "./choice-list";
@@ -47,8 +52,16 @@ export function ThreadsSection({
   onAdopt: (thread: PluginSidebarThread) => void;
 }) {
   const counts = useMemo(() => countByProject(entries), [entries]);
+  const chosenNames = scope.flatMap((id) => {
+    const name = projects.find((project) => project.id === id)?.name;
+    return name === undefined ? [] : [name];
+  });
   const scopeName =
-    projects.find((project) => project.id === scope)?.name ?? null;
+    chosenNames.length === 0
+      ? null
+      : chosenNames.length === 1
+        ? chosenNames[0]
+        : `${chosenNames[0]} +${chosenNames.length - 1}`;
   const choices: Choice<string | null>[] = [
     { id: null, label: "All projects", icon: "Layers", count: entries.length },
     ...projects.map((project) => ({
@@ -69,8 +82,14 @@ export function ThreadsSection({
             label="Show threads from"
             triggerLabel={`Threads from ${scopeName ?? "All projects"}`}
             choices={choices}
-            value={scope}
-            onChange={onScope}
+            isSelected={(id) =>
+              id === null ? scope.length === 0 : scope.includes(id)
+            }
+            onPick={(id) =>
+              onScope(id === null ? ALL_PROJECTS : toggleScope(scope, id))
+            }
+            multiselectable
+            keepOpen={(id) => id !== null}
             align="end"
             triggerClassName={cn(
               HEADER_ACTION,
@@ -96,7 +115,9 @@ export function ThreadsSection({
             ? "Nothing active. Inactive, snoozed and settled threads are below."
             : scopeName === null
               ? "No threads yet"
-              : `No threads in ${scopeName} yet.`}
+              : chosenNames.length === 1
+                ? `No threads in ${scopeName} yet.`
+                : "No threads in these projects yet."}
         </Note>
       ) : (
         <ul aria-label="Threads" className="m-0 flex flex-col gap-0.5 p-0">
@@ -105,7 +126,7 @@ export function ThreadsSection({
               key={entry.thread.id}
               entry={entry}
               active={entry.thread.id === activeThreadId}
-              showProject={scope === null}
+              showProject={scope.length !== 1}
               parkActions={parkActions}
               inline={[
                 ...(entry.adoptable
