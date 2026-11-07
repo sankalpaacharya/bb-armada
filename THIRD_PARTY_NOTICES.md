@@ -37,7 +37,7 @@ SOFTWARE.
 MIT License, Copyright (c) 2026 Michael Yong.
 
 The thread cards in `components/thread-row.tsx` (their markup, type scale,
-status slot, branch line and pull request colours) and `components/ui/select.tsx`
+status slot, branch line and pull request colours)
 are adapted from t3sidebar.
 
 Source: <https://github.com/SawyerHood/sawyer-plugins/tree/main/plugins/t3sidebar>

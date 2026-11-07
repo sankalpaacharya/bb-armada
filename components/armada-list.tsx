@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
 import { captainItems, makeCaptainItem } from "./captain-menu";
 import { CaptainTile } from "./captain-tile";
-import { ScopePicker } from "./scope-picker";
+import { ScopeList, ScopeTrigger, scopeLabel } from "./scope-picker";
 import { ThreadRow } from "./thread-row";
 
 const CAPTAIN_TOGGLES_KEY = "armada/captain-toggles";
@@ -132,6 +132,7 @@ export function ArmadaList({
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
   const [toggles, setToggle] = usePersistedMap(CAPTAIN_TOGGLES_KEY);
   const [storedScope, setScope] = useStoredScope();
+  const [scopeOpen, setScopeOpen] = useState(false);
   const [allWorkers, setAllWorkers] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -292,8 +293,20 @@ export function ArmadaList({
         </Note>
       )}
       <SectionHeader title="Threads">
-        <ScopePicker projects={pickable} scope={scope} onChange={setScope} />
+        <ScopeTrigger
+          label={scopeLabel(pickable, scope)}
+          open={scopeOpen}
+          onToggle={() => setScopeOpen((current) => !current)}
+        />
       </SectionHeader>
+      {scopeOpen ? (
+        <ScopeList
+          projects={pickable}
+          scope={scope}
+          onChange={setScope}
+          onClose={() => setScopeOpen(false)}
+        />
+      ) : null}
       {status === "loading" ? (
         <Note>Loading threads…</Note>
       ) : status === "error" && threads.length === 0 ? (

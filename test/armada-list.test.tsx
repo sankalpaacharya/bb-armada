@@ -257,6 +257,25 @@ describe("Armada thread list", () => {
     expect(within(rowOf(view.container, "b")!).queryByText("Beta")).toBeNull();
   });
 
+  it("picks a project from a list that opens inside the sidebar", async () => {
+    const { view } = await render({
+      threads: [
+        thread("a", { title: "Alpha work", projectId: "proj_a" }),
+        thread("b", { title: "Beta work", projectId: "proj_b" }),
+      ],
+    });
+    await waitFor(() => expect(rowOf(view.container, "a")).not.toBeNull());
+    fireEvent.click(
+      screen.getByRole("button", { name: "Threads from All projects" }),
+    );
+    const list = screen.getByRole("list", { name: "Show threads from" });
+    expect(view.container.contains(list)).toBe(true);
+    fireEvent.click(within(list).getByRole("button", { name: "Beta" }));
+    await waitFor(() => expect(rowOf(view.container, "a")).toBeNull());
+    expect(rowOf(view.container, "b")).not.toBeNull();
+    expect(screen.queryByRole("list", { name: "Show threads from" })).toBeNull();
+  });
+
   it("falls back to every project when the remembered one is gone", async () => {
     stored.set("armada/thread-scope", JSON.stringify("proj_gone"));
     const { view } = await render();
