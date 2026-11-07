@@ -100,7 +100,7 @@ describe("captain registry", () => {
     ).rejects.toThrow();
   });
 
-  it("drops stored records that no longer parse instead of failing the sidebar", async () => {
+  it("keeps a captain whose logo was retired and drops records that cannot be read", async () => {
     const { bb, list } = await load();
     await bb.storage.kv.set(REGISTRY_KEY, {
       version: 1,
@@ -110,6 +110,8 @@ describe("captain registry", () => {
         mismatched: { threadId: "other", logo: "flag", color: "rose", createdAt: "2026-01-01T00:00:00.000Z" },
       },
     });
-    expect(Object.keys((await list()).captains)).toEqual(["good"]);
+    const { captains } = await list();
+    expect(Object.keys(captains).sort()).toEqual(["bad", "good"]);
+    expect(captains["bad"]).toMatchObject({ logo: "compass", color: "rose" });
   });
 });
