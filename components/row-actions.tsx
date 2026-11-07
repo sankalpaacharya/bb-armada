@@ -10,14 +10,14 @@ const CLICKABLE_WHEN_SHOWN =
 /**
  * A row's actions, laid over its right end so they take no width at rest.
  * Hover (Tailwind gates it on hover-capable devices) fades them in; keyboard
- * focus shows them at once. The backdrop runs from clear to the row's fill,
- * so whatever sits under it fades out instead of colliding with the buttons.
+ * focus shows them at once. The backdrop is the row's own fill, so whatever
+ * sits under it is covered instead of colliding with the buttons.
  */
 export function RowActions({ actions }: { actions: readonly RowAction[] }) {
   return (
     <span
       className={cn(
-        "pointer-events-none absolute inset-y-0 right-0 flex items-center gap-0.5 bg-[linear-gradient(to_right,transparent,var(--row-fill)_1.25rem)] pl-6 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100",
+        "pointer-events-none absolute inset-y-0 right-0 flex items-center gap-0.5 bg-(--row-fill) pl-1.5 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100",
         "transition-opacity duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-focus-within/row:duration-0 motion-reduce:transition-none",
       )}
     >
