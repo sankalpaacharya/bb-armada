@@ -9,11 +9,12 @@ import {
 import { useArmadaModel } from "@/hooks/use-armada-model";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
 import type { CaptainEntry, ThreadEntry } from "@/lib/model";
-import { FOCUS_RING, SECTION_TITLE } from "@/lib/styles";
+import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age } from "./age";
 import { Summary } from "./captain-row";
 import { CaptainTile } from "./captain-tile";
+import { MemorySection } from "./memory-section";
 import { PlaceLine } from "./place-line";
 import { PullRequestNumber } from "./pull-request-number";
 import { Note } from "./section";
@@ -22,7 +23,6 @@ import { Icon } from "./ui/icon";
 
 type Open = (threadId: string) => void;
 
-const ROW = `flex w-full cursor-pointer rounded-md text-left hover:bg-accent/60 ${FOCUS_RING}`;
 const HEADER_BUTTON = `flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-2xs text-muted-foreground hover:bg-accent/60 hover:text-foreground ${FOCUS_RING}`;
 
 function WorkerChat({
@@ -92,7 +92,11 @@ function WorkerRow({
         type="button"
         aria-current={current ? "page" : undefined}
         onClick={() => onOpen(entry.thread.id)}
-        className={cn(ROW, "flex-col px-2 py-1", current && "bg-accent")}
+        className={cn(
+          PANEL_ROW,
+          "flex-col px-2 py-1",
+          current && "bg-accent",
+        )}
       >
         <span className="flex h-7 w-full items-center gap-2">
           <span className="grid size-4 shrink-0 place-items-center">
@@ -125,12 +129,15 @@ function WorkerRow({
 
 function CrewView({
   crew,
+  projectName,
   currentThreadId,
   onOpen,
   onOpenCaptain,
   onBack,
 }: {
   crew: Crew;
+  /** The captain's project, which names its memory folder. */
+  projectName: string | null;
   currentThreadId: string;
   onOpen: Open;
   onOpenCaptain: () => void;
@@ -197,6 +204,7 @@ function CrewView({
           </Group>
         </>
       )}
+      {projectName === null ? null : <MemorySection project={projectName} />}
     </div>
   );
 }
@@ -221,7 +229,7 @@ function CaptainPicker({
           <button
             type="button"
             onClick={() => onPick(entry.thread.id)}
-            className={cn(ROW, "h-11 items-center gap-2.5 px-2")}
+            className={cn(PANEL_ROW, "h-11 items-center gap-2.5 px-2")}
           >
             <CaptainTile avatar={entry.record.avatar} />
             <span className="flex min-w-0 flex-1 flex-col">
@@ -244,7 +252,7 @@ function CaptainPicker({
  * captain picked from the list when the thread has none.
  */
 export function CrewTab({ threadId }: ExperimentalThreadActionTabProps) {
-  const { status, threads, captains, model } = useArmadaModel();
+  const { status, threads, projects, captains, model } = useArmadaModel();
   const navigate = useBbNavigate();
   const [picked, setPicked] = useState<string | null>(null);
   const [chatId, setChatId] = useState<string | null>(null);
@@ -277,6 +285,11 @@ export function CrewTab({ threadId }: ExperimentalThreadActionTabProps) {
     body = (
       <CrewView
         crew={crew}
+        projectName={
+          projects.find(
+            (project) => project.id === crew.captain.thread.projectId,
+          )?.name ?? null
+        }
         currentThreadId={threadId}
         onOpen={setChatId}
         onOpenCaptain={() => navigate.toThread(crew.captain.thread.id)}

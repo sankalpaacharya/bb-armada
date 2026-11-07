@@ -3,6 +3,9 @@ export const FOCUS_RING =
 
 const ROW_HOVER = "hover:bg-sidebar-accent/60";
 
+/** A clickable row in the side panel, on the panel's accent, not the sidebar's. */
+export const PANEL_ROW = `flex w-full cursor-pointer rounded-md text-left hover:bg-accent/60 ${FOCUS_RING}`;
+
 export const rowFill = (active: boolean): string =>
   active ? "bg-sidebar-accent" : ROW_HOVER;
 
