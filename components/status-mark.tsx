@@ -22,12 +22,12 @@ function StatusMark({
   const glyph =
     row.glyph.kind === "grid" ? (
       <ShadeGrid label={row.word} className={row.tone} />
-    ) : row.glyph.kind === "dot" ? (
+    ) : row.glyph.kind === "word" ? (
       <span
-        role="img"
-        aria-label={row.word}
-        className={cn("size-[6px] shrink-0 rounded-full bg-current", row.tone)}
-      />
+        className={cn("shrink-0 text-2xs font-medium leading-none", row.tone)}
+      >
+        {row.word}
+      </span>
     ) : (
       <ThreadStatusGlyph indicator={row.glyph.indicator} size="compact" />
     );

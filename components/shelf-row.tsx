@@ -48,7 +48,7 @@ export function ShelfRow({
             {shortcut ?? (
               <span className="flex min-w-5 shrink-0 justify-end transition-opacity duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-focus-within/row:opacity-0 group-hover/row:opacity-0 motion-reduce:transition-none">
                 {entry.status !== null ? (
-                  <span className="grid size-4 place-items-center">
+                  <span className="grid h-4 min-w-4 place-items-center">
                     <StatusGlyph status={entry.status} />
                   </span>
                 ) : isSnoozed(entry) ? (

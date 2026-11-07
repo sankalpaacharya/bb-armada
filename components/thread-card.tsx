@@ -92,7 +92,7 @@ export function ThreadCard({
               </span>
               {title}
               {entry.status === null ? null : (
-                <span className="grid size-4 shrink-0 place-items-center">
+                <span className="grid h-4 min-w-4 shrink-0 place-items-center">
                   <StatusGlyph status={entry.status} />
                 </span>
               )}
