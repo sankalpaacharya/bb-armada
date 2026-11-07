@@ -992,11 +992,9 @@ describe("shelves", () => {
       ).toEqual({ threadId: "done", at: expect.any(Number) }),
     );
     await view.experimental_invalidateRpc(["parks"]);
-    await waitFor(() => expect(listOf(view.container, "done")).toBeNull());
+    await waitFor(() => expect(listOf(view.container, "done")).toBe("Settled"));
     expect(listOf(view.container, "other")).toBe("Threads");
     expect(screen.getByRole("region", { name: "Settled" })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /^Settled/ }));
     expect(listOf(view.container, "done")).toBe("Settled");
     fireEvent.click(
       within(rowOf(view.container, "done")!).getByRole("button", {
@@ -1054,8 +1052,8 @@ describe("shelves", () => {
         name: "Snooze until tomorrow",
       }),
     );
-    await waitFor(() => expect(listOf(view.container, "a")).toBeNull());
-    expect(listOf(view.container, "b")).toBeNull();
+    await waitFor(() => expect(listOf(view.container, "a")).toBe("Settled"));
+    expect(listOf(view.container, "b")).toBe("Snoozed");
     expect(screen.getByRole("region", { name: "Settled" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Snoozed" })).toBeTruthy();
   });
@@ -1124,14 +1122,13 @@ describe("shelves", () => {
       parks: [snoozedUntil("later", NOW + 2 * HOUR)],
     });
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /^Snoozed/ })).toBeTruthy(),
+      expect(screen.getByRole("region", { name: "Snoozed" })).toBeTruthy(),
     );
     expect(
       screen.getByText(
         "Nothing active. Inactive, snoozed and settled threads are below.",
       ),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^Snoozed/ }));
     expect(listOf(view.container, "later")).toBe("Snoozed");
     expect(
       within(rowOf(view.container, "later")!).getByText("2h"),
@@ -1143,7 +1140,26 @@ describe("shelves", () => {
     expect(listOf(view.container, "later")).toBe("Threads");
   });
 
-  it("shows Inactive and Settled collapsed with their counts, and settles an inactive row from its hover button", async () => {
+  it("shows a long shelf's first eight rows and offers the rest", async () => {
+    const ids = Array.from({ length: 10 }, (_, index) => `s${index}`);
+    await render({
+      threads: ids.map((id) => thread(id, { title: id })),
+      parks: ids.map((id) => settledAt(id, NOW)),
+    });
+    const rows = () =>
+      within(screen.getByRole("list", { name: "Settled" })).getAllByRole(
+        "listitem",
+      );
+    await waitFor(() => expect(rows()).toHaveLength(8));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show 2 more settled" }),
+    );
+    expect(rows()).toHaveLength(10);
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer settled" }));
+    expect(rows()).toHaveLength(8);
+  });
+
+  it("shows Inactive and Settled as quiet lists under the active one, and settles an inactive row from its hover button", async () => {
     vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
     const quiet = { createdAt: NOW - 9 * HOUR, updatedAt: NOW - 8 * HOUR };
     const { view } = await render({
@@ -1157,19 +1173,14 @@ describe("shelves", () => {
       settings: { inactiveAfterHours: 6 },
     });
     await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: /^Inactive/ }),
-      ).toBeTruthy(),
+      expect(screen.getByRole("region", { name: "Inactive" })).toBeTruthy(),
     );
     expect(listOf(view.container, "fresh")).toBe("Threads");
-    const toggle = (name: RegExp) => screen.getByRole("button", { name });
-    expect(toggle(/^Inactive/).textContent).toBe("Inactive2");
-    expect(toggle(/^Settled/).textContent).toBe("Settled1");
-    expect(toggle(/^Inactive/).getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByRole("list", { name: "Inactive" })).toBeNull();
-    expect(screen.queryByRole("list", { name: "Settled" })).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /^Inactive/ }));
+    const shelfRows = (name: string) =>
+      within(screen.getByRole("list", { name })).getAllByRole("listitem")
+        .length;
+    expect(shelfRows("Inactive")).toBe(2);
+    expect(shelfRows("Settled")).toBe(1);
     expect(listOf(view.container, "quiet")).toBe("Inactive");
     expect(
       within(rowOf(view.container, "quiet")!).getByText("8h"),
@@ -1179,7 +1190,7 @@ describe("shelves", () => {
         name: "Settle",
       }),
     );
-    await waitFor(() => expect(toggle(/^Settled/).textContent).toBe("Settled2"));
+    await waitFor(() => expect(shelfRows("Settled")).toBe(2));
     expect(
       view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
         ?.input,
@@ -1204,8 +1215,7 @@ describe("shelves", () => {
     await act(async () => {
       vi.advanceTimersByTime(2 * 60_000);
     });
-    expect(screen.getByRole("button", { name: /^Inactive/ })).toBeTruthy();
-    expect(listOf(view.container, "aging")).toBeNull();
+    expect(listOf(view.container, "aging")).toBe("Inactive");
   });
 
   it("asks the server to run auto-settle once when it opens", async () => {
@@ -1242,8 +1252,6 @@ describe("shelves", () => {
           ?.input,
       ).toEqual({ threadId: "quiet", at: expect.any(Number) }),
     );
-
-    fireEvent.click(screen.getByRole("button", { name: /^Settled/ }));
     fireEvent.contextMenu(anchorOf(view.container, "parked")!);
     fireEvent.click(
       await screen.findByRole("menuitem", { name: "Move to active" }),

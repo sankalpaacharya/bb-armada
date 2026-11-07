@@ -113,7 +113,7 @@ export function ArmadaList({
         onOpen={open}
         onDialog={setDialog}
       />
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col">
         <ThreadsSection
           entries={model.threads}
           scoped={scoped}
