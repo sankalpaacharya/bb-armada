@@ -1,4 +1,3 @@
-/** The tree fields the app's sidebar threads and the server's listed threads share. */
 export type TreeThread = {
   id: string;
   parentThreadId: string | null;

@@ -20,7 +20,7 @@ import type { OpenThread } from "./thread-link";
 export function ThreadsSection({
   entries,
   scoped,
-  parkedCount,
+  shelvedCount,
   projects,
   scope,
   onScope,
@@ -34,8 +34,8 @@ export function ThreadsSection({
   entries: readonly ThreadEntry[];
   /** The active entries within the scope. */
   scoped: readonly ThreadEntry[];
-  /** Parked entries within the scope, so an empty list can say where they went. */
-  parkedCount: number;
+  /** Shelved entries within the scope, so an empty list can say where they went. */
+  shelvedCount: number;
   /** Pickable projects, in picker order. */
   projects: readonly PluginSidebarProject[];
   scope: ThreadScope;
@@ -136,8 +136,8 @@ export function ThreadsSection({
         <Note>Could not load threads</Note>
       ) : scoped.length === 0 ? (
         <Note>
-          {parkedCount > 0
-            ? "Nothing active. Settled and snoozed threads are below."
+          {shelvedCount > 0
+            ? "Nothing active. Inactive, snoozed and settled threads are below."
             : scopeName === null
               ? "No threads yet"
               : `No threads in ${scopeName} yet.`}

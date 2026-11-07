@@ -2,16 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import {
   experimental_useSidebarThreads,
   useBbNavigate,
+  useSettings,
   type PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
 
 import { useArrowKeyRows } from "@/hooks/use-arrow-key-rows";
 import { useCaptains } from "@/hooks/use-captains";
-import { useParkActions, usePruneParks } from "@/hooks/use-park-actions";
+import {
+  useAutoSettleOnMount,
+  useParkActions,
+  usePruneParks,
+} from "@/hooks/use-park-actions";
 import { useParks } from "@/hooks/use-parks";
 import { useStoredState } from "@/hooks/use-stored-state";
 import { useWakeTime } from "@/lib/clock";
-import { wakesOf } from "@/lib/lifecycle";
+import { inactiveWakesOf, wakesOf } from "@/lib/lifecycle";
 import { buildArmada } from "@/lib/model";
 import {
   parseScope,
@@ -19,6 +24,7 @@ import {
   resolveScope,
   scopeThreads,
 } from "@/lib/scope";
+import { parseSettings } from "@/lib/settings";
 import { parseBooleanMap, removeStored } from "@/lib/storage";
 import type { CaptainRecord } from "@/lib/captains";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
@@ -42,6 +48,7 @@ export function ArmadaList({
   const captains = useCaptains();
   const parks = useParks();
   const parkActions = useParkActions();
+  const { inactiveAfterMs } = parseSettings(useSettings().values);
   const navigate = useBbNavigate();
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
   const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, null);
@@ -53,12 +60,17 @@ export function ArmadaList({
   const rows = useArrowKeyRows();
 
   const records = captains.status === "ready" ? captains.records : NO_CAPTAINS;
-  const wakeTime = useWakeTime(wakesOf(parks));
+  const wakeTime = useWakeTime([
+    ...wakesOf(parks),
+    ...inactiveWakesOf(threads, inactiveAfterMs),
+  ]);
   const model = useMemo(
-    () => buildArmada(threads, projects, records, parks, wakeTime),
-    [threads, projects, records, parks, wakeTime],
+    () =>
+      buildArmada(threads, projects, records, parks, wakeTime, inactiveAfterMs),
+    [threads, projects, records, parks, wakeTime, inactiveAfterMs],
   );
   usePruneParks(model.expiredParks);
+  useAutoSettleOnMount();
   useEffect(() => RETIRED_KEYS.forEach(removeStored), []);
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
   const scope = resolveScope(storedScope, pickable);
@@ -66,6 +78,7 @@ export function ArmadaList({
     () => scopeThreads(model.threads, scope),
     [model, scope],
   );
+  const inactive = scopeThreads(model.inactive, scope);
   const snoozed = scopeThreads(model.snoozed, scope);
   const settled = scopeThreads(model.settled, scope);
 
@@ -74,7 +87,7 @@ export function ArmadaList({
     onNavigate();
   };
 
-  const shelf = (name: "snoozed" | "settled") => ({
+  const shelf = (name: "inactive" | "snoozed" | "settled") => ({
     expanded: shelves[name] ?? false,
     onToggle: () =>
       setShelves({ ...shelves, [name]: !(shelves[name] ?? false) }),
@@ -99,7 +112,7 @@ export function ArmadaList({
       <ThreadsSection
         entries={model.threads}
         scoped={scoped}
-        parkedCount={snoozed.length + settled.length}
+        shelvedCount={inactive.length + snoozed.length + settled.length}
         projects={pickable}
         scope={scope}
         onScope={setScope}
@@ -108,6 +121,11 @@ export function ArmadaList({
         parkActions={parkActions}
         onOpen={open}
         onAdopt={(thread) => setDialog({ kind: "adopt", thread })}
+      />
+      <ShelfSection
+        title="Inactive"
+        entries={inactive}
+        {...shelf("inactive")}
       />
       <ShelfSection title="Snoozed" entries={snoozed} {...shelf("snoozed")} />
       <ShelfSection title="Settled" entries={settled} {...shelf("settled")} />

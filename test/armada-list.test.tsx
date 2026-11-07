@@ -70,6 +70,7 @@ async function render(
     activeThreadId?: string | null;
     rpc?: Record<string, (input: never) => unknown>;
     sdk?: Record<string, unknown>;
+    settings?: Record<string, number | boolean>;
   } = {},
 ) {
   const loaded = await loadPluginApp(app);
@@ -96,9 +97,11 @@ async function render(
       rpc: {
         captains_list: () => options.registry ?? registry("cap"),
         parks_list: () => options.parks ?? [],
+        parks_evaluate: () => ({ changed: [] }),
         ...options.rpc,
       } as never,
       sdk: options.sdk as never,
+      settings: options.settings ?? { inactiveAfterHours: 0 },
     },
   );
   return { view, onNavigate };
@@ -969,9 +972,10 @@ describe("shelves", () => {
           parks = [park];
           return park;
         },
-        parks_unpark: ({ threadId }: { threadId: string }) => {
-          parks = parks.filter((park) => park.threadId !== threadId);
-          return null;
+        parks_keep: ({ threadId, at }: { threadId: string; at: number }) => {
+          const park: ParkRecord = { threadId, kind: "kept", at };
+          parks = [park];
+          return park;
         },
       },
     });
@@ -1001,9 +1005,9 @@ describe("shelves", () => {
     );
     await waitFor(() => expect(listOf(view.container, "done")).toBe("Threads"));
     expect(
-      view.inspection.rpcCalls.find((call) => call.method === "parks_unpark")
+      view.inspection.rpcCalls.find((call) => call.method === "parks_keep")
         ?.input,
-    ).toEqual({ threadId: "done" });
+    ).toEqual({ threadId: "done", at: expect.any(Number) });
   });
 
   it("moves a settled or snoozed card off the list before the server answers", async () => {
@@ -1102,7 +1106,7 @@ describe("shelves", () => {
     );
     expect(
       screen.getByText(
-        "Nothing active. Settled and snoozed threads are below.",
+        "Nothing active. Inactive, snoozed and settled threads are below.",
       ),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show snoozed" }));
@@ -1115,6 +1119,82 @@ describe("shelves", () => {
       vi.advanceTimersByTime(2 * HOUR + 100);
     });
     expect(listOf(view.container, "later")).toBe("Threads");
+  });
+
+  it("shows Inactive and Settled collapsed with their counts, and settles an inactive row from its hover button", async () => {
+    vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
+    const quiet = { createdAt: NOW - 9 * HOUR, updatedAt: NOW - 8 * HOUR };
+    const { view } = await render({
+      threads: [
+        thread("fresh", { title: "Fresh", updatedAt: NOW }),
+        thread("quiet", { title: "Quiet", ...quiet }),
+        thread("quieter", { title: "Quieter", ...quiet }),
+        thread("done", { title: "Done", ...quiet }),
+      ],
+      parks: [settledAt("done", NOW - HOUR, "auto")],
+      settings: { inactiveAfterHours: 6 },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Show inactive" }),
+      ).toBeTruthy(),
+    );
+    expect(listOf(view.container, "fresh")).toBe("Threads");
+    const count = (name: string) =>
+      screen.getByRole("heading", { level: 2, name }).textContent;
+    expect(count("Inactive")).toBe("Inactive2");
+    expect(count("Settled")).toBe("Settled1");
+    expect(screen.queryByRole("list", { name: "Inactive" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Settled" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show inactive" }));
+    expect(listOf(view.container, "quiet")).toBe("Inactive");
+    expect(
+      within(rowOf(view.container, "quiet")!).getByText("8h"),
+    ).toBeTruthy();
+    fireEvent.click(
+      within(rowOf(view.container, "quiet")!).getByRole("button", {
+        name: "Settle",
+      }),
+    );
+    await waitFor(() => expect(count("Settled")).toBe("Settled2"));
+    expect(
+      view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
+        ?.input,
+    ).toEqual({ threadId: "quiet", at: expect.any(Number) });
+  });
+
+  it("moves a thread to Inactive when it crosses the threshold, with nothing else changing", async () => {
+    vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
+    const { view } = await render({
+      threads: [
+        thread("aging", {
+          title: "Aging",
+          createdAt: NOW - 7 * HOUR,
+          updatedAt: NOW - 6 * HOUR + 60_000,
+        }),
+      ],
+      settings: { inactiveAfterHours: 6 },
+    });
+    await waitFor(() =>
+      expect(listOf(view.container, "aging")).toBe("Threads"),
+    );
+    await act(async () => {
+      vi.advanceTimersByTime(2 * 60_000);
+    });
+    expect(screen.getByRole("button", { name: "Show inactive" })).toBeTruthy();
+    expect(listOf(view.container, "aging")).toBeNull();
+  });
+
+  it("asks the server to run auto-settle once when it opens", async () => {
+    const { view } = await render();
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.filter(
+          (call) => call.method === "parks_evaluate",
+        ),
+      ).toHaveLength(1),
+    );
   });
 
   it("puts Settle, the snooze presets and Move to active in the thread menu", async () => {
@@ -1148,9 +1228,9 @@ describe("shelves", () => {
     );
     await waitFor(() =>
       expect(
-        view.inspection.rpcCalls.find((call) => call.method === "parks_unpark")
+        view.inspection.rpcCalls.find((call) => call.method === "parks_keep")
           ?.input,
-      ).toEqual({ threadId: "parked" }),
+      ).toEqual({ threadId: "parked", at: expect.any(Number) }),
     );
   });
 });

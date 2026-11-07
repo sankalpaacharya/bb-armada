@@ -29,7 +29,7 @@ const KEYS_PER_CALL = 25;
 const CONCURRENT_CALLS = 4;
 const TURN_IN_FLIGHT = new Set(["active", "pending", "starting", "stopping"]);
 
-/** Every thread the list shows: visible, not archived, not deleted. */
+/** The same threads the list folds, so a card here is a card there. */
 async function loadThreads(bb: BbPluginApi): Promise<ListedThread[]> {
   const byId = new Map<string, ListedThread>();
   for (let offset = 0; ; offset += PAGE_SIZE) {

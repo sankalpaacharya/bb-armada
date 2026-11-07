@@ -1,25 +1,40 @@
 import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
-import type { Park } from "@/lib/lifecycle";
-import type { ParkedEntry } from "@/lib/model";
+import { isSettled, isSnoozed, type ThreadEntry } from "@/lib/model";
 import { FOCUS_RING } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age, WakesIn } from "./age";
 import { parkItems } from "./menu-items";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
-/** A parked thread as one quiet line: its title, then when it wakes or how long ago it settled. */
+/**
+ * A shelved thread as one quiet line: its title, then when it wakes, how long
+ * ago it settled, or how long it has been quiet. Hover offers Settle on an
+ * inactive row and Move to active on a parked one.
+ */
 export function ShelfRow({
   entry,
   active,
   actions,
   onOpen,
 }: {
-  entry: ParkedEntry<Park>;
+  entry: ThreadEntry;
   active: boolean;
   actions: ParkActions;
   onOpen: OpenThread;
 }) {
+  const hover =
+    entry.shelf === "inactive"
+      ? {
+          label: "Settle",
+          icon: "Check",
+          run: () => actions.settle(entry.thread.id),
+        }
+      : {
+          label: "Move to active",
+          icon: "ArrowTurnBackward",
+          run: () => actions.keep(entry.thread.id),
+        };
   return (
     <li className="list-none">
       <ThreadLink
@@ -38,27 +53,31 @@ export function ShelfRow({
             <span className="relative flex w-7 shrink-0 items-center justify-end">
               <span className="flex items-center group-hover/row:invisible group-focus-within/row:invisible">
                 {shortcut ??
-                  (entry.park.kind === "snoozed" ? (
+                  (isSnoozed(entry) ? (
                     <WakesIn until={entry.park.until} />
                   ) : (
-                    <Age at={entry.park.at} />
+                    <Age
+                      at={
+                        isSettled(entry) ? entry.park.at : entry.lastActivityAt
+                      }
+                    />
                   ))}
               </span>
               <button
                 type="button"
-                aria-label="Move to active"
-                title="Move to active"
+                aria-label={hover.label}
+                title={hover.label}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  actions.unpark(entry.thread.id);
+                  hover.run();
                 }}
                 className={cn(
                   "pointer-events-auto absolute top-1/2 right-0 hidden size-5 -translate-y-1/2 cursor-pointer place-items-center rounded text-muted-foreground group-hover/row:grid group-focus-within/row:grid hover:bg-state-hover hover:text-foreground",
                   FOCUS_RING,
                 )}
               >
-                <Icon name="ArrowTurnBackward" className="size-3.5" />
+                <Icon name={hover.icon} className="size-3.5" />
               </button>
             </span>
           </>

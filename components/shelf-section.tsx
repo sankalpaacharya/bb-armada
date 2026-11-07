@@ -1,14 +1,13 @@
 import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
-import type { Park } from "@/lib/lifecycle";
-import type { ParkedEntry } from "@/lib/model";
+import type { ThreadEntry } from "@/lib/model";
 import { HEADER_ACTION } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { SectionHeader } from "./section";
 import { ShelfRow } from "./shelf-row";
 import type { OpenThread } from "./thread-link";
 
-/** A collapsible shelf of parked threads. Renders nothing while it is empty. */
+/** A collapsible shelf of threads off the active list. Renders nothing while it is empty. */
 export function ShelfSection({
   title,
   entries,
@@ -18,8 +17,8 @@ export function ShelfSection({
   actions,
   onOpen,
 }: {
-  title: "Snoozed" | "Settled";
-  entries: readonly ParkedEntry<Park>[];
+  title: "Inactive" | "Snoozed" | "Settled";
+  entries: readonly ThreadEntry[];
   expanded: boolean;
   onToggle: () => void;
   activeThreadId: string | null;

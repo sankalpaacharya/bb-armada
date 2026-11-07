@@ -26,7 +26,7 @@ export type Park = z.infer<(typeof parkVariants)[number]>;
 export type Settle = Extract<Park, { kind: "settled" }>;
 export type Snooze = Extract<Park, { kind: "snoozed" }>;
 
-export type Shelf = "active" | "snoozed" | "settled";
+export type Shelf = "active" | "inactive" | "snoozed" | "settled";
 
 export const PARK_KEY_PREFIX = "park:";
 export const parkKey = (threadId: string): string =>
@@ -52,39 +52,71 @@ export function parseStoredPark(raw: unknown): ParkRecord | null {
 export type ShelfSignals = {
   /** False while anything in the thread's tree is working, queued or needs you. */
   parkable: boolean;
+  pinned: boolean;
   latestAttentionAt: number;
+  lastActivityAt: number;
 };
 
 /**
  * A park that can never apply again: attention came after it, or its snooze
- * timer passed. Deleting it changes nothing the list shows.
+ * timer passed. An auto settle also ends on any activity after it, as the
+ * server job would unsettle it on its next run. Deleting an expired park
+ * changes nothing the list shows.
  */
 export function isExpired(
   park: Park,
-  latestAttentionAt: number,
+  signals: Pick<ShelfSignals, "latestAttentionAt" | "lastActivityAt">,
   now: number,
 ): boolean {
-  if (park.kind === "kept") return false;
-  return (
-    latestAttentionAt > park.at ||
-    (park.kind === "snoozed" && park.until <= now)
-  );
+  switch (park.kind) {
+    case "kept":
+      return false;
+    case "settled":
+      return (
+        (park.by === "auto"
+          ? signals.lastActivityAt
+          : signals.latestAttentionAt) > park.at
+      );
+    case "snoozed":
+      return signals.latestAttentionAt > park.at || park.until <= now;
+  }
 }
 
 /**
  * Live work and a raised hand always win, so a parked thread that starts
  * working or asks a question comes straight back. A snooze wakes on its
  * timer or on attention after it was set; a settle returns on new attention.
+ * Anything else that has been quiet for `inactiveAfterMs` is inactive, unless
+ * it is pinned; null turns Inactive off.
  */
 export function resolveShelf(
   park: Park | undefined,
   signals: ShelfSignals,
   now: number,
+  inactiveAfterMs: number | null,
 ): Shelf {
-  if (park === undefined || park.kind === "kept" || !signals.parkable)
-    return "active";
-  return isExpired(park, signals.latestAttentionAt, now) ? "active" : park.kind;
+  if (!signals.parkable) return "active";
+  if (
+    park !== undefined &&
+    park.kind !== "kept" &&
+    !isExpired(park, signals, now)
+  )
+    return park.kind;
+  return !signals.pinned &&
+    inactiveAfterMs !== null &&
+    signals.lastActivityAt <= now - inactiveAfterMs
+    ? "inactive"
+    : "active";
 }
+
+/** When each thread would cross into Inactive, for the clock that wakes the model. */
+export const inactiveWakesOf = (
+  threads: readonly ActivityTimes[],
+  inactiveAfterMs: number | null,
+): number[] =>
+  inactiveAfterMs === null
+    ? []
+    : threads.map((thread) => lastActivityOf(thread) + inactiveAfterMs);
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -138,11 +170,13 @@ export const wakesOf = (parks: readonly Park[]): number[] =>
 
 const DAY = 24 * HOUR;
 
-export const lastActivityOf = (thread: {
+export type ActivityTimes = {
   createdAt: number;
   updatedAt: number;
   latestAttentionAt: number;
-}): number =>
+};
+
+export const lastActivityOf = (thread: ActivityTimes): number =>
   Math.max(thread.createdAt, thread.updatedAt, thread.latestAttentionAt);
 
 /** A card's pull request as auto-settle reads it; `unknown` when it could not be read. */
@@ -188,7 +222,6 @@ export function cannotAutoSettle(
   );
 }
 
-/** Only a card the job could settle or unsettle needs its pull request read. */
 export const needsPullRequest = (
   park: Park | null,
   thread: AutoSettleThread,

@@ -7,9 +7,11 @@ import type { Avatar, CaptainRecord } from "./captains";
 import { parentIdOf, threadForest } from "./forest";
 import {
   isExpired,
+  lastActivityOf,
   resolveShelf,
   type Park,
   type ParkRecord,
+  type Settle,
   type Shelf,
   type Snooze,
 } from "./lifecycle";
@@ -31,6 +33,8 @@ type Fold = {
   parkable: boolean;
   activityAt: number;
   latestAttentionAt: number;
+  /** The newest creation, change or attention in the tree, which ages a card into Inactive. */
+  lastActivityAt: number;
 };
 
 /** The captain a card was launched by, as its card shows it. */
@@ -65,8 +69,9 @@ export type CaptainEntry = Fold & {
 export type ArmadaModel = {
   captains: CaptainEntry[];
   threads: ThreadEntry[];
+  inactive: ThreadEntry[];
   snoozed: ParkedEntry<Snooze>[];
-  settled: ParkedEntry<Extract<Park, { kind: "settled" }>>[];
+  settled: ParkedEntry<Settle>[];
   /** Threads whose stored park can never apply again, to delete. */
   expiredParks: string[];
 };
@@ -76,6 +81,7 @@ function fold(threads: readonly PluginSidebarThread[]): Fold {
   let parkable = true;
   let activityAt = 0;
   let latestAttentionAt = 0;
+  let lastActivityAt = 0;
   for (const thread of threads) {
     for (const signal of signalsOf(thread)) {
       status = strongerStatus(status, signal);
@@ -83,8 +89,9 @@ function fold(threads: readonly PluginSidebarThread[]): Fold {
     }
     activityAt = Math.max(activityAt, thread.updatedAt);
     latestAttentionAt = Math.max(latestAttentionAt, thread.latestAttentionAt);
+    lastActivityAt = Math.max(lastActivityAt, lastActivityOf(thread));
   }
-  return { status, parkable, activityAt, latestAttentionAt };
+  return { status, parkable, activityAt, latestAttentionAt, lastActivityAt };
 }
 
 function pinOrder(a: PluginSidebarThread, b: PluginSidebarThread): number {
@@ -118,13 +125,11 @@ function countStatuses(threads: readonly PluginSidebarThread[]): CaptainCounts {
   return counts;
 }
 
-function isSnoozed(entry: ThreadEntry): entry is ParkedEntry<Snooze> {
+export function isSnoozed(entry: ThreadEntry): entry is ParkedEntry<Snooze> {
   return entry.shelf === "snoozed" && entry.park?.kind === "snoozed";
 }
 
-function isSettled(
-  entry: ThreadEntry,
-): entry is ParkedEntry<Extract<Park, { kind: "settled" }>> {
+export function isSettled(entry: ThreadEntry): entry is ParkedEntry<Settle> {
   return entry.shelf === "settled" && entry.park?.kind === "settled";
 }
 
@@ -134,6 +139,7 @@ export function buildArmada(
   records: readonly CaptainRecord[],
   parks: readonly ParkRecord[],
   now: number,
+  inactiveAfterMs: number | null,
 ): ArmadaModel {
   const visible = threads.filter(
     (thread) => !thread.isHidden && !thread.isArchived,
@@ -159,13 +165,12 @@ export function buildArmada(
       { threadId: thread.id, name: thread.displayTitle, avatar: record.avatar },
     ]),
   );
-  const parked: ThreadEntry[] = [];
   const expiredParks: string[] = [];
 
   const entryOf = (thread: PluginSidebarThread): ThreadEntry => {
     const folded = fold([thread, ...subtreeOf(thread.id)]);
     const park = parkOf.get(thread.id) ?? null;
-    if (park !== null && isExpired(park, folded.latestAttentionAt, now))
+    if (park !== null && isExpired(park, folded, now))
       expiredParks.push(thread.id);
     const parentId = parentIdOf(thread);
     const captain =
@@ -176,7 +181,12 @@ export function buildArmada(
       captain,
       adoptable: captain === null,
       park,
-      shelf: resolveShelf(park ?? undefined, folded, now),
+      shelf: resolveShelf(
+        park ?? undefined,
+        { ...folded, pinned: thread.isPinned },
+        now,
+        inactiveAfterMs,
+      ),
       ...folded,
     };
   };
@@ -193,17 +203,18 @@ export function buildArmada(
     );
 
   const entries = roots.map(entryOf);
-  for (const entry of entries) if (entry.shelf !== "active") parked.push(entry);
+  const on = (shelf: Shelf) => entries.filter((entry) => entry.shelf === shelf);
 
   return {
     captains,
-    threads: entries
-      .filter((entry) => entry.shelf === "active")
-      .sort(entryOrder),
-    snoozed: parked
+    threads: on("active").sort(entryOrder),
+    inactive: on("inactive").sort(
+      (a, b) => b.lastActivityAt - a.lastActivityAt,
+    ),
+    snoozed: entries
       .filter(isSnoozed)
       .sort((a, b) => a.park.until - b.park.until),
-    settled: parked.filter(isSettled).sort((a, b) => b.park.at - a.park.at),
+    settled: entries.filter(isSettled).sort((a, b) => b.park.at - a.park.at),
     expiredParks,
   };
 }

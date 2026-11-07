@@ -13,7 +13,8 @@ const build = (
   threads: readonly PluginSidebarThread[],
   captains: readonly CaptainRecord[],
   parks: readonly ParkRecord[] = [],
-) => buildArmada(threads, projects, captains, parks, NOW);
+  inactiveAfterMs: number | null = null,
+) => buildArmada(threads, projects, captains, parks, NOW, inactiveAfterMs);
 
 function registryOf(
   ...ids: [id: string, createdAt?: string][]
@@ -415,5 +416,48 @@ describe("shelves", () => {
     const model = build([thread("here")], none, [settledAt("gone", NOW)]);
     expect(threadIds(model)).toEqual(["here"]);
     expect(model.settled).toEqual([]);
+  });
+});
+
+describe("the Inactive shelf", () => {
+  const SIX_HOURS = 6 * HOUR;
+  const old = { createdAt: NOW - 9 * HOUR, updatedAt: NOW - 8 * HOUR };
+
+  it("shelves quiet cards newest first, and leaves pinned, live and recent ones active", () => {
+    const threads = [
+      thread("older", { ...old, updatedAt: NOW - 9 * HOUR }),
+      thread("old", old),
+      thread("pinned", { ...old, isPinned: true, pinnedAt: 1 }),
+      thread("busy", { ...old, ...busy }),
+      thread("recent"),
+    ];
+    const model = build(threads, none, [], SIX_HOURS);
+    expect(idsOf(model.inactive)).toEqual(["old", "older"]);
+    expect(threadIds(model).sort()).toEqual(["busy", "pinned", "recent"]);
+  });
+
+  it("ages a card by the newest activity anywhere in its tree", () => {
+    const threads = [
+      thread("root", old),
+      thread("child", { parentThreadId: "root" }),
+    ];
+    expect(idsOf(build(threads, none, [], SIX_HOURS).inactive)).toEqual([]);
+  });
+
+  it("never shelves a captain, and ages its workers as their own cards", () => {
+    const threads = [
+      thread("cap", old),
+      thread("worker", { ...old, parentThreadId: "cap" }),
+    ];
+    const model = build(threads, registryOf(["cap"]), [], SIX_HOURS);
+    expect(idsOf(model.inactive)).toEqual(["worker"]);
+    expect(model.captains.map((captain) => captain.thread.id)).toEqual(["cap"]);
+  });
+
+  it("returns an auto-settled card to the list on new activity and marks the park to delete", () => {
+    const parks = [settledAt("back", NOW - 2 * HOUR, "auto")];
+    const model = build([thread("back")], none, parks, SIX_HOURS);
+    expect(threadIds(model)).toEqual(["back"]);
+    expect(model.expiredParks).toEqual(["back"]);
   });
 });
