@@ -10,11 +10,17 @@ import { cn } from "@/lib/utils";
 
 const NO_KEYS: readonly string[] = [];
 
-const ATTENTION_TONE: Record<PrAttention, string> = {
-  none: "text-muted-foreground",
+const STATE = {
+  draft: { word: "Draft", tone: "text-muted-foreground" },
+  open: { word: "Open", tone: "text-success-foreground" },
+  merged: { word: "Merged", tone: "text-[color:var(--pr-merged)]" },
+  closed: { word: "Closed", tone: "text-destructive-text" },
+} as const;
+
+/** An open PR's attention outranks its state colour: failing checks or conflicts read red. */
+const ATTENTION_TONE: Partial<Record<PrAttention, string>> = {
   checks_failed: "text-destructive-text",
   conflicts: "text-destructive-text",
-  ready_to_merge: "text-success-foreground",
 };
 
 export function PullRequestNumber({
@@ -35,18 +41,19 @@ export function PullRequestNumber({
   const row = environmentId === null ? undefined : data?.[environmentId];
   if (row?.outcome !== "available") return null;
   const { pullRequest } = row;
+  const state = STATE[pullRequest.state];
   return (
     <a
       href={pullRequest.url}
       target="_blank"
       rel="noreferrer"
       onClick={(event) => event.stopPropagation()}
-      title={pullRequest.title}
+      title={`${state.word} · #${pullRequest.number} ${pullRequest.title}`}
       className={cn(
         "pointer-events-auto relative shrink-0 font-mono hover:underline",
-        pullRequest.state === "merged"
-          ? "text-[color:var(--pr-merged)]"
-          : ATTENTION_TONE[pullRequest.attention],
+        (pullRequest.state === "open"
+          ? ATTENTION_TONE[pullRequest.attention]
+          : undefined) ?? state.tone,
       )}
     >
       #{pullRequest.number}
