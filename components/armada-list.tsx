@@ -18,24 +18,27 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCaptainRegistry } from "@/hooks/use-captain-registry";
-import {
-  buildArmada,
-  pickableProjects,
-  type CaptainEntry,
-  type ProjectGroup,
-} from "@/lib/model";
+import { withoutLeadingEmoji } from "@/lib/captain-text";
+import { buildArmada, pickableProjects, type CaptainEntry } from "@/lib/model";
 import type { rpcContract } from "@/lib/rpc";
-import { laneOf } from "@/lib/status";
+import {
+  parseScope,
+  resolveScope,
+  scopeThreads,
+  type ThreadScope,
+} from "@/lib/scope";
+import { isLive, statusOf } from "@/lib/status";
 import { parseBooleanMap, readStored, writeStored } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
 import { captainItems, makeCaptainItem } from "./captain-menu";
 import { CaptainTile } from "./captain-tile";
-import { LaneGlyph } from "./lane-glyph";
+import { ScopePicker } from "./scope-picker";
 import { ThreadRow } from "./thread-row";
 
-const COLLAPSED_GROUPS_KEY = "armada/collapsed-groups";
 const CAPTAIN_TOGGLES_KEY = "armada/captain-toggles";
+const THREAD_SCOPE_KEY = "armada/thread-scope";
+const WORKER_PREVIEW = 5;
 
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
@@ -59,6 +62,17 @@ function usePersistedMap(
   return [map, set];
 }
 
+function useStoredScope(): [ThreadScope, (scope: ThreadScope) => void] {
+  const [scope, setScope] = useState(() =>
+    readStored<ThreadScope>(THREAD_SCOPE_KEY, parseScope, null),
+  );
+  const set = (next: ThreadScope) => {
+    setScope(next);
+    writeStored(THREAD_SCOPE_KEY, JSON.stringify(next));
+  };
+  return [scope, set];
+}
+
 function SectionHeader({
   title,
   children,
@@ -67,32 +81,27 @@ function SectionHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex h-7 items-center justify-between px-2 pt-2">
-      <h2 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <h2 className="flex items-center gap-2 px-2.5 pt-3 pb-1 first:pt-1">
+      <span className="text-2xs font-medium text-muted-foreground/70">
         {title}
-      </h2>
+      </span>
+      <span className="h-px flex-1 bg-sidebar-border" />
       {children}
-    </div>
+    </h2>
   );
 }
 
-function Note({ children }: { children: ReactNode }) {
-  return <p className="px-2 py-2 text-xs text-muted-foreground">{children}</p>;
-}
-
-function captainDetail(
-  entry: CaptainEntry,
-  projectName: string | null,
-): ReactNode {
-  const parts: string[] = [];
-  if (entry.counts.working > 0) parts.push(`${entry.counts.working} working`);
-  if (entry.counts.attention > 0)
-    parts.push(`${entry.counts.attention} needs you`);
-  const text = parts.length > 0 ? parts.join(" · ") : (projectName ?? "");
-  return text === "" ? null : (
-    <span className="block truncate text-[11.5px] text-muted-foreground">
-      {text}
-    </span>
+function Note({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <p className={cn("px-2.5 py-1.5 text-sm text-muted-foreground", className)}>
+      {children}
+    </p>
   );
 }
 
@@ -119,8 +128,11 @@ export function ArmadaList({
   const navigate = useBbNavigate();
   const now = useNow(30_000);
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
-  const [collapsed, setCollapsed] = usePersistedMap(COLLAPSED_GROUPS_KEY);
   const [toggles, setToggle] = usePersistedMap(CAPTAIN_TOGGLES_KEY);
+  const [storedScope, setScope] = useStoredScope();
+  const [allWorkers, setAllWorkers] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const listRef = useRef<HTMLDivElement>(null);
 
   const model = useMemo(
@@ -128,8 +140,13 @@ export function ArmadaList({
     [threads, projects, registry],
   );
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
-  const projectName = (projectId: string) =>
-    projects.find((project) => project.id === projectId)?.name ?? null;
+  const scope = resolveScope(storedScope, projects);
+  const scoped = useMemo(
+    () => scopeThreads(model.threads, scope),
+    [model.threads, scope],
+  );
+  const scopeName =
+    projects.find((project) => project.id === scope)?.name ?? null;
 
   const open = (threadId: string, split: boolean) => {
     navigate.toThread(threadId, { split });
@@ -155,36 +172,31 @@ export function ArmadaList({
     focusRow(listRef.current, event.target, event.key === "ArrowDown" ? 1 : -1);
   };
 
-  const newCaptain = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      aria-label="New captain"
-      className="size-6 text-muted-foreground"
-      onClick={() => setDialog({ kind: "create" })}
-    >
-      <Icon name="Plus" className="size-3.5" />
-    </Button>
-  );
-
   const renderCaptain = (entry: CaptainEntry) => {
     const { thread, record } = entry;
+    const title = withoutLeadingEmoji(thread.displayTitle);
     const hasWorkers = entry.workers.length > 0;
     const isOpen =
       toggles[thread.id] ??
-      entry.workers.some((worker) => laneOf(worker) !== null);
+      entry.workers.some((worker) => isLive(statusOf(worker)));
     const label = isOpen ? "Hide workers" : "Show workers";
+    const showAll = allWorkers.has(thread.id);
+    const workers = showAll
+      ? entry.workers
+      : entry.workers.slice(0, WORKER_PREVIEW);
+    const hidden = entry.workers.length - workers.length;
     return (
       <Fragment key={thread.id}>
         <ThreadRow
           thread={thread}
           kind="captain"
-          lane={entry.lane}
+          status={entry.status}
           activityAt={thread.updatedAt}
           now={now}
           active={thread.id === activeThreadId}
-          before={
+          title={title}
+          avatar={<CaptainTile logo={record.logo} color={record.color} />}
+          toggle={
             hasWorkers ? (
               <button
                 type="button"
@@ -192,7 +204,7 @@ export function ArmadaList({
                 aria-label={label}
                 title={label}
                 onClick={() => setToggle(thread.id, !isOpen)}
-                className="grid size-5 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                className="pointer-events-auto grid size-4 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground opacity-0 outline-none group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Icon
                   name="ChevronRight"
@@ -202,12 +214,8 @@ export function ArmadaList({
                   )}
                 />
               </button>
-            ) : (
-              <span aria-hidden="true" className="size-5 shrink-0" />
-            )
+            ) : null
           }
-          tile={<CaptainTile logo={record.logo} color={record.color} />}
-          detail={captainDetail(entry, projectName(thread.projectId))}
           inline={captainItems(record, {
             changeLogo: () => setDialog({ kind: "edit", thread, record }),
             remove: () => removeCaptain(thread.id),
@@ -217,21 +225,36 @@ export function ArmadaList({
         {hasWorkers && isOpen ? (
           <li className="list-none">
             <ul
-              aria-label={`Workers of ${thread.displayTitle}`}
-              className="m-0 ml-[18px] space-y-px border-l border-sidebar-border p-0 pl-2"
+              aria-label={`Workers of ${title}`}
+              className="m-0 flex flex-col gap-px p-0"
             >
-              {entry.workers.map((worker) => (
+              {workers.map((worker) => (
                 <ThreadRow
                   key={worker.id}
                   thread={worker}
                   kind="worker"
-                  lane={laneOf(worker)}
+                  status={statusOf(worker)}
                   activityAt={worker.updatedAt}
                   now={now}
                   active={worker.id === activeThreadId}
                   onOpen={open}
                 />
               ))}
+              {hidden > 0 ? (
+                <li className="list-none">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAllWorkers((current) =>
+                        new Set(current).add(thread.id),
+                      )
+                    }
+                    className="flex h-7 w-full cursor-pointer items-center rounded-md pr-2.5 pl-9 text-left text-2xs text-muted-foreground outline-none hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {hidden} more
+                  </button>
+                </li>
+              ) : null}
             </ul>
           </li>
         ) : null}
@@ -239,79 +262,70 @@ export function ArmadaList({
     );
   };
 
-  const renderGroup = (group: ProjectGroup) => {
-    const key = group.project.id;
-    const isCollapsed = collapsed[key] === true;
-    return (
-      <section key={key} className="mb-1">
-        <button
-          type="button"
-          aria-expanded={!isCollapsed}
-          onClick={() => setCollapsed(key, !isCollapsed)}
-          className="flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Icon
-            name="ChevronRight"
-            className={cn(
-              "size-3 shrink-0 transition-transform",
-              !isCollapsed && "rotate-90",
-            )}
-          />
-          <span className="min-w-0 flex-1 truncate">{group.project.name}</span>
-          {isCollapsed ? <LaneGlyph lane={group.lane} /> : null}
-        </button>
-        {isCollapsed ? null : (
-          <ul className="m-0 space-y-px p-0">
-            {group.threads.map((entry) => (
-              <ThreadRow
-                key={entry.thread.id}
-                thread={entry.thread}
-                kind="thread"
-                lane={entry.lane}
-                activityAt={entry.activityAt}
-                now={now}
-                active={entry.thread.id === activeThreadId}
-                inline={
-                  entry.thread.parentThreadId === null
-                    ? [
-                        makeCaptainItem(() =>
-                          setDialog({ kind: "adopt", thread: entry.thread }),
-                        ),
-                      ]
-                    : undefined
-                }
-                onOpen={open}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-    );
-  };
-
   return (
     <div
       ref={listRef}
       onKeyDown={onKeyDown}
-      className="armada-root flex min-h-full shrink-0 flex-col px-1.5 pb-2"
+      className="flex min-h-full shrink-0 flex-col px-1.5 pb-2"
     >
-      <SectionHeader title="Captains">{newCaptain}</SectionHeader>
+      <SectionHeader title="Captains">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="New captain"
+          className="size-6 text-muted-foreground"
+          onClick={() => setDialog({ kind: "create" })}
+        >
+          <Icon name="Plus" className="size-4" />
+        </Button>
+      </SectionHeader>
       {model.captains.length > 0 ? (
-        <ul className="m-0 space-y-px p-0">
+        <ul aria-label="Captains" className="m-0 flex flex-col gap-px p-0">
           {model.captains.map(renderCaptain)}
         </ul>
       ) : (
-        <Note>No captains yet</Note>
+        <Note className="pl-9">
+          Start a captain to run a project from one chat.
+        </Note>
       )}
       <SectionHeader title="Threads" />
+      <ScopePicker projects={pickable} scope={scope} onChange={setScope} />
       {status === "loading" ? (
         <Note>Loading threads…</Note>
       ) : status === "error" && threads.length === 0 ? (
         <Note>Could not load threads</Note>
-      ) : model.groups.length === 0 ? (
-        <Note>No threads yet</Note>
+      ) : scoped.length === 0 ? (
+        <Note>
+          {scopeName === null
+            ? "No threads yet"
+            : `No threads in ${scopeName} yet.`}
+        </Note>
       ) : (
-        model.groups.map(renderGroup)
+        <ul aria-label="Threads" className="m-0 flex flex-col gap-px p-0">
+          {scoped.map((entry) => (
+            <ThreadRow
+              key={entry.thread.id}
+              thread={entry.thread}
+              kind="thread"
+              status={entry.status}
+              activityAt={entry.activityAt}
+              now={now}
+              active={entry.thread.id === activeThreadId}
+              project={scope === null ? { name: entry.projectName } : undefined}
+              inline={
+                entry.thread.parentThreadId === null
+                  ? [
+                      makeCaptainItem(() =>
+                        setDialog({ kind: "adopt", thread: entry.thread }),
+                      ),
+                    ]
+                  : undefined
+              }
+              onOpen={open}
+            />
+          ))}
+        </ul>
       )}
       {dialog === null ? null : (
         <CaptainDialog

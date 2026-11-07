@@ -251,7 +251,7 @@ export function CaptainDialog({
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-3 rounded-lg bg-accent/50 p-3">
-          <CaptainTile logo={logo} color={color} size="lg" />
+          <CaptainTile logo={logo} color={color} size="preview" />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">
             {previewTitle}
           </span>

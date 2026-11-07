@@ -6,12 +6,12 @@ import { cn } from "@/lib/utils";
 export function CaptainTile({
   logo,
   color,
-  size = "md",
+  size = "row",
   className,
 }: {
   logo: LogoId;
   color: ColorId;
-  size?: "sm" | "md" | "lg";
+  size?: "row" | "preview";
   className?: string;
 }) {
   return (
@@ -20,19 +20,13 @@ export function CaptainTile({
       className={cn(
         "grid shrink-0 place-items-center text-white",
         colorClass(color),
-        size === "sm" && "size-5 rounded-md",
-        size === "md" && "size-7 rounded-lg",
-        size === "lg" && "size-10 rounded-xl",
+        size === "row" ? "size-[18px] rounded-[5px]" : "size-10 rounded-[10px]",
         className,
       )}
     >
       <Icon
         name={logoIcon(logo)}
-        className={cn(
-          size === "sm" && "size-3",
-          size === "md" && "size-4",
-          size === "lg" && "size-6",
-        )}
+        className={size === "row" ? "size-3" : "size-6"}
       />
     </span>
   );

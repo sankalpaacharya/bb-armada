@@ -4,11 +4,12 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 
 import type { CaptainRecord, CaptainRegistry } from "./captains";
-import { laneOf, strongerLane, type Lane } from "./status";
+import { statusOf, strongerStatus, type Status } from "./status";
 
 export type ThreadEntry = {
   thread: PluginSidebarThread;
-  lane: Lane | null;
+  projectName: string | null;
+  status: Status | null;
   activityAt: number;
 };
 
@@ -16,17 +17,10 @@ export type CaptainEntry = {
   record: CaptainRecord;
   thread: PluginSidebarThread;
   workers: PluginSidebarThread[];
-  lane: Lane | null;
-  counts: { attention: number; working: number };
+  status: Status | null;
 };
 
-export type ProjectGroup = {
-  project: PluginSidebarProject;
-  threads: ThreadEntry[];
-  lane: Lane | null;
-};
-
-export type ArmadaModel = { captains: CaptainEntry[]; groups: ProjectGroup[] };
+export type ArmadaModel = { captains: CaptainEntry[]; threads: ThreadEntry[] };
 
 function parentIdOf(thread: PluginSidebarThread): string | null {
   return thread.parentThreadId ?? thread.lifecycleOwnerThreadId;
@@ -103,16 +97,12 @@ export function buildArmada(
     .map((thread): CaptainEntry => {
       const record = registry.captains[thread.id];
       const workers = subtreeOf(record.threadId, true).sort(byRecency);
-      for (const worker of workers) owned.add(worker.id);
-      const counts = { attention: 0, working: 0 };
-      let lane = laneOf(thread);
+      let status = statusOf(thread);
       for (const worker of workers) {
-        const workerLane = laneOf(worker);
-        lane = strongerLane(lane, workerLane);
-        if (workerLane === "attention") counts.attention += 1;
-        if (workerLane === "working") counts.working += 1;
+        owned.add(worker.id);
+        status = strongerStatus(status, statusOf(worker));
       }
-      return { record, thread, workers, lane, counts };
+      return { record, thread, workers, status };
     })
     .sort(
       (a, b) =>
@@ -132,51 +122,25 @@ export function buildArmada(
     }
   };
 
+  const projectNames = new Map(
+    projects.map((project) => [project.id, project.name]),
+  );
   const entries = new Map<string, ThreadEntry>();
   for (const thread of visible) {
     if (owned.has(thread.id)) continue;
     const root = rootOf(thread);
     const entry = entries.get(root.id) ?? {
       thread: root,
-      lane: null,
+      projectName: projectNames.get(root.projectId) ?? null,
+      status: null,
       activityAt: 0,
     };
-    entry.lane = strongerLane(entry.lane, laneOf(thread));
+    entry.status = strongerStatus(entry.status, statusOf(thread));
     entry.activityAt = Math.max(entry.activityAt, thread.updatedAt);
     entries.set(root.id, entry);
   }
 
-  const projectById = new Map(projects.map((project) => [project.id, project]));
-  const grouped = new Map<string, ThreadEntry[]>();
-  for (const entry of entries.values()) {
-    const bucket = grouped.get(entry.thread.projectId) ?? [];
-    bucket.push(entry);
-    grouped.set(entry.thread.projectId, bucket);
-  }
-
-  const groups = [...grouped].map(([projectId, bucket]): ProjectGroup => {
-    const project = projectById.get(projectId) ?? {
-      id: projectId,
-      name: "Other",
-      isPersonal: false,
-      href: "/",
-      settingsHref: "/",
-    };
-    const sorted = bucket.sort(entryOrder);
-    return {
-      project,
-      threads: sorted,
-      lane: sorted.reduce<Lane | null>(
-        (lane, entry) => strongerLane(lane, entry.lane),
-        null,
-      ),
-    };
-  });
-  const latest = (group: ProjectGroup) =>
-    Math.max(...group.threads.map((entry) => entry.activityAt));
-  groups.sort((a, b) => latest(b) - latest(a));
-
-  return { captains, groups };
+  return { captains, threads: [...entries.values()].sort(entryOrder) };
 }
 
 export function pickableProjects(

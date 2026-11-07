@@ -9,7 +9,7 @@ const CENTRE = 4;
 const CHASERS = [1, 0.75, 0.5] as const;
 
 export function SquareGrid({
-  label = "Working",
+  label,
   className,
 }: {
   label?: string;
@@ -17,8 +17,9 @@ export function SquareGrid({
 }) {
   return (
     <span
-      role="img"
+      role={label === undefined ? undefined : "img"}
       aria-label={label}
+      aria-hidden={label === undefined ? true : undefined}
       className={cn("armada-square-grid", className)}
     >
       {Array.from({ length: CELLS }, (_, index) => (

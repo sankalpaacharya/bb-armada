@@ -1,18 +1,15 @@
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
-export type Lane = "attention" | "working" | "done";
+export type Status = "needs-you" | "failed" | "working" | "queued" | "done";
 
-export const LANE_RANK: Record<Lane, number> = {
-  attention: 3,
-  working: 2,
+const RANK: Record<Status, number> = {
+  "needs-you": 5,
+  failed: 4,
+  working: 3,
+  queued: 2,
   done: 1,
 };
 
-const ATTENTION_INDICATORS = new Set<string>([
-  "waiting-for-input",
-  "queued-failed",
-  "unread-error",
-]);
 const WORKING_INDICATORS = new Set<string>([
   "runtime",
   "workflow",
@@ -31,13 +28,19 @@ const BUSY_STATUSES = new Set<string>([
   "waiting-for-host",
 ]);
 
-export function laneOf(thread: PluginSidebarThread): Lane | null {
+export function statusOf(thread: PluginSidebarThread): Status | null {
   if (
     thread.hasPendingInteraction ||
-    thread.queuedWork === "failed" ||
-    ATTENTION_INDICATORS.has(thread.indicator)
+    thread.indicator === "waiting-for-input"
   ) {
-    return "attention";
+    return "needs-you";
+  }
+  if (
+    thread.queuedWork === "failed" ||
+    thread.indicator === "queued-failed" ||
+    thread.indicator === "unread-error"
+  ) {
+    return "failed";
   }
   const { activity } = thread;
   if (
@@ -50,24 +53,21 @@ export function laneOf(thread: PluginSidebarThread): Lane | null {
       activity.goals >
       0
   ) {
-    return "working";
+    return thread.indicator === "queued-waiting" ? "queued" : "working";
   }
   if (thread.indicator === "unread-success") return "done";
   return null;
 }
 
-export function strongerLane(a: Lane | null, b: Lane | null): Lane | null {
+export function strongerStatus(
+  a: Status | null,
+  b: Status | null,
+): Status | null {
   if (a === null) return b;
   if (b === null) return a;
-  return LANE_RANK[b] > LANE_RANK[a] ? b : a;
+  return RANK[b] > RANK[a] ? b : a;
 }
 
-const LABELS: Record<Lane, string> = {
-  attention: "Needs you",
-  working: "Working",
-  done: "Done",
-};
-
-export function statusLabel(lane: Lane): string {
-  return LABELS[lane];
+export function isLive(status: Status | null): boolean {
+  return status !== null && status !== "done";
 }
