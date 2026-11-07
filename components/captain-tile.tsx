@@ -15,7 +15,11 @@ export function CaptainTile({
 }) {
   return (
     <span
-      className={cn("block shrink-0 overflow-hidden", TILE[size], className)}
+      className={cn(
+        "block shrink-0 overflow-hidden",
+        TILE[size],
+        className,
+      )}
     >
       <img alt="" src={avatarDataUri(avatar)} className="size-full" />
     </span>

@@ -158,9 +158,7 @@ export function CaptainDialog({
   const project = projects.find((candidate) => candidate.id === projectId);
   const copy = COPY[spawned === null ? state.kind : "unrecorded"];
   const currentTitle =
-    state.kind === "create"
-      ? null
-      : (state.thread.title ?? state.thread.displayTitle);
+    state.kind === "create" ? null : (state.thread.title ?? state.thread.displayTitle);
   const defaultName =
     currentTitle ?? (project === undefined ? "" : captainTitle(project.name));
   const name = typedName ?? defaultName;
@@ -223,7 +221,9 @@ export function CaptainDialog({
       } else if (state.kind !== "create") {
         const threadId = state.thread.id;
         await Promise.all([
-          renamed ? sdk.threads.update({ threadId, title: trimmedName }) : null,
+          renamed
+            ? sdk.threads.update({ threadId, title: trimmedName })
+            : null,
           state.kind === "adopt"
             ? adopt.mutate({
                 threadId,

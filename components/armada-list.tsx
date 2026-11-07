@@ -45,11 +45,7 @@ export function ArmadaList({
   const navigate = useBbNavigate();
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
   const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, null);
-  const [shelves, setShelves] = useStoredState(
-    SHELVES_KEY,
-    parseBooleanMap,
-    {},
-  );
+  const [shelves, setShelves] = useStoredState(SHELVES_KEY, parseBooleanMap, {});
   const rows = useArrowKeyRows();
 
   const records = captains.status === "ready" ? captains.records : NO_CAPTAINS;
@@ -62,10 +58,7 @@ export function ArmadaList({
   useEffect(() => RETIRED_KEYS.forEach(removeStored), []);
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
   const scope = resolveScope(storedScope, pickable);
-  const scoped = useMemo(
-    () => scopeThreads(model.threads, scope),
-    [model, scope],
-  );
+  const scoped = useMemo(() => scopeThreads(model.threads, scope), [model, scope]);
   const snoozed = scopeThreads(model.snoozed, scope);
   const settled = scopeThreads(model.settled, scope);
 
@@ -76,8 +69,7 @@ export function ArmadaList({
 
   const shelf = (name: "snoozed" | "settled") => ({
     expanded: shelves[name] ?? false,
-    onToggle: () =>
-      setShelves({ ...shelves, [name]: !(shelves[name] ?? false) }),
+    onToggle: () => setShelves({ ...shelves, [name]: !(shelves[name] ?? false) }),
     activeThreadId,
     actions: parkActions,
     onOpen: open,

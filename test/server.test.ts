@@ -440,8 +440,9 @@ describe("migration from the single captains key", () => {
   });
 
   it("still serves the list when the move fails, and keeps the old key to retry", async () => {
-    const { createFakePluginHost: host } =
-      await import("@get-bb/plugin-sdk/testing");
+    const { createFakePluginHost: host } = await import(
+      "@get-bb/plugin-sdk/testing"
+    );
     const { bb, harness } = host({ pluginId: "armada" });
     await bb.storage.kv.set(LEGACY_CAPTAINS_KEY, legacy);
     vi.spyOn(bb.storage.kv, "set").mockRejectedValue(new Error("busy"));
