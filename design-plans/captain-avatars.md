@@ -34,3 +34,12 @@ DiceBear's code is MIT. Look up the **Adventurer** artwork's licence and author 
 - Rendering test: a captain row shows an `img` inside the tile.
 - Dialog test: Shuffle changes the offered seeds; creating sends the selected avatar.
 - `npm run check` passes.
+
+## Captain names (user)
+
+The user: "it should be just cops, not called a cops captain". The Captains section already says what these rows are.
+- `captainTitle(projectName)` returns the project name alone, with no emoji and no "Captain ·" prefix. That's the thread title a new captain gets.
+- Captain rows show `thread.displayTitle` unchanged, so a user's rename shows.
+- Delete `withoutLeadingEmoji` and its test, since nothing needs it.
+- The dialog preview title is the project name.
+- The existing captain thread has already been renamed to "cops" by the lead.
