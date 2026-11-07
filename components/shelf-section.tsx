@@ -82,7 +82,7 @@ export function ShelfSection({
           type="button"
           onClick={() => setExpanded((current) => !current)}
           className={cn(
-            "flex h-7 w-full cursor-pointer items-center rounded-md px-2.5 text-left text-2xs text-muted-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-foreground",
+            "flex h-7 w-full cursor-pointer items-center rounded-md pr-2.5 pl-8 text-left text-2xs text-muted-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-foreground",
             FOCUS_RING,
           )}
         >
