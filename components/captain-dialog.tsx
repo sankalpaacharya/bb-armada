@@ -7,7 +7,7 @@ import {
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -23,16 +23,15 @@ import type { Avatar, CaptainRecord } from "@/lib/captains";
 import { rpcContract } from "@/lib/rpc";
 import { FOCUS_RING } from "@/lib/styles";
 import { toastFailure } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
-import { ChoiceList } from "./choice-list";
+import { Dropdown } from "./dropdown";
 
 export type CaptainDialogState =
   | { kind: "create" }
   | { kind: "adopt"; thread: PluginSidebarThread }
   | { kind: "edit"; thread: PluginSidebarThread; record: CaptainRecord };
 
-const OFFERED = 12;
-const AVATAR_COLUMNS = 6;
 const NAME_MAX = 80;
 
 /** The open project unless it already has a captain, else the first project without one. */
@@ -47,14 +46,6 @@ export function startingProject(
   const pick =
     (free(active) ? active : projects.find(free)) ?? active ?? projects[0];
   return pick?.id ?? "";
-}
-
-/** A fresh set of offers, with the current avatar kept first so it can be picked again. */
-function offerAvatars(keep: Avatar | null): [Avatar, ...Avatar[]] {
-  return [
-    keep ?? randomAvatar(),
-    ...Array.from({ length: OFFERED - 1 }, randomAvatar),
-  ];
 }
 
 function Field({
@@ -153,10 +144,9 @@ export function CaptainDialog({
   const navigate = useBbNavigate();
   const sdk = useSdk();
   const nameId = useId();
-  const [offers, setOffers] = useState(() =>
-    offerAvatars(state.kind === "edit" ? state.record.avatar : null),
+  const [avatar, setAvatar] = useState<Avatar>(() =>
+    state.kind === "edit" ? state.record.avatar : randomAvatar(),
   );
-  const [avatar, setAvatar] = useState<Avatar>(() => offers[0]);
   const [projectId, setProjectId] = useState(() =>
     startingProject(projects, activeProjectId, captained),
   );
@@ -186,12 +176,6 @@ export function CaptainDialog({
     state.kind === "edit"
       ? projects.find((candidate) => candidate.id === state.thread.projectId)
       : undefined;
-
-  const shuffle = () => {
-    const next = offerAvatars(null);
-    setOffers(next);
-    setAvatar(next[0]);
-  };
 
   /** The recorded captain's thread, or null when it started but is not recorded yet. */
   const recordCreated = async (
@@ -256,13 +240,35 @@ export function CaptainDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && !pending && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent
+        className="max-w-sm"
+        // Escape inside the project list closes the list, not the dialog.
+        onEscapeKeyDown={(event) => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest("[role=listbox]")
+          )
+            event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-3 rounded-lg bg-accent/50 p-3">
           <CaptainTile avatar={avatar} size="preview" />
+          <button
+            type="button"
+            aria-label="New avatar"
+            title="New avatar"
+            onClick={() => setAvatar(randomAvatar())}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon" }),
+              "size-7",
+            )}
+          >
+            <Icon name="RotateCcw" />
+          </button>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {name}
           </span>
@@ -295,8 +301,11 @@ export function CaptainDialog({
           </Field>
         ) : state.kind === "create" ? (
           <Field label="Project">
-            <ChoiceList
+            <Dropdown
               label="Project"
+              triggerLabel={
+                project === undefined ? "Project" : `Project: ${project.name}`
+              }
               choices={projects.map((candidate) => ({
                 id: candidate.id,
                 label: candidate.name,
@@ -306,43 +315,22 @@ export function CaptainDialog({
               }))}
               value={projectId}
               onChange={setProjectId}
-              className="max-h-36 overflow-y-auto rounded-lg border border-border p-1"
-            />
+              align="stretch"
+              triggerClassName={`flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-left text-sm text-foreground ${FOCUS_RING}`}
+              listClassName="max-h-48 overflow-y-auto"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                {project?.name}
+                {project !== undefined && captained.has(project.id) ? (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · has a captain
+                  </span>
+                ) : null}
+              </span>
+            </Dropdown>
           </Field>
         ) : null}
-        <Field label="Avatar">
-          <ChoiceList
-            label="Avatar"
-            choices={offers.map((offer, index) => ({
-              id: offer.seed,
-              label: `Avatar ${index + 1}`,
-            }))}
-            value={avatar.seed}
-            onChange={(seed) =>
-              setAvatar(offers.find((offer) => offer.seed === seed) ?? avatar)
-            }
-            grid={{
-              columns: AVATAR_COLUMNS,
-              render: (choice, selected) => (
-                <CaptainTile
-                  avatar={{ style: "micah", seed: choice.id }}
-                  size="preview"
-                  className={selected ? "ring-2 ring-ring" : undefined}
-                />
-              ),
-            }}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="justify-self-start"
-            onClick={shuffle}
-          >
-            <Icon name="RotateCcw" />
-            Shuffle
-          </Button>
-        </Field>
         <DialogFooter>
           <Button
             type="button"

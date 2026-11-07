@@ -1,7 +1,7 @@
 export const FOCUS_RING =
   "outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-export const ROW_HOVER = "hover:bg-sidebar-accent/60";
+const ROW_HOVER = "hover:bg-sidebar-accent/60";
 
 export const rowFill = (active: boolean): string =>
   active ? "bg-sidebar-accent" : ROW_HOVER;

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 
 import app from "../app";
+import { avatarDataUri } from "../lib/avatar";
 import type { CaptainRecord } from "../lib/captains";
 import type { ParkRecord } from "../lib/lifecycle";
 import { NOW, project, settledAt, snoozedUntil, thread } from "./fixtures";
@@ -566,6 +567,15 @@ describe("Armada thread list", () => {
   });
 });
 
+const previewAvatar = () =>
+  screen
+    .getByRole("button", { name: "New avatar" })
+    .previousElementSibling?.querySelector("img")
+    ?.getAttribute("src");
+
+const projectTrigger = (dialog: ReturnType<typeof within>) =>
+  dialog.getByRole("button", { name: /^Project: / });
+
 describe("creating a captain", () => {
   it("creates it from the dialog with the typed name, chosen project and avatar, then opens it", async () => {
     const created = {
@@ -581,39 +591,28 @@ describe("creating a captain", () => {
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
 
     const dialog = within(await screen.findByRole("dialog"));
-    expect(
-      dialog
-        .getByRole("option", { name: "Beta" })
-        .getAttribute("aria-selected"),
-    ).toBe("true");
-    const preview = (text: string) =>
-      dialog
-        .getAllByText(text)
-        .filter((element) => element.closest("[role=option]") === null);
+    expect(dialog.queryByRole("listbox")).toBeNull();
+    expect(projectTrigger(dialog).textContent).toBe("Beta");
     const name = dialog.getByRole("textbox", {
       name: "Name",
     }) as HTMLInputElement;
-    expect(preview("Beta")).toHaveLength(1);
     expect(name.value).toBe("Beta");
+    fireEvent.click(projectTrigger(dialog));
     fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
-    expect(preview("Alpha")).toHaveLength(1);
+    expect(dialog.queryByRole("listbox")).toBeNull();
+    expect(projectTrigger(dialog).textContent).toBe("Alpha · has a captain");
     expect(name.value).toBe("Alpha");
     fireEvent.change(name, { target: { value: "  Fleet " } });
+    fireEvent.click(projectTrigger(dialog));
     fireEvent.click(dialog.getByRole("option", { name: "Beta" }));
+    fireEvent.click(projectTrigger(dialog));
     fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
     expect(name.value).toBe("  Fleet ");
     expect(dialog.getByText("Fleet")).toBeTruthy();
-    const avatars = within(dialog.getByRole("listbox", { name: "Avatar" }));
-    const seedsBefore = avatars
-      .getAllByRole("option")
-      .map((option) => option.querySelector("img")?.getAttribute("src"));
-    expect(new Set(seedsBefore).size).toBe(12);
-    fireEvent.click(dialog.getByRole("button", { name: "Shuffle" }));
-    const seedsAfter = avatars
-      .getAllByRole("option")
-      .map((option) => option.querySelector("img")?.getAttribute("src"));
-    expect(seedsAfter).not.toEqual(seedsBefore);
-    fireEvent.click(avatars.getByRole("option", { name: "Avatar 3" }));
+    const before = previewAvatar();
+    fireEvent.click(dialog.getByRole("button", { name: "New avatar" }));
+    const chosen = previewAvatar();
+    expect(chosen).not.toBe(before);
     fireEvent.keyDown(name, { key: "Enter" });
 
     await waitFor(() =>
@@ -630,23 +629,44 @@ describe("creating a captain", () => {
       name: "Fleet",
       avatar: { style: "micah", seed: expect.stringMatching(/^[a-z0-9]{10}$/) },
     });
+    const sent = view.inspection.rpcCalls.find(
+      (call) => call.method === "captains_create",
+    )?.input as { avatar: { style: "micah"; seed: string } };
+    expect(avatarDataUri(sent.avatar)).toBe(chosen);
     expect(onNavigate).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("moves through the avatar grid by row with up and down", async () => {
+  it("has no avatar grid, only a button that rolls a new avatar", async () => {
     await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
     const dialog = within(await screen.findByRole("dialog"));
-    const grid = dialog.getByRole("listbox", { name: "Avatar" });
-    const option = (name: string) => within(grid).getByRole("option", { name });
-    option("Avatar 2").focus();
-    fireEvent.keyDown(grid, { key: "ArrowDown" });
-    expect(document.activeElement).toBe(option("Avatar 8"));
-    fireEvent.keyDown(grid, { key: "ArrowRight" });
-    expect(document.activeElement).toBe(option("Avatar 9"));
-    fireEvent.keyDown(grid, { key: "ArrowUp" });
-    expect(document.activeElement).toBe(option("Avatar 3"));
+    expect(dialog.queryByRole("listbox", { name: "Avatar" })).toBeNull();
+    expect(dialog.queryByRole("button", { name: "Shuffle" })).toBeNull();
+    const seen = new Set([previewAvatar()]);
+    for (let roll = 0; roll < 3; roll++) {
+      fireEvent.click(dialog.getByRole("button", { name: "New avatar" }));
+      seen.add(previewAvatar());
+    }
+    expect(seen.size).toBe(4);
+  });
+
+  it("closes the project list on Escape without closing the dialog", async () => {
+    await render();
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    const trigger = projectTrigger(dialog);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const list = dialog.getByRole("listbox", { name: "Project" });
+    expect(document.activeElement).toBe(
+      within(list).getByRole("option", { name: "Beta" }),
+    );
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(dialog.queryByRole("listbox")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(screen.getByRole("dialog")).toBeTruthy();
   });
 
   it("will not create a captain without a name", async () => {
@@ -671,11 +691,9 @@ describe("creating a captain", () => {
   it("lists personal projects after the others", async () => {
     await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
-    const names = within(
-      within(await screen.findByRole("dialog")).getByRole("listbox", {
-        name: "Project",
-      }),
-    )
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.click(projectTrigger(dialog));
+    const names = within(dialog.getByRole("listbox", { name: "Project" }))
       .getAllByRole("option")
       .map((option) => option.textContent);
     expect(names).toEqual(["Alpha · has a captain", "Beta", "Personal"]);
@@ -697,7 +715,7 @@ describe("creating a captain", () => {
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
     const retry = await dialog.findByRole("button", { name: "Record captain" });
     expect(view.inspection.navigateCalls).toEqual([]);
-    expect(dialog.queryByRole("listbox", { name: "Project" })).toBeNull();
+    expect(dialog.queryByRole("button", { name: /^Project: / })).toBeNull();
     fireEvent.click(retry);
     await waitFor(() =>
       expect(view.inspection.navigateCalls).toEqual([
@@ -763,10 +781,9 @@ describe("thread menu", () => {
 
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByText("Loose idea")).toBeTruthy();
-    expect(dialog.queryByRole("listbox", { name: "Project" })).toBeNull();
-    const picked = dialog.getByRole("option", { name: "Avatar 5" });
-    fireEvent.click(picked);
-    const pickedSrc = picked.querySelector("img")?.getAttribute("src");
+    expect(dialog.queryByRole("button", { name: /^Project: / })).toBeNull();
+    fireEvent.click(dialog.getByRole("button", { name: "New avatar" }));
+    const chosen = previewAvatar();
     fireEvent.click(dialog.getByRole("button", { name: "Make captain" }));
     await waitFor(() =>
       expect(
@@ -775,7 +792,10 @@ describe("thread menu", () => {
         )?.input,
       ).toMatchObject({ threadId: "plain", avatar: { style: "micah" } }),
     );
-    expect(pickedSrc).toBeTruthy();
+    const sent = view.inspection.rpcCalls.find(
+      (call) => call.method === "captains_adopt",
+    )?.input as { avatar: { style: "micah"; seed: string } };
+    expect(avatarDataUri(sent.avatar)).toBe(chosen);
     expect(view.inspection.sdkCalls).toEqual([]);
   });
 
@@ -865,17 +885,16 @@ describe("thread menu", () => {
       (dialog.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value,
     ).toBe("Captain Alpha");
     expect(dialog.getByText("Alpha")).toBeTruthy();
-    expect(dialog.queryByRole("listbox", { name: "Project" })).toBeNull();
+    expect(dialog.queryByRole("button", { name: /^Project: / })).toBeNull();
     const save = dialog.getByRole("button", {
       name: "Save changes",
     }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
-    const current = dialog.getByRole("option", { name: "Avatar 1" });
-    expect(current.getAttribute("aria-selected")).toBe("true");
-    expect(current.querySelector("img")?.getAttribute("src")).toBe(
+    expect(previewAvatar()).toBe(
       rowOf(view.container, "cap")!.querySelector("img")?.getAttribute("src"),
     );
-    fireEvent.click(dialog.getByRole("option", { name: "Avatar 2" }));
+    fireEvent.click(dialog.getByRole("button", { name: "New avatar" }));
+    const chosen = previewAvatar();
     expect(save.disabled).toBe(false);
     fireEvent.click(save);
     await waitFor(() =>
@@ -885,13 +904,11 @@ describe("thread menu", () => {
         )?.input,
       ).toMatchObject({ threadId: "cap", avatar: { style: "micah" } }),
     );
-    expect(
-      (
-        view.inspection.rpcCalls.find(
-          (call) => call.method === "captains_update",
-        )?.input as { avatar: { seed: string } }
-      ).avatar.seed,
-    ).not.toBe("cap");
+    const sent = view.inspection.rpcCalls.find(
+      (call) => call.method === "captains_update",
+    )?.input as { avatar: { style: "micah"; seed: string } };
+    expect(sent.avatar.seed).not.toBe("cap");
+    expect(avatarDataUri(sent.avatar)).toBe(chosen);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(view.inspection.sdkCalls).toEqual([]);
   });
