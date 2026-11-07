@@ -142,9 +142,9 @@ describe("captain records", () => {
       environment: { type: "project-default" },
       title: "Fleet",
     });
-    expect((spawn![0] as { prompt: string }).prompt).toContain(
-      "~/.bb/captains/alpha.md",
-    );
+    const prompt = (spawn![0] as { prompt: string }).prompt;
+    expect(prompt).toContain("/firstmate");
+    expect(prompt).toContain("~/.bb/captains/alpha/");
   });
 
   it("refuses a blank name without spawning a thread", async () => {
