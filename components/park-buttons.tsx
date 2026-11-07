@@ -4,7 +4,6 @@ import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
 import { snoozePresets } from "@/lib/lifecycle";
 import type { ThreadEntry } from "@/lib/model";
-import { canPark } from "@/lib/status";
 import { FOCUS_RING } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +49,7 @@ export function ParkableSlot({
   actions: ParkActions;
   children: ReactNode;
 }) {
-  if (!canPark(entry.status)) return children;
+  if (!entry.parkable) return children;
   const tomorrow = () =>
     snoozePresets(new Date()).find((preset) => preset.id === "tomorrow")!;
   return (

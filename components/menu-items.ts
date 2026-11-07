@@ -4,9 +4,8 @@ import {
 } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
-import { snoozePresets, type Shelf } from "@/lib/lifecycle";
+import { snoozePresets } from "@/lib/lifecycle";
 import type { ThreadEntry } from "@/lib/model";
-import { canPark } from "@/lib/status";
 
 export function makeCaptainItem(
   onSelect: () => void,
@@ -38,7 +37,7 @@ export function captainItems(actions: {
 
 /** Settle and the snooze presets for a parkable thread; Move to active for a parked one. */
 export function parkItems(
-  entry: Pick<ThreadEntry, "thread" | "status"> & { shelf: Shelf },
+  entry: Pick<ThreadEntry, "thread" | "parkable" | "shelf">,
   actions: ParkActions,
 ): PluginThreadActionsInlineItem[] {
   const { id } = entry.thread;
@@ -55,7 +54,7 @@ export function parkItems(
       },
     ];
   }
-  if (!canPark(entry.status)) return [];
+  if (!entry.parkable) return [];
   const presets = snoozePresets(new Date());
   return [
     {

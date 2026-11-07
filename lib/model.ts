@@ -11,10 +11,22 @@ import {
   type Shelf,
   type Snooze,
 } from "./lifecycle";
-import { statusOf, strongerStatus, type Status } from "./status";
+import {
+  STATUS,
+  signalsOf,
+  statusOf,
+  strongerStatus,
+  type Status,
+} from "./status";
 
 type Fold = {
+  /** The most urgent status anywhere in the folded threads. */
   status: Status | null;
+  /**
+   * Whether every signal of every folded thread allows parking. This is not
+   * a property of `status`: a failure outranks work still running elsewhere.
+   */
+  parkable: boolean;
   activityAt: number;
   latestAttentionAt: number;
 };
@@ -54,14 +66,18 @@ function parentIdOf(thread: PluginSidebarThread): string | null {
 
 function fold(threads: readonly PluginSidebarThread[]): Fold {
   let status: Status | null = null;
+  let parkable = true;
   let activityAt = 0;
   let latestAttentionAt = 0;
   for (const thread of threads) {
-    status = strongerStatus(status, statusOf(thread));
+    for (const signal of signalsOf(thread)) {
+      status = strongerStatus(status, signal);
+      parkable &&= STATUS[signal].parkable;
+    }
     activityAt = Math.max(activityAt, thread.updatedAt);
     latestAttentionAt = Math.max(latestAttentionAt, thread.latestAttentionAt);
   }
-  return { status, activityAt, latestAttentionAt };
+  return { status, parkable, activityAt, latestAttentionAt };
 }
 
 function pinOrder(a: PluginSidebarThread, b: PluginSidebarThread): number {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isLive, statusOf, strongerStatus } from "../lib/status";
+import { isLive, signalsOf, statusOf, strongerStatus } from "../lib/status";
 import { thread } from "./fixtures";
 
 describe("statusOf", () => {
@@ -53,6 +53,18 @@ describe("statusOf", () => {
   it("reads an unread success as done and an idle thread as quiet", () => {
     expect(statusOf(thread("a", { indicator: "unread-success" }))).toBe("done");
     expect(statusOf(thread("b"))).toBeNull();
+  });
+});
+
+describe("signalsOf", () => {
+  it("keeps a failed send beside the turn that is still running", () => {
+    const both = thread("a", { queuedWork: "failed", runtimeStatus: "active" });
+    expect(signalsOf(both).sort()).toEqual(["failed", "working"]);
+    expect(statusOf(both)).toBe("failed");
+  });
+
+  it("gives an idle thread no signals", () => {
+    expect(signalsOf(thread("a"))).toEqual([]);
   });
 });
 

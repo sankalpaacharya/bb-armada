@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { threadIdSchema } from "./captains";
-import { canPark, type Status } from "./status";
 import { formatDuration } from "./time";
 
 const time = z.number().int().positive();
@@ -32,7 +31,8 @@ export function parseStoredPark(raw: unknown): ParkRecord | null {
 }
 
 export type ShelfSignals = {
-  status: Status | null;
+  /** False while anything in the thread's tree is working, queued or needs you. */
+  parkable: boolean;
   latestAttentionAt: number;
 };
 
@@ -46,7 +46,7 @@ export function resolveShelf(
   signals: ShelfSignals,
   now: number,
 ): Shelf {
-  if (park === undefined || !canPark(signals.status)) return "active";
+  if (park === undefined || !signals.parkable) return "active";
   if (signals.latestAttentionAt > park.at) return "active";
   if (park.kind === "snoozed") return park.until <= now ? "active" : "snoozed";
   return "settled";

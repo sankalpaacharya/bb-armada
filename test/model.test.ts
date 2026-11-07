@@ -313,6 +313,52 @@ describe("shelves", () => {
     expect(model.snoozed).toEqual([]);
   });
 
+  it("keeps a root active when one child failed and another is still working", () => {
+    const threads = [
+      thread("root"),
+      thread("failed", { parentThreadId: "root", indicator: "unread-error" }),
+      thread("running", { parentThreadId: "root", runtimeStatus: "active" }),
+    ];
+    const model = build(threads, none, [settledAt("root", NOW - HOUR)]);
+    expect(threadIds(model)).toEqual(["root"]);
+    expect(model.threads[0]).toMatchObject({ status: "failed", parkable: false });
+    expect(model.settled).toEqual([]);
+  });
+
+  it("keeps a captain's worker active when it failed but its own child is still working", () => {
+    const threads = [
+      thread("cap"),
+      thread("w", { parentThreadId: "cap", indicator: "unread-error" }),
+      thread("grandchild", { parentThreadId: "w", runtimeStatus: "active" }),
+    ];
+    const model = build(threads, registryOf(["cap"]), [
+      settledAt("w", NOW - HOUR),
+    ]);
+    expect(idsOf(model.captains[0]!.workers)).toEqual(["w"]);
+    expect(model.captains[0]!.workers[0]!.parkable).toBe(false);
+    expect(model.settled).toEqual([]);
+  });
+
+  it("keeps a thread active when a send failed while its turn is still running", () => {
+    const threads = [
+      thread("t", { queuedWork: "failed", runtimeStatus: "active" }),
+    ];
+    const model = build(threads, none, [snoozedUntil("t", NOW + HOUR)]);
+    expect(threadIds(model)).toEqual(["t"]);
+    expect(model.threads[0]).toMatchObject({ status: "failed", parkable: false });
+    expect(model.snoozed).toEqual([]);
+  });
+
+  it("lets a failed or finished tree be parked", () => {
+    const threads = [
+      thread("root", { indicator: "unread-error" }),
+      thread("child", { parentThreadId: "root", indicator: "unread-success" }),
+    ];
+    const model = build(threads, none);
+    expect(model.threads[0]!.parkable).toBe(true);
+    expect(build(threads, none, [settledAt("root", NOW - HOUR)]).settled).toHaveLength(1);
+  });
+
   it("brings a settled root back when its subtree gets new attention", () => {
     const threads = [
       thread("root"),

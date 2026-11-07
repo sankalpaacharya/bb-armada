@@ -860,6 +860,25 @@ describe("shelves", () => {
     expect(screen.queryByRole("heading", { name: /Settled/ })).toBeNull();
   });
 
+  it("offers no park actions on a failed card while something in its tree is still working", async () => {
+    const { view } = await render({
+      threads: [
+        thread("root", { title: "Root", indicator: "unread-error" }),
+        thread("child", { title: "Child", parentThreadId: "root", ...busy }),
+      ],
+      parks: [settledAt("root", NOW)],
+    });
+    await waitFor(() => expect(rowOf(view.container, "root")).not.toBeNull());
+    expect(listOf(view.container, "root")).toBe("Threads");
+    const card = within(rowOf(view.container, "root")!);
+    expect(card.getByText("Failed")).toBeTruthy();
+    expect(card.queryByRole("button", { name: "Settle" })).toBeNull();
+    fireEvent.contextMenu(anchorOf(view.container, "root")!);
+    await screen.findByRole("menu");
+    expect(screen.queryByRole("menuitem", { name: "Settle" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /Snooze/ })).toBeNull();
+  });
+
   it("shows a snoozed thread with its wake time and wakes it on time", async () => {
     vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
     const { view } = await render({

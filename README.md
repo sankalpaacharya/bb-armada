@@ -36,9 +36,12 @@ parks into what the list draws. It is pure and unit-tested.
 - Every entry carries a folded status, the newest activity and the newest
   attention time of its subtree. A captain folds itself and all its workers.
 - Root cards can be made captains; workers cannot.
-- Each root card and each worker resolves a shelf from its park and its folded
-  status (`lib/lifecycle.ts`): a working, queued or needs-you thread is always
-  active, a snooze wakes on its timer or on attention after it was set, and a
+- Each root card and each worker resolves a shelf from its park and its fold
+  (`lib/lifecycle.ts`). The fold is parkable only when no thread in it is
+  working, queued or needs you. That is read from every signal of every
+  thread, not from the folded status, because a failure outranks work still
+  running beside it. So a tree with live work or a raised hand is always
+  active, and it offers no Settle or Snooze, a snooze wakes on its timer or on attention after it was set, and a
   settle returns on new attention. Captains are never parked. A parked worker
   leaves its captain's list for the shelf. Snoozed is ordered by soonest wake,
   Settled by newest settle.
