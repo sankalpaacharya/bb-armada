@@ -197,3 +197,22 @@ The user: "there should be a select if I want to see the threads from all the pr
 - Empty filtered list: one muted line "No threads in <project> yet."
 - Reuse the vendored popover/select primitive if one exists in `components/ui/`; otherwise port t3sidebar's `src/components/Select.tsx` (MIT, credit already added) rather than inventing one. Keyboard accessible.
 - Filtering is a pure function (`scopeThreads(entries, scope)` or a parameter to the model) with a unit test.
+
+## Revision 4: thread cards copy t3sidebar exactly (user, binding; supersedes the type scale for thread/worker cards)
+
+References: `.audit/shot/t3-ref-2.png` (t3sidebar thread cards in the user's bb) and `.audit/shot/t3-scope-picker.png` (t3's project picker, which Revision 3's picker must look like: full-width trigger "All projects ⌄" in muted text, dropdown list with a check on the selected item).
+The user: "show which harness it is using, and if it's a worktree or a branch, and if it has a PR, and copy the font as well".
+
+Thread cards and worker cards use **t3sidebar's exact markup and classes** from `$T3/src/ThreadCard.tsx` (port it, MIT, credited):
+- Container `group/card relative rounded-md px-2.5 py-2`, active `bg-sidebar-accent`, hover `bg-sidebar-accent/60`; list `flex flex-col gap-px`.
+- Line 1 `relative flex h-5 items-center gap-1.5`: project `min-w-0 flex-1 truncate text-2xs font-medium text-muted-foreground` + status slot (status glyph/word or age, see Revision 2 for the words; the square-grid loader for working).
+- Line 2 title `mt-0.5 truncate text-sm text-foreground`, `font-medium` only when unread. **Type = t3's `text-sm` / `text-2xs` tokens, not the 13px/12px values above**; inherit the font family (both plugins inherit bb's font; t3's "font" look is its sizes, weights and `font-mono` branch line).
+- Line 3 `mt-0.5 flex h-4 items-center gap-1.5 text-2xs text-muted-foreground`:
+  - **Worktree vs branch**: a `size-3` muted icon before the branch: a worktree icon when `thread.environment.isWorktree`, a branch icon when it is the project checkout (pick the closest names available in Armada's `components/ui/icon` / bb's icon set; host/laptop icon when there is no environment branch and the host name shows instead).
+  - Branch `min-w-0 flex-1 truncate font-mono` (or host name when no branch).
+  - Activity counts as t3 (`rounded bg-muted px-1 font-mono text-2xs`), only non-zero.
+  - **PR**: `#N` exactly as t3 colours it (merged `text-[color:var(--pr-merged)]`, checks failed/conflicts `text-destructive-text`, ready to merge `text-success-foreground`, else muted), linking to the PR, `stopPropagation` on click. `experimental_useSidebarThreadPullRequest` was removed from SDK 0.6.104; read it the documented way instead: `experimental_useRpcKeyedQuery({ pluginId: "bb--github-pr-status", contract, method: "pullRequests", keys: [thread.environment.id] })` with the contract copied from `/Applications/bb.app/Contents/Resources/app.asar.unpacked/node_modules/bb-app/server/dist/builtin-skills/bb-plugin-authoring/references/frontend-pull-requests.md` ("Read the data yourself"). Show nothing for absent/unavailable/error. Test it with the harness `rpc` option.
+  - **Harness**: provider glyph pinned to the right edge, always drawn (fixed right edge). Prefer the SDK's `experimental_ProviderIcon` (exists in 0.6.104; check its props); fall back to porting `$T3/src/ProviderGlyph.tsx` only if it cannot render `providerId`. `size-3 text-muted-foreground/70`.
+- Project picker (Revision 3) looks like `t3-scope-picker.png`: the trigger sits at the top of the Threads section full width (`text-sm text-muted-foreground`, chevron right), not a tiny header control.
+- Section headers "Captains" / "Threads": t3's shelf header style (`text-2xs font-medium text-muted-foreground/70` + `h-px flex-1 bg-sidebar-border` rule) with the Captains `+` after the rule.
+- Captain rows keep the compact one-line layout with the 18px avatar, but use the same `text-sm` title / `text-2xs` muted time so the whole list shares one type scale.
