@@ -14,8 +14,7 @@ import { ThreadLink, type OpenThread } from "./thread-link";
 
 /**
  * The leading mark: live status first, since that is what a glance looks
- * for; at rest, the captain that launched it, else a quiet dot (the harness
- * is on the open thread's place line). The captain stays named for screen
+ * for; at rest, the captain that launched it, else nothing. The captain stays named for screen
  * readers either way.
  */
 function LeadMark({ entry }: { entry: ThreadEntry }) {
@@ -25,12 +24,7 @@ function LeadMark({ entry }: { entry: ThreadEntry }) {
       <StatusGlyph status={entry.status} />
     ) : captain !== null ? (
       <CaptainTile avatar={captain.avatar} size="badge" />
-    ) : (
-      <span
-        aria-hidden="true"
-        className="size-1.5 rounded-full bg-muted-foreground/40"
-      />
-    );
+    ) : null;
   return (
     <span className="flex items-center">
       {captain === null ? null : (
