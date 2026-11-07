@@ -21,7 +21,7 @@ const keyOf = (id: string | null) => id ?? "\u0000";
 /**
  * A list with listbox semantics: one tab stop on the first selected option,
  * arrow keys move focus, Enter or Space pick, Escape asks to close. With
- * `multiselectable`, every selected option carries a check.
+ * `multiselectable`, every option carries a checkbox.
  */
 export function ChoiceList<Id extends string | null>({
   id,
@@ -133,7 +133,21 @@ export function ChoiceList<Id extends string | null>({
                   {choice.count}
                 </span>
               )}
-              {selected && (multiselectable || choice.count === undefined) ? (
+              {multiselectable ? (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "grid size-3.5 shrink-0 place-items-center rounded-[4px] border transition-colors",
+                    selected
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-muted-foreground/40",
+                  )}
+                >
+                  {selected ? (
+                    <Icon name="Check" className="size-2.5" />
+                  ) : null}
+                </span>
+              ) : selected && choice.count === undefined ? (
                 <Icon name="Check" className="size-3.5 shrink-0" />
               ) : null}
             </button>
