@@ -6,18 +6,23 @@ import type {
 import type { CaptainRecord } from "./captains";
 import { statusOf, strongerStatus, type Status } from "./status";
 
-export type ThreadEntry = {
-  thread: PluginSidebarThread;
-  projectName: string | null;
+type Fold = {
   status: Status | null;
   activityAt: number;
+  latestAttentionAt: number;
 };
 
-export type CaptainEntry = {
+export type ThreadEntry = Fold & {
+  thread: PluginSidebarThread;
+  projectName: string | null;
+  /** Root cards can become captains; a captain's workers cannot. */
+  adoptable: boolean;
+};
+
+export type CaptainEntry = Fold & {
   record: CaptainRecord;
   thread: PluginSidebarThread;
-  workers: PluginSidebarThread[];
-  status: Status | null;
+  workers: ThreadEntry[];
 };
 
 export type ArmadaModel = { captains: CaptainEntry[]; threads: ThreadEntry[] };
@@ -26,8 +31,16 @@ function parentIdOf(thread: PluginSidebarThread): string | null {
   return thread.parentThreadId ?? thread.lifecycleOwnerThreadId;
 }
 
-function byRecency(a: PluginSidebarThread, b: PluginSidebarThread): number {
-  return b.updatedAt - a.updatedAt;
+function fold(threads: readonly PluginSidebarThread[]): Fold {
+  let status: Status | null = null;
+  let activityAt = 0;
+  let latestAttentionAt = 0;
+  for (const thread of threads) {
+    status = strongerStatus(status, statusOf(thread));
+    activityAt = Math.max(activityAt, thread.updatedAt);
+    latestAttentionAt = Math.max(latestAttentionAt, thread.latestAttentionAt);
+  }
+  return { status, activityAt, latestAttentionAt };
 }
 
 function pinOrder(a: PluginSidebarThread, b: PluginSidebarThread): number {
@@ -50,6 +63,10 @@ function entryOrder(a: ThreadEntry, b: ThreadEntry): number {
   return b.activityAt - a.activityAt;
 }
 
+function byActivity(a: Fold, b: Fold): number {
+  return b.activityAt - a.activityAt;
+}
+
 export function buildArmada(
   threads: readonly PluginSidebarThread[],
   projects: readonly PluginSidebarProject[],
@@ -59,6 +76,9 @@ export function buildArmada(
     (thread) => !thread.isHidden && !thread.isArchived,
   );
   const byId = new Map(visible.map((thread) => [thread.id, thread]));
+  const projectNames = new Map(
+    projects.map((project) => [project.id, project.name]),
+  );
   const childrenOf = new Map<string, PluginSidebarThread[]>();
   for (const thread of visible) {
     const parentId = parentIdOf(thread);
@@ -72,20 +92,17 @@ export function buildArmada(
     const thread = byId.get(record.threadId);
     return thread === undefined ? [] : [{ record, thread }];
   });
-  const captainIds = new Set(captainRecords.map(({ record }) => record.threadId));
+  const captainIds = new Set(captainRecords.map(({ thread }) => thread.id));
 
-  const subtreeOf = (
-    rootId: string,
-    stopAtCaptains: boolean,
-  ): PluginSidebarThread[] => {
+  /** Every descendant, stopping at captains, which own their own subtree. */
+  const subtreeOf = (rootId: string): PluginSidebarThread[] => {
     const found: PluginSidebarThread[] = [];
     const seen = new Set([rootId]);
     const pending = [rootId];
     for (let index = 0; index < pending.length; index += 1) {
       for (const child of childrenOf.get(pending[index]) ?? []) {
-        if (seen.has(child.id)) continue;
+        if (seen.has(child.id) || captainIds.has(child.id)) continue;
         seen.add(child.id);
-        if (stopAtCaptains && captainIds.has(child.id)) continue;
         found.push(child);
         pending.push(child.id);
       }
@@ -93,16 +110,23 @@ export function buildArmada(
     return found;
   };
 
+  const entryOf = (thread: PluginSidebarThread, adoptable: boolean): ThreadEntry => ({
+    thread,
+    projectName: projectNames.get(thread.projectId) ?? null,
+    adoptable,
+    ...fold([thread, ...subtreeOf(thread.id)]),
+  });
+
   const owned = new Set(captainIds);
   const captains = captainRecords
     .map(({ record, thread }): CaptainEntry => {
-      const workers = subtreeOf(record.threadId, true).sort(byRecency);
-      let status = statusOf(thread);
-      for (const worker of workers) {
-        owned.add(worker.id);
-        status = strongerStatus(status, statusOf(worker));
-      }
-      return { record, thread, workers, status };
+      const subtree = subtreeOf(thread.id);
+      for (const member of subtree) owned.add(member.id);
+      const workers = (childrenOf.get(thread.id) ?? [])
+        .filter((child) => !captainIds.has(child.id))
+        .map((child) => entryOf(child, false))
+        .sort(byActivity);
+      return { record, thread, workers, ...fold([thread, ...subtree]) };
     })
     .sort(
       (a, b) =>
@@ -122,32 +146,13 @@ export function buildArmada(
     }
   };
 
-  const projectNames = new Map(
-    projects.map((project) => [project.id, project.name]),
-  );
-  const entries = new Map<string, ThreadEntry>();
+  const roots = new Map<string, PluginSidebarThread>();
   for (const thread of visible) {
     if (owned.has(thread.id)) continue;
     const root = rootOf(thread);
-    const entry = entries.get(root.id) ?? {
-      thread: root,
-      projectName: projectNames.get(root.projectId) ?? null,
-      status: null,
-      activityAt: 0,
-    };
-    entry.status = strongerStatus(entry.status, statusOf(thread));
-    entry.activityAt = Math.max(entry.activityAt, thread.updatedAt);
-    entries.set(root.id, entry);
+    roots.set(root.id, root);
   }
+  const entries = [...roots.values()].map((root) => entryOf(root, true));
 
-  return { captains, threads: [...entries.values()].sort(entryOrder) };
-}
-
-export function pickableProjects(
-  projects: readonly PluginSidebarProject[],
-): PluginSidebarProject[] {
-  return [
-    ...projects.filter((project) => !project.isPersonal),
-    ...projects.filter((project) => project.isPersonal),
-  ];
+  return { captains, threads: entries.sort(entryOrder) };
 }

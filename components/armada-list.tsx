@@ -18,16 +18,17 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCaptains } from "@/hooks/use-captains";
 import { withoutLeadingEmoji } from "@/lib/captain-text";
-import { buildArmada, pickableProjects, type CaptainEntry } from "@/lib/model";
+import { buildArmada, type CaptainEntry } from "@/lib/model";
 import { rpcContract } from "@/lib/rpc";
 import {
   parseScope,
+  pickableProjects,
   resolveScope,
   countByProject,
   scopeThreads,
   type ThreadScope,
 } from "@/lib/scope";
-import { isLive, statusOf } from "@/lib/status";
+import { isLive } from "@/lib/status";
 import { parseBooleanMap, readStored, writeStored } from "@/lib/storage";
 import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -193,7 +194,7 @@ export function ArmadaList({
     const hasWorkers = entry.workers.length > 0;
     const isOpen =
       toggles[thread.id] ??
-      entry.workers.some((worker) => isLive(statusOf(worker)));
+      entry.workers.some((worker) => isLive(worker.status));
     const label = isOpen ? "Hide workers" : "Show workers";
     const showAll = allWorkers.has(thread.id);
     const workers = showAll
@@ -206,7 +207,7 @@ export function ArmadaList({
           thread={thread}
           kind="captain"
           status={entry.status}
-          activityAt={thread.updatedAt}
+          activityAt={entry.activityAt}
           now={now}
           active={thread.id === activeThreadId}
           title={title}
@@ -245,13 +246,13 @@ export function ArmadaList({
             >
               {workers.map((worker) => (
                 <ThreadRow
-                  key={worker.id}
-                  thread={worker}
+                  key={worker.thread.id}
+                  thread={worker.thread}
                   kind="worker"
-                  status={statusOf(worker)}
-                  activityAt={worker.updatedAt}
+                  status={worker.status}
+                  activityAt={worker.activityAt}
                   now={now}
-                  active={worker.id === activeThreadId}
+                  active={worker.thread.id === activeThreadId}
                   onOpen={open}
                 />
               ))}
@@ -343,7 +344,7 @@ export function ArmadaList({
               active={entry.thread.id === activeThreadId}
               project={scope === null ? { name: entry.projectName } : undefined}
               inline={
-                entry.thread.parentThreadId === null
+                entry.adoptable
                   ? [
                       makeCaptainItem(() =>
                         setDialog({ kind: "adopt", thread: entry.thread }),

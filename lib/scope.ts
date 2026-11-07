@@ -28,6 +28,15 @@ export function parseScope(raw: string): ThreadScope | undefined {
   return value === null || typeof value === "string" ? value : undefined;
 }
 
+export function pickableProjects(
+  projects: readonly PluginSidebarProject[],
+): PluginSidebarProject[] {
+  return [
+    ...projects.filter((project) => !project.isPersonal),
+    ...projects.filter((project) => project.isPersonal),
+  ];
+}
+
 export function countByProject(
   entries: readonly ThreadEntry[],
 ): ReadonlyMap<string, number> {

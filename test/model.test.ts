@@ -2,7 +2,7 @@ import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { describe, expect, it } from "vitest";
 
 import type { CaptainRecord } from "../lib/captains";
-import { buildArmada } from "../lib/model";
+import { buildArmada, type ThreadEntry } from "../lib/model";
 import { NOW, project, thread } from "./fixtures";
 
 const projects = [project("proj_a", "Alpha"), project("proj_b", "Beta")];
@@ -19,27 +19,38 @@ function registryOf(
 }
 
 const none = registryOf();
-const idsOf = (list: readonly PluginSidebarThread[]) =>
-  list.map((item) => item.id);
+const idsOf = (list: readonly ThreadEntry[]) =>
+  list.map((entry) => entry.thread.id);
 const threadIds = (model: ReturnType<typeof buildArmada>) =>
   model.threads.map((entry) => entry.thread.id);
 const busy: Partial<PluginSidebarThread> = { status: "active" };
 const blocked: Partial<PluginSidebarThread> = { hasPendingInteraction: true };
 
 describe("captains and their workers", () => {
-  it("nests every descendant under the captain, newest activity first", () => {
+  it("lists the captain's children as workers, each folding its own subtree, newest activity first", () => {
     const threads = [
       thread("cap"),
       thread("w1", { parentThreadId: "cap", updatedAt: NOW - 3000 }),
-      thread("w2", { parentThreadId: "cap", updatedAt: NOW - 1000 }),
-      thread("grandchild", { parentThreadId: "w1", updatedAt: NOW - 2000 }),
+      thread("w2", { parentThreadId: "cap", updatedAt: NOW - 2000 }),
+      thread("grandchild", {
+        parentThreadId: "w1",
+        updatedAt: NOW - 1000,
+        ...blocked,
+      }),
     ];
     const [captain] = buildArmada(
       threads,
       projects,
       registryOf(["cap"]),
     ).captains;
-    expect(idsOf(captain!.workers)).toEqual(["w2", "grandchild", "w1"]);
+    expect(idsOf(captain!.workers)).toEqual(["w1", "w2"]);
+    expect(captain!.workers[0]).toMatchObject({
+      status: "needs-you",
+      activityAt: NOW - 1000,
+      adoptable: false,
+    });
+    expect(captain!.status).toBe("needs-you");
+    expect(captain!.activityAt).toBe(NOW - 1000);
   });
 
   it("follows the lifecycle owner when a worker has no parent", () => {
@@ -189,9 +200,20 @@ describe("the thread list", () => {
     expect(entry!.status).toBe("needs-you");
   });
 
-  it("treats a thread whose parent is not visible as a root", () => {
+  it("treats a thread whose parent is not visible as a root that can become a captain", () => {
     const threads = [thread("orphan", { parentThreadId: "archived-parent" })];
-    expect(threadIds(buildArmada(threads, projects, none))).toEqual(["orphan"]);
+    const [entry] = buildArmada(threads, projects, none).threads;
+    expect(entry).toMatchObject({ adoptable: true });
+    expect(entry!.thread.id).toBe("orphan");
+  });
+
+  it("folds the newest attention of the subtree into the root", () => {
+    const threads = [
+      thread("root", { latestAttentionAt: NOW - 5000 }),
+      thread("child", { parentThreadId: "root", latestAttentionAt: NOW }),
+    ];
+    const [entry] = buildArmada(threads, projects, none).threads;
+    expect(entry!.latestAttentionAt).toBe(NOW);
   });
 
   it("orders threads across projects by latest activity, counting folded children", () => {

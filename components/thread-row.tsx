@@ -17,7 +17,7 @@ import { formatAge } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { PullRequestNumber } from "./pull-request-number";
 import { RenameInput } from "./rename-input";
-import { StatusGlyph, StatusWord } from "./status-glyph";
+import { StatusMark } from "./status-mark";
 
 export type RowKind = "captain" | "worker" | "thread";
 
@@ -60,10 +60,8 @@ function Trailing({
       </kbd>
     );
   }
-  if (status !== null) {
-    if (!compact) return <StatusWord status={status} />;
-    if (isLive(status)) return <StatusGlyph status={status} />;
-  }
+  if (status !== null && (!compact || isLive(status)))
+    return <StatusMark status={status} variant={compact ? "compact" : "card"} />;
   return (
     <span className="shrink-0 tabular-nums text-2xs text-muted-foreground">
       {formatAge(activityAt, now)}

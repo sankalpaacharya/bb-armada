@@ -1,16 +1,80 @@
-import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type {
+  PluginSidebarThread,
+  PluginSidebarThreadIndicator,
+} from "@get-bb/plugin-sdk/app";
 
 export type Status = "needs-you" | "failed" | "working" | "queued" | "done";
 
-const RANK: Record<Status, number> = {
-  "needs-you": 5,
-  failed: 4,
-  working: 3,
-  queued: 2,
-  done: 1,
+export type StatusGlyph =
+  | { kind: "grid" }
+  | { kind: "indicator"; indicator: PluginSidebarThreadIndicator };
+
+export type StatusRow = {
+  rank: number;
+  word: string;
+  tone: string;
+  glyph: StatusGlyph;
+  /** The card shows the word next to the glyph; the grid speaks for itself. */
+  wordOnCard: boolean;
+  /** Compact rows show the glyph; a status that is not live shows the age. */
+  live: boolean;
+  parkable: boolean;
 };
 
-const WORKING_INDICATORS = new Set<string>([
+const indicator = (indicator: PluginSidebarThreadIndicator): StatusGlyph => ({
+  kind: "indicator",
+  indicator,
+});
+
+export const STATUS: Record<Status, StatusRow> = {
+  "needs-you": {
+    rank: 5,
+    word: "Needs you",
+    tone: "text-attention",
+    glyph: indicator("waiting-for-input"),
+    wordOnCard: true,
+    live: true,
+    parkable: false,
+  },
+  failed: {
+    rank: 4,
+    word: "Failed",
+    tone: "text-destructive-text",
+    glyph: indicator("unread-error"),
+    wordOnCard: true,
+    live: true,
+    parkable: true,
+  },
+  working: {
+    rank: 3,
+    word: "Working",
+    tone: "text-timeline-accent",
+    glyph: { kind: "grid" },
+    wordOnCard: false,
+    live: true,
+    parkable: false,
+  },
+  queued: {
+    rank: 2,
+    word: "Queued",
+    tone: "text-muted-foreground",
+    glyph: indicator("queued-waiting"),
+    wordOnCard: true,
+    live: true,
+    parkable: false,
+  },
+  done: {
+    rank: 1,
+    word: "Done",
+    tone: "text-muted-foreground",
+    glyph: indicator("unread-success"),
+    wordOnCard: true,
+    live: false,
+    parkable: true,
+  },
+};
+
+const WORKING_INDICATORS = new Set<PluginSidebarThreadIndicator>([
   "runtime",
   "workflow",
   "background-agent",
@@ -65,9 +129,13 @@ export function strongerStatus(
 ): Status | null {
   if (a === null) return b;
   if (b === null) return a;
-  return RANK[b] > RANK[a] ? b : a;
+  return STATUS[b].rank > STATUS[a].rank ? b : a;
 }
 
 export function isLive(status: Status | null): boolean {
-  return status !== null && status !== "done";
+  return status !== null && STATUS[status].live;
+}
+
+export function canPark(status: Status | null): boolean {
+  return status === null || STATUS[status].parkable;
 }

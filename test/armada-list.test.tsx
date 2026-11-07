@@ -113,14 +113,10 @@ describe("Armada thread list", () => {
     const workers = within(
       screen.getByRole("list", { name: "Workers of Captain Alpha" }),
     );
-    for (const title of [
-      "Build parser",
-      "Write docs",
-      "Approve deploy",
-      "Nested helper",
-    ]) {
+    for (const title of ["Build parser", "Write docs", "Approve deploy"]) {
       expect(workers.getByText(title)).toBeTruthy();
     }
+    expect(workers.queryByText("Nested helper")).toBeNull();
     const list = screen.getByRole("list", { name: "Threads" });
     expect(
       Array.from(list.querySelectorAll("[data-armada-row]")).map(
