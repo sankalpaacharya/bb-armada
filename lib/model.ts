@@ -4,6 +4,7 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 
 import type { Avatar, CaptainRecord } from "./captains";
+import { parentIdOf, threadForest } from "./forest";
 import {
   isExpired,
   resolveShelf,
@@ -69,10 +70,6 @@ export type ArmadaModel = {
   /** Threads whose stored park can never apply again, to delete. */
   expiredParks: string[];
 };
-
-function parentIdOf(thread: PluginSidebarThread): string | null {
-  return thread.parentThreadId ?? thread.lifecycleOwnerThreadId;
-}
 
 function fold(threads: readonly PluginSidebarThread[]): Fold {
   let status: Status | null = null;
@@ -146,36 +143,15 @@ export function buildArmada(
     projects.map((project) => [project.id, project.name]),
   );
   const parkOf = new Map(parks.map((park) => [park.threadId, park]));
-  const childrenOf = new Map<string, PluginSidebarThread[]>();
-  for (const thread of visible) {
-    const parentId = parentIdOf(thread);
-    if (parentId === null || !byId.has(parentId)) continue;
-    const siblings = childrenOf.get(parentId) ?? [];
-    siblings.push(thread);
-    childrenOf.set(parentId, siblings);
-  }
 
   const captainRecords = records.flatMap((record) => {
     const thread = byId.get(record.threadId);
     return thread === undefined ? [] : [{ record, thread }];
   });
-  const captainIds = new Set(captainRecords.map(({ thread }) => thread.id));
-
-  /** Every descendant, stopping at captains, which own their own subtree. */
-  const subtreeOf = (rootId: string): PluginSidebarThread[] => {
-    const found: PluginSidebarThread[] = [];
-    const seen = new Set([rootId]);
-    const pending = [rootId];
-    for (let index = 0; index < pending.length; index += 1) {
-      for (const child of childrenOf.get(pending[index]) ?? []) {
-        if (seen.has(child.id) || captainIds.has(child.id)) continue;
-        seen.add(child.id);
-        found.push(child);
-        pending.push(child.id);
-      }
-    }
-    return found;
-  };
+  const { roots, subtreeOf } = threadForest(
+    visible,
+    new Set(captainRecords.map(({ thread }) => thread.id)),
+  );
 
   const badgeOf = new Map(
     captainRecords.map(({ record, thread }): [string, CaptainBadge] => [
@@ -216,31 +192,7 @@ export function buildArmada(
         a.record.threadId.localeCompare(b.record.threadId),
     );
 
-  /** A card's root: the thread reached by climbing parents until none is left or the next is a captain. */
-  const rootOf = (thread: PluginSidebarThread): PluginSidebarThread => {
-    let current = thread;
-    const seen = new Set([current.id]);
-    for (;;) {
-      const parentId = parentIdOf(current);
-      const parent = parentId === null ? undefined : byId.get(parentId);
-      if (
-        parent === undefined ||
-        captainIds.has(parent.id) ||
-        seen.has(parent.id)
-      )
-        return current;
-      seen.add(parent.id);
-      current = parent;
-    }
-  };
-
-  const roots = new Map<string, PluginSidebarThread>();
-  for (const thread of visible) {
-    if (captainIds.has(thread.id)) continue;
-    const root = rootOf(thread);
-    roots.set(root.id, root);
-  }
-  const entries = [...roots.values()].map(entryOf);
+  const entries = roots.map(entryOf);
   for (const entry of entries) if (entry.shelf !== "active") parked.push(entry);
 
   return {
