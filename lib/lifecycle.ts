@@ -91,18 +91,10 @@ export function snoozePresets(now: Date): SnoozePreset[] {
   return presets;
 }
 
+/** Rounded up, so a snooze never reads "now" while the thread is still hidden. */
 export const wakeLabel = (until: number, now: number): string =>
-  formatDuration(until - now);
+  formatDuration(until - now, "up");
 
-/** The soonest snooze wake still ahead, or null when nothing is snoozed. */
-export function nextWakeAt(
-  parks: readonly Park[],
-  now: number,
-): number | null {
-  let soonest: number | null = null;
-  for (const park of parks) {
-    if (park.kind !== "snoozed" || park.until <= now) continue;
-    if (soonest === null || park.until < soonest) soonest = park.until;
-  }
-  return soonest;
-}
+/** When each snooze wakes, for the clock that wakes the model. */
+export const wakesOf = (parks: readonly Park[]): number[] =>
+  parks.flatMap((park) => (park.kind === "snoozed" ? [park.until] : []));

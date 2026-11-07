@@ -31,3 +31,14 @@ describe("formatDuration", () => {
     expect(formatDuration(-1)).toBe("now");
   });
 });
+
+describe("formatDuration rounding up", () => {
+  it("never reads now while time is left, and reads a full unit in that unit", () => {
+    expect(formatDuration(40_000, "up")).toBe("1m");
+    expect(formatDuration(4 * MINUTE + 1, "up")).toBe("5m");
+    expect(formatDuration(59 * MINUTE + 30_000, "up")).toBe("1h");
+    expect(formatDuration(90 * MINUTE, "up")).toBe("2h");
+    expect(formatDuration(6 * DAY + 1, "up")).toBe("1w");
+    expect(formatDuration(0, "up")).toBe("now");
+  });
+});

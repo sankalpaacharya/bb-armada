@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  nextWakeAt,
   parseStoredPark,
   resolveShelf,
   snoozePresets,
@@ -86,22 +85,12 @@ describe("snoozePresets", () => {
   });
 });
 
-describe("wake timing", () => {
-  it("labels the time left with the same formatter as ages", () => {
+describe("wakeLabel", () => {
+  it("rounds the time left up, so a hidden snooze never reads now", () => {
+    expect(wakeLabel(NOW + 40_000, NOW)).toBe("1m");
+    expect(wakeLabel(NOW + HOUR - 1000, NOW)).toBe("1h");
     expect(wakeLabel(NOW + 5 * MINUTE, NOW)).toBe("5m");
-    expect(wakeLabel(NOW + 2 * HOUR, NOW)).toBe("2h");
     expect(wakeLabel(NOW - 1, NOW)).toBe("now");
-  });
-
-  it("finds the soonest wake still ahead", () => {
-    const parks: Park[] = [
-      settled,
-      { kind: "snoozed", at: NOW, until: NOW + 3 * HOUR },
-      { kind: "snoozed", at: NOW, until: NOW + HOUR },
-      { kind: "snoozed", at: NOW - HOUR, until: NOW - 1 },
-    ];
-    expect(nextWakeAt(parks, NOW)).toBe(NOW + HOUR);
-    expect(nextWakeAt([settled], NOW)).toBeNull();
   });
 });
 

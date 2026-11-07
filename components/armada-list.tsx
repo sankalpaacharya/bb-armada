@@ -10,8 +10,8 @@ import { useCaptains } from "@/hooks/use-captains";
 import { useParkActions } from "@/hooks/use-park-actions";
 import { useParks } from "@/hooks/use-parks";
 import { useStoredState } from "@/hooks/use-stored-state";
-import { useNow, useScheduledTick } from "@/lib/clock";
-import { nextWakeAt } from "@/lib/lifecycle";
+import { useWakeTime } from "@/lib/clock";
+import { wakesOf } from "@/lib/lifecycle";
 import { buildArmada } from "@/lib/model";
 import {
   parseScope,
@@ -39,17 +39,16 @@ export function ArmadaList({
   const parks = useParks();
   const parkActions = useParkActions();
   const navigate = useBbNavigate();
-  const now = useNow();
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
   const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, null);
   const [shelves, setShelves] = useStoredState(SHELVES_KEY, parseBooleanMap, {});
   const rows = useArrowKeyRows();
 
+  const wakeTime = useWakeTime(wakesOf(parks));
   const model = useMemo(
-    () => buildArmada(threads, projects, captains ?? [], parks, now),
-    [threads, projects, captains, parks, now],
+    () => buildArmada(threads, projects, captains ?? [], parks, wakeTime),
+    [threads, projects, captains, parks, wakeTime],
   );
-  useScheduledTick(nextWakeAt(parks, now));
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
   const scope = resolveScope(storedScope, pickable);
   const scoped = useMemo(() => scopeThreads(model.threads, scope), [model, scope]);

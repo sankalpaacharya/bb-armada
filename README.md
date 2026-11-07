@@ -110,9 +110,11 @@ title, a muted count, and the actions beside it, with no divider lines. Every ro
 owns bb's row contract: the full-bleed anchor, `data-sidebar-thread-id`, split
 on cmd-click, the jump shortcuts, bb's context menu and inline rename. Pickers
 are one `ChoiceList` with listbox semantics. Ages and "wakes in" labels come
-from one clock in `lib/clock.ts` through the `Age` and `WakesIn` leaves, and
-the same clock takes one scheduled tick at the next snooze wake so a snoozed
-thread returns on time. Shelf rows are one line in t3sidebar's style, and a
+from one 30 s clock in `lib/clock.ts` through the `Age` and `WakesIn` leaves,
+so a tick re-renders only those leaves. The model is built from a separate
+wake time (`useWakeTime`) that moves only when the next snooze is due, so a
+snoozed thread returns on time without the list rebuilding every tick. A
+wake label rounds up and never reads "now" while the thread is still hidden. Shelf rows are one line in t3sidebar's style, and a
 parkable card swaps its status for Snooze and Settle buttons on hover.
 
 ## Develop
