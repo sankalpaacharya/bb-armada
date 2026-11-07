@@ -1,6 +1,7 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
+import { createAutoSettle } from "./lib/auto-settle";
 import { captainPrompt } from "./lib/captain-text";
 import {
   CAPTAIN_KEY_PREFIX,
@@ -23,6 +24,7 @@ import {
   rpcContract,
   type Created,
 } from "./lib/rpc";
+import { SETTINGS, parseSettings } from "./lib/settings";
 
 /** A failed record write is retried after each wait, longer each time. */
 const RECORD_BACKOFF_MS = [100, 400] as const;
@@ -72,6 +74,7 @@ export default async function plugin(bb: BbPluginApi) {
     );
   }
   const queue = queueByKey();
+  const settings = bb.settings.define(SETTINGS);
 
   const findCaptain = async (threadId: string): Promise<CaptainRecord | null> =>
     parseStoredCaptain(await kv.get<unknown>(captainKey(threadId)));
@@ -82,10 +85,22 @@ export default async function plugin(bb: BbPluginApi) {
     return record;
   };
 
-  const savePark = async (record: ParkRecord): Promise<ParkRecord> => {
-    await kv.set(parkKey(record.threadId), record);
-    bb.rpc.experimental_invalidate([PARKS_TAG]);
-    return record;
+  const savePark = (record: ParkRecord): Promise<ParkRecord> =>
+    queue(record.threadId, async () => {
+      await kv.set(parkKey(record.threadId), record);
+      bb.rpc.experimental_invalidate([PARKS_TAG]);
+      return record;
+    });
+
+  const { evaluate, reevaluate } = createAutoSettle(bb, {
+    queue,
+    readSettings: async () => parseSettings(await settings.get()).autoSettle,
+    onChanged: () => bb.rpc.experimental_invalidate([PARKS_TAG]),
+  });
+  const inBackground = (run: () => Promise<unknown>) => () => {
+    run().catch((cause: unknown) =>
+      bb.log.warn(`auto-settle failed: ${messageOf(cause)}`),
+    );
   };
 
   bb.rpc.register(rpcContract, {
@@ -169,12 +184,23 @@ export default async function plugin(bb: BbPluginApi) {
       return savePark({ threadId, kind: "snoozed", at, until });
     },
 
-    parks_unpark: async ({ threadId }) => {
-      await kv.delete(parkKey(threadId));
-      bb.rpc.experimental_invalidate([PARKS_TAG]);
-      return null;
-    },
+    parks_unpark: ({ threadId }) =>
+      queue(threadId, async () => {
+        await kv.delete(parkKey(threadId));
+        bb.rpc.experimental_invalidate([PARKS_TAG]);
+        return null;
+      }),
+
+    parks_keep: ({ threadId, at }) => savePark({ threadId, kind: "kept", at }),
+
+    parks_evaluate: async () => ({ changed: await evaluate() }),
   });
+
+  bb.background.schedule("auto-settle", "*/5 * * * *", async () => {
+    await evaluate();
+  });
+  settings.onChange(inBackground(reevaluate));
+  inBackground(evaluate)();
 
   bb.log.info("loaded");
 }

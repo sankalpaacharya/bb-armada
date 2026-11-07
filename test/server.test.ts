@@ -18,7 +18,12 @@ afterEach(() => {
 async function load(options: { seed?: (kv: Kv) => Promise<void> } = {}) {
   const { bb, harness } = createFakePluginHost({
     pluginId: "armada",
-    sdk: { threads: { spawn: async () => ({ id: "thr_new" }) as never } },
+    sdk: {
+      threads: {
+        spawn: async () => ({ id: "thr_new" }) as never,
+        list: async () => [],
+      },
+    },
   });
   await options.seed?.(bb.storage.kv);
   await plugin(bb);
@@ -217,7 +222,9 @@ describe("captain records", () => {
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
     expect(await list()).toEqual([]);
-    expect(harness.sdk.calls).toEqual([]);
+    expect(
+      harness.sdk.calls.filter((call) => call.path !== "threads.list"),
+    ).toEqual([]);
   });
 
   it("invalidates the captains read after every write", async () => {
@@ -445,9 +452,8 @@ describe("migration from the single captains key", () => {
   });
 
   it("still serves the list when the move fails, and keeps the old key to retry", async () => {
-    const { createFakePluginHost: host } = await import(
-      "@get-bb/plugin-sdk/testing"
-    );
+    const { createFakePluginHost: host } =
+      await import("@get-bb/plugin-sdk/testing");
     const { bb, harness } = host({ pluginId: "armada" });
     await bb.storage.kv.set(LEGACY_CAPTAINS_KEY, legacy);
     vi.spyOn(bb.storage.kv, "set").mockRejectedValue(new Error("busy"));
@@ -458,5 +464,303 @@ describe("migration from the single captains key", () => {
       level: "error",
       message: expect.stringContaining("busy"),
     });
+  });
+});
+
+describe("auto-settle", () => {
+  const DAY = 86_400_000;
+  const HOUR = 3_600_000;
+  const started = Date.now();
+  const quietFor = (ms: number) => started - ms;
+
+  type Listed = {
+    id: string;
+    parentThreadId: string | null;
+    lifecycleOwnerThreadId: string | null;
+    environmentId: string | null;
+    visibility: "visible" | "hidden";
+    archivedAt: number | null;
+    deletedAt: number | null;
+    pinnedAt: number | null;
+    createdAt: number;
+    updatedAt: number;
+    latestAttentionAt: number;
+    hasPendingInteraction: boolean;
+    queuedWork: "none" | "waiting" | "failed";
+    status: string;
+    activity: Record<
+      | "activeBackgroundAgentCount"
+      | "activeBackgroundCommandCount"
+      | "activeGoalCount"
+      | "activePlanModeCount"
+      | "activeWorkflowCount",
+      number
+    >;
+  };
+
+  const listed = (id: string, overrides: Partial<Listed> = {}): Listed => ({
+    id,
+    parentThreadId: null,
+    lifecycleOwnerThreadId: null,
+    environmentId: null,
+    visibility: "visible",
+    archivedAt: null,
+    deletedAt: null,
+    pinnedAt: null,
+    createdAt: quietFor(5 * DAY),
+    updatedAt: quietFor(4 * DAY),
+    latestAttentionAt: 0,
+    hasPendingInteraction: false,
+    queuedWork: "none",
+    status: "idle",
+    activity: {
+      activeBackgroundAgentCount: 0,
+      activeBackgroundCommandCount: 0,
+      activeGoalCount: 0,
+      activePlanModeCount: 0,
+      activeWorkflowCount: 0,
+    },
+    ...overrides,
+  });
+
+  type Row =
+    | {
+        outcome: "available";
+        pullRequest: { state: string; updatedAt: string };
+      }
+    | { outcome: "absent" }
+    | { outcome: "unavailable"; message: string };
+
+  async function loadAuto(
+    options: {
+      threads?: Listed[];
+      pullRequests?: Record<string, Row>;
+      settings?: Record<string, number | boolean>;
+      seed?: (kv: Kv) => Promise<void>;
+    } = {},
+  ) {
+    let threads = options.threads ?? [];
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "armada",
+      settings: options.settings,
+      sdk: {
+        threads: {
+          list: async (args) => {
+            const offset = args?.offset ?? 0;
+            return threads.slice(offset, offset + (args?.limit ?? 100));
+          },
+        },
+        plugins: {
+          callRpc: async ({ input }) => {
+            const { keys } = input as { keys: string[] };
+            return Object.fromEntries(
+              keys.map((key) => [
+                key,
+                options.pullRequests?.[key] ?? { outcome: "absent" },
+              ]),
+            );
+          },
+        },
+      },
+    });
+    await options.seed?.(bb.storage.kv);
+    await plugin(bb);
+    const evaluate = async () =>
+      (
+        (await harness.callRpc("parks_evaluate", null)) as {
+          changed: string[];
+        }
+      ).changed.sort();
+    const startup = await evaluate();
+    const parks = async () =>
+      ((await harness.callRpc("parks_list", null)) as ParkRecord[]).sort(
+        (a, b) => a.threadId.localeCompare(b.threadId),
+      );
+    return {
+      bb,
+      harness,
+      startup,
+      evaluate,
+      parks,
+      setThreads: (next: Listed[]) => {
+        threads = next;
+      },
+    };
+  }
+
+  it("settles quiet cards once at start, as auto, and invalidates the parks read", async () => {
+    const { startup, parks, harness } = await loadAuto({
+      threads: [listed("old"), listed("recent", { updatedAt: quietFor(HOUR) })],
+    });
+    expect(startup).toEqual(["old"]);
+    expect(await parks()).toEqual([
+      { threadId: "old", kind: "settled", at: expect.any(Number), by: "auto" },
+    ]);
+    expect(harness.experimental_rpcInvalidations).toContainEqual(["parks"]);
+  });
+
+  it("writes nothing on a second run when nothing changed", async () => {
+    const { evaluate, bb } = await loadAuto({ threads: [listed("old")] });
+    const set = vi.spyOn(bb.storage.kv, "set");
+    const remove = vi.spyOn(bb.storage.kv, "delete");
+    expect(await evaluate()).toEqual([]);
+    expect(set).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("unsettles an auto-settled card on new activity", async () => {
+    const { evaluate, parks, setThreads } = await loadAuto({
+      threads: [listed("old")],
+    });
+    setThreads([listed("old", { latestAttentionAt: quietFor(1000) })]);
+    expect(await evaluate()).toEqual(["old"]);
+    expect(await parks()).toEqual([]);
+  });
+
+  it("never settles a kept card or touches a user's settle, and leaves a snooze alone", async () => {
+    const { startup, parks } = await loadAuto({
+      threads: [
+        listed("kept"),
+        listed("user", { updatedAt: quietFor(HOUR) }),
+        listed("snoozed"),
+      ],
+      seed: async (kv) => {
+        await kv.set("park:kept", { threadId: "kept", kind: "kept", at: 1 });
+        await kv.set("park:user", { threadId: "user", kind: "settled", at: 1 });
+        await kv.set("park:snoozed", {
+          threadId: "snoozed",
+          kind: "snoozed",
+          at: 1,
+          until: started + DAY,
+        });
+      },
+    });
+    expect(startup).toEqual([]);
+    expect((await parks()).map((park) => park.kind)).toEqual([
+      "kept",
+      "snoozed",
+      "settled",
+    ]);
+  });
+
+  it("folds a card's tree: a working child holds its root, and a captain's worker is its own card", async () => {
+    const { startup } = await loadAuto({
+      threads: [
+        listed("root"),
+        listed("child", { parentThreadId: "root", status: "active" }),
+        listed("cap"),
+        listed("worker", { parentThreadId: "cap" }),
+      ],
+      seed: async (kv) => {
+        await kv.set("captain:cap", {
+          threadId: "cap",
+          avatar: { style: "micah", seed: "cap" },
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+      },
+    });
+    expect(startup).toEqual(["worker"]);
+  });
+
+  it("holds pinned, waiting and queued cards, and skips hidden and archived threads", async () => {
+    const { startup } = await loadAuto({
+      threads: [
+        listed("pinned", { pinnedAt: 1 }),
+        listed("waiting", { hasPendingInteraction: true }),
+        listed("queued", { queuedWork: "waiting" }),
+        listed("planning", {
+          activity: { ...listed("x").activity, activePlanModeCount: 1 },
+        }),
+        listed("hidden", { visibility: "hidden" }),
+        listed("archived", { archivedAt: 1 }),
+      ],
+    });
+    expect(startup).toEqual([]);
+  });
+
+  it("reads each card's pull request from GitHub PR Status: merged settles, open holds, unreadable leaves it", async () => {
+    const after = new Date(started - HOUR / 2).toISOString();
+    const { startup, harness } = await loadAuto({
+      threads: [
+        listed("merged", { environmentId: "env_m", updatedAt: quietFor(HOUR) }),
+        listed("open", { environmentId: "env_o" }),
+        listed("down", { environmentId: "env_d" }),
+        listed("gone", { environmentId: "env_g" }),
+      ],
+      pullRequests: {
+        env_m: {
+          outcome: "available",
+          pullRequest: { state: "merged", updatedAt: after },
+        },
+        env_o: {
+          outcome: "available",
+          pullRequest: { state: "open", updatedAt: after },
+        },
+        env_d: { outcome: "unavailable", message: "offline" },
+      },
+    });
+    expect(startup).toEqual(["gone", "merged"]);
+    const [call] = harness.sdk.callsTo("plugins.callRpc");
+    expect(call![0]).toMatchObject({
+      pluginId: "bb--github-pr-status",
+      method: "pullRequests",
+      input: { keys: ["env_m", "env_o", "env_d", "env_g"] },
+    });
+  });
+
+  it("changes nothing for cards with an environment when GitHub PR Status cannot be called", async () => {
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "armada",
+      sdk: {
+        threads: {
+          list: async () => [
+            listed("env", { environmentId: "env_1" }),
+            listed("bare"),
+          ],
+        },
+        plugins: {
+          callRpc: async () => {
+            throw new Error("plugin not loaded");
+          },
+        },
+      },
+    });
+    await plugin(bb);
+    expect(await harness.callRpc("parks_evaluate", null)).toEqual({
+      changed: ["bare"],
+    });
+  });
+
+  it("follows the settings: 0 days turns age off, and a change runs again", async () => {
+    const { startup, harness, parks } = await loadAuto({
+      threads: [listed("old")],
+      settings: { autoSettleAfterDays: 0 },
+    });
+    expect(startup).toEqual([]);
+    await harness.setSettings({ autoSettleAfterDays: 3 });
+    await vi.waitFor(async () =>
+      expect((await parks()).map((park) => park.threadId)).toEqual(["old"]),
+    );
+  });
+
+  it("runs on its five-minute schedule", async () => {
+    const { harness, parks, setThreads } = await loadAuto();
+    setThreads([listed("old")]);
+    await harness.runSchedule("auto-settle");
+    expect((await parks()).map((park) => park.threadId)).toEqual(["old"]);
+  });
+
+  it("stores Move to active as kept, and a later settle replaces it", async () => {
+    const { harness, parks, evaluate } = await loadAuto({
+      threads: [listed("old")],
+    });
+    expect(
+      await harness.callRpc("parks_keep", { threadId: "old", at: 2000 }),
+    ).toEqual({ threadId: "old", kind: "kept", at: 2000 });
+    expect(await evaluate()).toEqual([]);
+    await harness.callRpc("parks_settle", { threadId: "old", at: 3000 });
+    expect(await parks()).toEqual([
+      { threadId: "old", kind: "settled", at: 3000, by: "user" },
+    ]);
   });
 });
