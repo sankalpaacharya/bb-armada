@@ -43,9 +43,9 @@ describe("captains and their workers", () => {
   it("lists a captain's children in Threads as cards carrying their captain", () => {
     const threads = [
       thread("cap", { title: "cops" }),
-      thread("w1", { parentThreadId: "cap", updatedAt: NOW - 3000 }),
-      thread("w2", { parentThreadId: "cap", updatedAt: NOW - 2000 }),
-      thread("plain", { updatedAt: NOW - 1000 }),
+      thread("w1", { parentThreadId: "cap", createdAt: NOW - 3000 }),
+      thread("w2", { parentThreadId: "cap", createdAt: NOW - 2000 }),
+      thread("plain", { createdAt: NOW - 1000 }),
     ];
     const model = build(threads, registryOf(["cap"]));
     expect(threadIds(model)).toEqual(["plain", "w2", "w1"]);
@@ -237,10 +237,10 @@ describe("the thread list", () => {
     expect(threadIds(build(threads, none))).toEqual(["a-old", "b-root"]);
   });
 
-  it("puts pinned threads first in their manual order, then the rest newest first", () => {
+  it("puts pinned threads first in their manual order, then the rest by creation, newest first, whatever their activity", () => {
     const threads = [
-      thread("recent", { updatedAt: NOW - 1000 }),
-      thread("older", { updatedAt: NOW - 9000 }),
+      thread("recent", { createdAt: NOW - 1000, updatedAt: NOW - 9000 }),
+      thread("older", { createdAt: NOW - 9000, updatedAt: NOW }),
       thread("pin-b", {
         isPinned: true,
         pinnedAt: NOW,
