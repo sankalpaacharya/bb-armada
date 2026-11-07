@@ -1,19 +1,31 @@
-import type { ColorId } from "./colors";
-import type { LogoId } from "./logos";
+import { z } from "zod";
 
-export type CaptainRecord = {
-  threadId: string;
-  logo: LogoId;
-  color: ColorId;
-  createdAt: string;
-};
+import { COLOR_IDS, DEFAULT_COLOR } from "./colors";
+import { DEFAULT_LOGO, LOGOS } from "./logos";
 
-export type CaptainRegistry = {
-  version: 1;
-  captains: Record<string, CaptainRecord>;
-};
+export const threadIdSchema = z.string().min(1).max(200);
 
-export const REGISTRY_KEY = "captains";
-export const REGISTRY_CHANNEL = "captains";
+export const captainRecordSchema = z.object({
+  threadId: threadIdSchema,
+  logo: z.enum(LOGOS),
+  color: z.enum(COLOR_IDS),
+  createdAt: z.string(),
+});
 
-export const EMPTY_REGISTRY: CaptainRegistry = { version: 1, captains: {} };
+export type CaptainRecord = z.infer<typeof captainRecordSchema>;
+
+const storedCaptainSchema = captainRecordSchema.extend({
+  logo: z.enum(LOGOS).catch(DEFAULT_LOGO),
+  color: z.enum(COLOR_IDS).catch(DEFAULT_COLOR),
+});
+
+export const CAPTAIN_KEY_PREFIX = "captain:";
+export const LEGACY_CAPTAINS_KEY = "captains";
+
+export const captainKey = (threadId: string): string =>
+  `${CAPTAIN_KEY_PREFIX}${threadId}`;
+
+export function parseStoredCaptain(raw: unknown): CaptainRecord | null {
+  const parsed = storedCaptainSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}

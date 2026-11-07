@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { toast } from "sonner";
 import {
+  experimental_useRpcMutation,
   useBbNavigate,
-  useRpc,
   type PluginSidebarProject,
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
@@ -21,7 +20,8 @@ import { captainTitle, withoutLeadingEmoji } from "@/lib/captain-text";
 import type { CaptainRecord } from "@/lib/captains";
 import { COLORS, DEFAULT_COLOR, type ColorId } from "@/lib/colors";
 import { DEFAULT_LOGO, LOGOS, logoIcon, type LogoId } from "@/lib/logos";
-import type { rpcContract } from "@/lib/rpc";
+import { rpcContract } from "@/lib/rpc";
+import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
 
@@ -186,7 +186,30 @@ export function CaptainDialog({
   onClose,
   onNavigate,
 }: CaptainDialogProps) {
-  const rpc = useRpc<typeof rpcContract>();
+  const create = experimental_useRpcMutation({
+    contract: rpcContract,
+    method: "captains_create",
+  });
+  const adopt = experimental_useRpcMutation({
+    contract: rpcContract,
+    method: "captains_adopt",
+  });
+  const update = experimental_useRpcMutation({
+    contract: rpcContract,
+    method: "captains_update",
+    optimistic: (input, cache) =>
+      cache.update("captains_list", null, (current) =>
+        current.map((record) =>
+          record.threadId === input.threadId
+            ? {
+                ...record,
+                logo: input.logo ?? record.logo,
+                color: input.color ?? record.color,
+              }
+            : record,
+        ),
+      ),
+  });
   const navigate = useBbNavigate();
   const initial = state.kind === "edit" ? state.record : null;
   const [logo, setLogo] = useState<LogoId>(initial?.logo ?? DEFAULT_LOGO);
@@ -210,7 +233,7 @@ export function CaptainDialog({
     setPending(true);
     try {
       if (state.kind === "create" && project !== undefined) {
-        const created = await rpc.call("captains_create", {
+        const created = await create.mutate({
           projectId: project.id,
           projectName: project.name,
           logo,
@@ -219,26 +242,16 @@ export function CaptainDialog({
         navigate.toThread(created.threadId);
         onNavigate();
       } else if (state.kind === "adopt") {
-        await rpc.call("captains_adopt", {
-          threadId: state.thread.id,
-          logo,
-          color,
-        });
+        await adopt.mutate({ threadId: state.thread.id, logo, color });
       } else if (state.kind === "edit") {
-        await rpc.call("captains_update", {
-          threadId: state.thread.id,
-          logo,
-          color,
-        });
+        await update.mutate({ threadId: state.thread.id, logo, color });
       }
       onClose();
     } catch (cause) {
       setPending(false);
-      toast.error(
+      toastFailure(
         `Could not ${state.kind === "create" ? "create the captain" : "save the captain"}`,
-        {
-          description: cause instanceof Error ? cause.message : String(cause),
-        },
+        cause,
       );
     }
   };

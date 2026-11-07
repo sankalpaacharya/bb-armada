@@ -17,7 +17,7 @@ const { threads } = buildArmada(
     thread("a2", { projectId: "proj_a" }),
   ],
   projects,
-  { version: 1, captains: {} },
+  [],
 );
 const ids = (entries: ReturnType<typeof scopeThreads>) =>
   entries.map((entry) => entry.thread.id).sort();

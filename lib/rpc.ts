@@ -1,16 +1,22 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
-import { captainRecordSchema, captainRegistrySchema } from "./captain-schema";
+import { captainRecordSchema, threadIdSchema } from "./captains";
 import { COLOR_IDS } from "./colors";
 import { LOGOS } from "./logos";
 
-const threadId = z.string().min(1).max(200);
+export const CAPTAINS_TAG = "captains";
+
+const threadId = threadIdSchema;
 const logo = z.enum(LOGOS);
 const color = z.enum(COLOR_IDS);
 
 export const rpcContract = defineRpcContract({
-  captains_list: { input: z.null(), output: captainRegistrySchema },
+  captains_list: {
+    input: z.null(),
+    output: z.array(captainRecordSchema),
+    tags: () => [CAPTAINS_TAG],
+  },
   captains_create: {
     input: z.object({
       projectId: z.string().min(1).max(200),

@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 
 import app from "../app";
-import type { CaptainRegistry } from "../lib/captains";
+import type { CaptainRecord } from "../lib/captains";
 import { NOW, project, thread } from "./fixtures";
 
 const stored = new Map<string, string>();
@@ -37,20 +37,13 @@ const projects = [
   project("proj_me", "Personal", true),
 ];
 
-const registry = (...ids: string[]): CaptainRegistry => ({
-  version: 1,
-  captains: Object.fromEntries(
-    ids.map((id) => [
-      id,
-      {
-        threadId: id,
-        logo: "rocket",
-        color: "emerald",
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
-    ]),
-  ),
-});
+const registry = (...ids: string[]): CaptainRecord[] =>
+  ids.map((id) => ({
+    threadId: id,
+    logo: "rocket",
+    color: "emerald",
+    createdAt: "2026-01-01T00:00:00.000Z",
+  }));
 
 const busy = { status: "active" } as const;
 
@@ -69,7 +62,7 @@ const threads = [
 
 async function render(
   options: {
-    registry?: CaptainRegistry;
+    registry?: CaptainRecord[];
     threads?: typeof threads;
     activeThreadId?: string | null;
     rpc?: Record<string, (input: never) => unknown>;
@@ -374,25 +367,13 @@ describe("Armada thread list", () => {
     expect(screen.getByRole("button", { name: "New captain" })).toBeTruthy();
   });
 
-  it("shows a captain as soon as the server announces it", async () => {
-    const { view } = await render({ registry: registry() });
-    await waitFor(() =>
-      expect(view.inspection.rpcCalls.length).toBeGreaterThan(0),
-    );
-    expect(rowOf(view.container, "cap")?.dataset.kind).toBe("thread");
-    await view.emitRealtime("captains", registry("cap"));
-    await waitFor(() =>
-      expect(rowOf(view.container, "cap")?.dataset.kind).toBe("captain"),
-    );
-  });
-
-  it("reloads the registry when the realtime connection comes back", async () => {
+  it("shows a captain as soon as the server invalidates the captains read", async () => {
     let answer = registry();
     const { view } = await render({ rpc: { captains_list: () => answer } });
-    await waitFor(() => expect(view.inspection.rpcCalls).toHaveLength(1));
+    await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
+    expect(rowOf(view.container, "cap")?.dataset.kind).toBe("thread");
     answer = registry("cap");
-    await view.setRealtimeConnectionState("reconnecting");
-    await view.setRealtimeConnectionState("connected");
+    await view.experimental_invalidateRpc(["captains"]);
     await waitFor(() =>
       expect(rowOf(view.container, "cap")?.dataset.kind).toBe("captain"),
     );

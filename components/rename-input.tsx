@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { useSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
+import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 export function RenameInput({
@@ -36,11 +36,9 @@ export function RenameInput({
     if (!save || next === "" || next === initial) return;
     sdk.threads
       .update({ threadId: thread.id, title: next })
-      .catch((cause: unknown) => {
-        toast.error("Could not rename the thread", {
-          description: cause instanceof Error ? cause.message : String(cause),
-        });
-      });
+      .catch((cause: unknown) =>
+        toastFailure("Could not rename the thread", cause),
+      );
   };
 
   return (

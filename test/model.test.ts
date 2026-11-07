@@ -1,7 +1,7 @@
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { describe, expect, it } from "vitest";
 
-import type { CaptainRegistry } from "../lib/captains";
+import type { CaptainRecord } from "../lib/captains";
 import { buildArmada } from "../lib/model";
 import { NOW, project, thread } from "./fixtures";
 
@@ -9,16 +9,13 @@ const projects = [project("proj_a", "Alpha"), project("proj_b", "Beta")];
 
 function registryOf(
   ...ids: [id: string, createdAt?: string][]
-): CaptainRegistry {
-  return {
-    version: 1,
-    captains: Object.fromEntries(
-      ids.map(([id, createdAt = "2026-01-01T00:00:00.000Z"]) => [
-        id,
-        { threadId: id, logo: "compass", color: "indigo", createdAt },
-      ]),
-    ),
-  };
+): CaptainRecord[] {
+  return ids.map(([id, createdAt = "2026-01-01T00:00:00.000Z"]) => ({
+    threadId: id,
+    logo: "compass",
+    color: "indigo",
+    createdAt,
+  }));
 }
 
 const none = registryOf();

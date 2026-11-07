@@ -3,7 +3,7 @@ import type {
   PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
 
-import type { CaptainRecord, CaptainRegistry } from "./captains";
+import type { CaptainRecord } from "./captains";
 import { statusOf, strongerStatus, type Status } from "./status";
 
 export type ThreadEntry = {
@@ -53,7 +53,7 @@ function entryOrder(a: ThreadEntry, b: ThreadEntry): number {
 export function buildArmada(
   threads: readonly PluginSidebarThread[],
   projects: readonly PluginSidebarProject[],
-  registry: CaptainRegistry,
+  records: readonly CaptainRecord[],
 ): ArmadaModel {
   const visible = threads.filter(
     (thread) => !thread.isHidden && !thread.isArchived,
@@ -68,10 +68,11 @@ export function buildArmada(
     childrenOf.set(parentId, siblings);
   }
 
-  const captainThreads = visible.filter((thread) =>
-    Object.hasOwn(registry.captains, thread.id),
-  );
-  const captainIds = new Set(captainThreads.map((thread) => thread.id));
+  const captainRecords = records.flatMap((record) => {
+    const thread = byId.get(record.threadId);
+    return thread === undefined ? [] : [{ record, thread }];
+  });
+  const captainIds = new Set(captainRecords.map(({ record }) => record.threadId));
 
   const subtreeOf = (
     rootId: string,
@@ -93,9 +94,8 @@ export function buildArmada(
   };
 
   const owned = new Set(captainIds);
-  const captains = captainThreads
-    .map((thread): CaptainEntry => {
-      const record = registry.captains[thread.id];
+  const captains = captainRecords
+    .map(({ record, thread }): CaptainEntry => {
       const workers = subtreeOf(record.threadId, true).sort(byRecency);
       let status = statusOf(thread);
       for (const worker of workers) {

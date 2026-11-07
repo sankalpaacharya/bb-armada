@@ -7,20 +7,19 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { toast } from "sonner";
 import {
+  experimental_useRpcMutation,
   experimental_useSidebarThreads,
   useBbNavigate,
-  useRpc,
   type PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { useCaptainRegistry } from "@/hooks/use-captain-registry";
+import { useCaptains } from "@/hooks/use-captains";
 import { withoutLeadingEmoji } from "@/lib/captain-text";
 import { buildArmada, pickableProjects, type CaptainEntry } from "@/lib/model";
-import type { rpcContract } from "@/lib/rpc";
+import { rpcContract } from "@/lib/rpc";
 import {
   parseScope,
   resolveScope,
@@ -30,6 +29,7 @@ import {
 } from "@/lib/scope";
 import { isLive, statusOf } from "@/lib/status";
 import { parseBooleanMap, readStored, writeStored } from "@/lib/storage";
+import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
 import { captainItems, makeCaptainItem } from "./captain-menu";
@@ -126,8 +126,15 @@ export function ArmadaList({
   onNavigate,
 }: PluginThreadListProps) {
   const { status, threads, projects } = experimental_useSidebarThreads();
-  const registry = useCaptainRegistry();
-  const rpc = useRpc<typeof rpcContract>();
+  const captains = useCaptains();
+  const removeMutation = experimental_useRpcMutation({
+    contract: rpcContract,
+    method: "captains_remove",
+    optimistic: ({ threadId }, cache) =>
+      cache.update("captains_list", null, (current) =>
+        current.filter((record) => record.threadId !== threadId),
+      ),
+  });
   const navigate = useBbNavigate();
   const now = useNow(30_000);
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
@@ -140,8 +147,8 @@ export function ArmadaList({
   const listRef = useRef<HTMLDivElement>(null);
 
   const model = useMemo(
-    () => buildArmada(threads, projects, registry),
-    [threads, projects, registry],
+    () => buildArmada(threads, projects, captains ?? []),
+    [threads, projects, captains],
   );
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
   const projectCounts = useMemo(
@@ -162,11 +169,11 @@ export function ArmadaList({
   };
 
   const removeCaptain = (threadId: string) => {
-    rpc.call("captains_remove", { threadId }).catch((cause: unknown) => {
-      toast.error("Could not remove the captain", {
-        description: cause instanceof Error ? cause.message : String(cause),
-      });
-    });
+    removeMutation
+      .mutate({ threadId })
+      .catch((cause: unknown) =>
+        toastFailure("Could not remove the captain", cause),
+      );
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -313,7 +320,7 @@ export function ArmadaList({
           onClose={() => setScopeOpen(false)}
         />
       ) : null}
-      {status === "loading" ? (
+      {status === "loading" || captains === undefined ? (
         <Note>Loading threads…</Note>
       ) : status === "error" && threads.length === 0 ? (
         <Note>Could not load threads</Note>
