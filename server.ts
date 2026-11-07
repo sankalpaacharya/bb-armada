@@ -28,7 +28,7 @@ import {
   rpcContract,
   type Created,
 } from "./lib/rpc";
-import { SETTINGS, parseSettings } from "./lib/settings";
+import { SETTINGS, logoSkipProjects, parseSettings } from "./lib/settings";
 
 /** A failed record write is retried after each wait, longer each time. */
 const RECORD_BACKOFF_MS = [100, 400] as const;
@@ -80,7 +80,9 @@ export default async function plugin(bb: BbPluginApi) {
   const queue = queueByKey();
   const settings = bb.settings.define(SETTINGS);
   const homes = createHomeReader(bb);
-  const logos = createLogoReader(bb);
+  const logos = createLogoReader(bb, async () =>
+    logoSkipProjects(await settings.get()),
+  );
 
   const findCaptain = async (threadId: string): Promise<CaptainRecord | null> =>
     parseStoredCaptain(await kv.get<unknown>(captainKey(threadId)));

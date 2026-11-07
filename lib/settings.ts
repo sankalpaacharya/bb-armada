@@ -29,7 +29,29 @@ export const SETTINGS = {
       "A closed pull request always settles its thread; this adds merged ones.",
     default: true,
   },
+  logoSkipProjects: {
+    type: "string",
+    label: "Projects to leave alone for logos",
+    description:
+      "Project names, one per line or comma-separated. Armada never reads these projects' files to find a logo.",
+    experimental_multiline: true,
+    default: "",
+  },
 } as const satisfies PluginSettingDescriptors;
+
+/** The project names whose files the logo scan must not read, lowercased. */
+export function logoSkipProjects(
+  values: Readonly<Record<string, unknown>> | undefined,
+): ReadonlySet<string> {
+  const raw = values?.logoSkipProjects;
+  if (typeof raw !== "string") return new Set();
+  return new Set(
+    raw
+      .split(/[,\n]/)
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name !== ""),
+  );
+}
 
 export type ShelfSettings = {
   inactiveAfterMs: number | null;

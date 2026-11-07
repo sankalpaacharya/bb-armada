@@ -84,7 +84,10 @@ const QUERIES = ["icon", "logo"];
  * Finds each project's logo the way T3 Code does, from a favicon or logo in
  * its repo. The map is kept for the process; `refresh` reads it afresh.
  */
-export function createLogoReader(bb: BbPluginApi) {
+export function createLogoReader(
+  bb: BbPluginApi,
+  skipped: () => Promise<ReadonlySet<string>>,
+) {
   const { projects } = bb.sdk;
 
   const logoOf = async (projectId: string): Promise<string | null> => {
@@ -109,8 +112,10 @@ export function createLogoReader(bb: BbPluginApi) {
   };
 
   const read = async (): Promise<ProjectLogos> => {
+    const skip = await skipped();
     const standard = (await projects.list()).filter(
-      (project) => project.kind === "standard",
+      (project) =>
+        project.kind === "standard" && !skip.has(project.name.toLowerCase()),
     );
     const found = await Promise.all(
       standard.map(async (project): Promise<[string, string][]> => {

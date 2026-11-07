@@ -44,21 +44,29 @@ const svgUri = (markup: string) =>
 
 async function load(
   projects: { id: string; kind?: "personal" | "standard"; repo: Repo }[],
+  settings?: Record<string, string>,
 ) {
   let repos = projects;
+  const read: string[] = [];
   const repoOf = (projectId: string) => {
+    read.push(projectId);
     const found = repos.find((project) => project.id === projectId);
     if (found === undefined) throw new Error(`no project ${projectId}`);
     return found.repo;
   };
   const { bb, harness } = createFakePluginHost({
     pluginId: "armada",
+    settings,
     sdk: {
       threads: { list: async () => [] },
       files: { listPaths: async () => ({ paths: [], truncated: false }) },
       projects: {
         list: async () =>
-          repos.map(({ id, kind = "standard" }) => ({ id, kind })) as never,
+          repos.map(({ id, kind = "standard" }) => ({
+            id,
+            name: id,
+            kind,
+          })) as never,
         paths: async ({ projectId, query }) => ({
           paths: Object.keys(repoOf(projectId))
             .filter((path) => path.includes(query ?? ""))
@@ -84,6 +92,7 @@ async function load(
   return {
     harness,
     logos: () => harness.callRpc("project_logos", null),
+    read,
     setProjects: (next: typeof projects) => {
       repos = next;
     },
@@ -91,6 +100,18 @@ async function load(
 }
 
 describe("project logos", () => {
+  it("never reads the files of a project the settings leave alone", async () => {
+    const { logos, read } = await load(
+      [
+        { id: "kept", repo: { "favicon.svg": svg("<svg>k</svg>") } },
+        { id: "Private", repo: { "favicon.svg": svg("<svg>p</svg>") } },
+      ],
+      { logoSkipProjects: "private, other" },
+    );
+    expect(await logos()).toEqual({ kept: svgUri("<svg>k</svg>") });
+    expect(read).not.toContain("Private");
+  });
+
   it("finds each project's logo in its repo, root files first and apps/web before other workspaces", async () => {
     const { logos } = await load([
       {
