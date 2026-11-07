@@ -255,14 +255,14 @@ describe("Armada thread list", () => {
     expect(captain.getByRole("img", { name: "Working" })).toBeTruthy();
   });
 
-  it("says Idle with the age on a quiet captain, and offers no workers toggle", async () => {
+  it("says Idle with no age on a quiet captain, and offers no workers toggle", async () => {
     vi.useFakeTimers({ toFake: ["Date"], now: NOW });
     const { view } = await render({
       threads: [thread("cap", { title: "Captain Alpha", projectId: "proj_a" })],
     });
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
     const row = within(rowOf(view.container, "cap")!);
-    expect(row.getByText("1h")).toBeTruthy();
+    expect(row.queryByText("1h")).toBeNull();
     expect(row.getByText("Idle")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /workers/i })).toBeNull();
   });

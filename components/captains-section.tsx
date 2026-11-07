@@ -64,7 +64,7 @@ export function CaptainsSection({
         ) : captains.length === 0 ? (
           <Note>Start a captain to run a project from one chat.</Note>
         ) : (
-          <ul aria-label="Captains" className="m-0 flex flex-col gap-px p-0">
+          <ul aria-label="Captains" className="m-0 flex flex-col gap-0.5 p-1">
             {captains.map((entry) => (
               <CaptainRow
                 key={entry.thread.id}

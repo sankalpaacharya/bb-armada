@@ -53,15 +53,8 @@ export function StatusOrAge({
   return <Age at={activityAt} />;
 }
 
-/** A captain row's trailing slot: the grid while working, else the age. */
-export function WorkingOrAge({
-  status,
-  activityAt,
-}: {
-  status: Status | null;
-  activityAt: number;
-}) {
-  if (status === "working")
-    return <StatusMark status={status} variant="compact" />;
-  return <Age at={activityAt} />;
+/** A captain row's trailing slot: the grid while working, else nothing. */
+export function WorkingGlyph({ status }: { status: Status | null }) {
+  if (status !== "working") return null;
+  return <StatusMark status={status} variant="compact" />;
 }

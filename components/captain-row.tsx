@@ -3,7 +3,7 @@ import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 import type { CaptainCounts, CaptainEntry } from "@/lib/model";
 import { STATUS } from "@/lib/status";
 import { CaptainTile } from "./captain-tile";
-import { WorkingOrAge } from "./status-mark";
+import { WorkingGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
 function Summary({ counts }: { counts: CaptainCounts }) {
@@ -28,7 +28,7 @@ function Summary({ counts }: { counts: CaptainCounts }) {
 
 /**
  * A captain in the deck: avatar, name over a one-line summary of its tree,
- * and the grid while working or the age.
+ * and the grid while working.
  */
 export function CaptainRow({
   entry,
@@ -48,7 +48,7 @@ export function CaptainRow({
         active={active}
         inline={inline}
         onOpen={onOpen}
-        className="flex h-12 items-center gap-2.5 rounded-none px-3"
+        className="flex h-11 items-center gap-2.5 rounded-[6px] px-1.5"
         titleClassName="font-medium"
       >
         {({ title, shortcut }) => (
@@ -63,13 +63,8 @@ export function CaptainRow({
                 <Summary counts={entry.counts} />
               </span>
             </span>
-            <span className="pointer-events-none relative flex w-7 shrink-0 items-center justify-end">
-              {shortcut ?? (
-                <WorkingOrAge
-                  status={entry.status}
-                  activityAt={entry.activityAt}
-                />
-              )}
+            <span className="pointer-events-none relative flex shrink-0 items-center justify-end pr-1.5 empty:hidden">
+              {shortcut ?? <WorkingGlyph status={entry.status} />}
             </span>
           </>
         )}
