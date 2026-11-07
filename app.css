@@ -1,35 +1,40 @@
-/* The wave spinner from the user's beautiful-bb plugin (scripts/build-wave-spinner.mjs
-   there): a 3x3 grid pulsing from the top-left corner, in the beautiful-bb accent. */
+/* The sidebar wave from the user's beautiful-bb plugin (wave-icon.tsx and
+   effects.css there): three accent bars rising one after another. */
 .armada-wave {
   --armada-wave: var(--bbb-accent, oklch(0.55 0.17 295));
-  display: inline-grid;
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
-  grid-template-columns: repeat(3, 4px);
-  grid-auto-rows: 4px;
-  gap: 1.5px;
 }
 .dark .armada-wave {
   --armada-wave: var(--bbb-accent, oklch(0.78 0.11 295));
 }
-.armada-wave > span {
-  border-radius: 1px;
-  background: var(--armada-wave);
-  animation: armada-wave-pulse 0.7s ease-in-out infinite;
+.armada-wave rect {
+  fill: var(--armada-wave);
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: armada-wave-bar 900ms ease-in-out infinite;
 }
-@keyframes armada-wave-pulse {
+.armada-wave rect:nth-child(2) {
+  animation-delay: 150ms;
+}
+.armada-wave rect:nth-child(3) {
+  animation-delay: 300ms;
+}
+@keyframes armada-wave-bar {
   0%,
   100% {
-    opacity: 0.3;
-    transform: scale(0.8);
+    transform: scaleY(0.35);
+    opacity: 0.55;
   }
   50% {
+    transform: scaleY(1);
     opacity: 1;
-    transform: scale(1);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .armada-wave > span {
+  .armada-wave rect {
     animation: none;
-    opacity: 0.6;
+    transform: scaleY(0.7);
   }
 }
