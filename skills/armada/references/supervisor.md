@@ -47,9 +47,9 @@ each blocker. Main also messages you. On every wake:
 2. **Adopt what you do not know.** For each thread in
    `bb thread list --parent-thread <your id>` that has no ledger line: find its
    task from its In flight line in `backlog.md` or the `<slug>:` at the start
-   of its title, read `tasks/<slug>/brief.md`, and add the ledger line. A `TASK` line from main can
-   be lost; this step makes it unnecessary. A child with no brief gets the
-   line `- ?: thr_xxx, unknown` and is left alone.
+   of its title, read `tasks/<slug>/brief.md`, and add the ledger line. A
+   `TASK` line from main can be lost; this step makes it unnecessary. A child
+   with no brief gets the line `- ?: thr_xxx, unknown` and is left alone.
 3. **New task from main** (`TASK <slug> thr_xxx`): add its ledger line and read
    its brief, unless step 2 already did.
 4. **Worker question, approval, failure, or stall**: follow `supervision.md`.

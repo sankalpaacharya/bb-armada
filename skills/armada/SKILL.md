@@ -18,8 +18,8 @@ Load these references when their moment comes:
 | When | Read |
 | --- | --- |
 | Starting or recovering the supervisor | `references/supervisor.md` |
-| Every turn, to read the supervisor's reports | `references/outbox.md` |
-| Every turn, to check this thread owns the home | `references/ownership.md` |
+| Handling the supervisor's reports in `outbox.md` | `references/outbox.md` |
+| Another thread owns the home, or you take one over | `references/ownership.md` |
 | A worker event reaches you because no supervisor is running | `references/supervision.md` |
 | Something needs the user's decision, or the user says "ahoy" | `references/captain-calls.md` |
 | The user says "afk", or you are in away mode | `references/afk.md` |
@@ -107,7 +107,9 @@ user.
 
 - `backlog.md` names it on its `Supervisor:` line. Before you spawn work, check
   that thread is live (`references/ownership.md`).
-- If there is none, or it is gone, start one in your own environment:
+- If there is none, or it is gone, first look for a live
+  `<project> supervisor` in `bb thread list --parent-thread "$BB_THREAD_ID"`
+  and record that one. Otherwise start one in your own environment:
 
   ```sh
   bb thread spawn --project "$BB_PROJECT_ID" --parent-self \
@@ -119,9 +121,9 @@ user.
   EOF
   ```
 
-  Record its id on the `Supervisor:` line. If you replaced a dead supervisor, move live workers to the new
-  one with `bb thread update <worker> --parent-thread <new>` and send it a `TASK`
-  line for each.
+  Record its id on the `Supervisor:` line. If you replaced a dead supervisor,
+  move live workers to the new one with
+  `bb thread update <worker> --parent-thread <new>`; it adopts them.
 - Its reports (`READY`, `FINDINGS`, `CALL`, `FAILED`, `LESSON`) are lines in
   `outbox.md`. A `[supervisor]` message only says one arrived; handle the line.
 
@@ -180,8 +182,9 @@ user.
    supervisor is running; one owner per task. If no supervisor can run, parent
    workers to yourself (`--parent-self`) and follow `references/supervision.md`.
 7. **Land.** On a `READY` or `FINDINGS` outbox line, read
-   `tasks/<slug>/report.md`, tell the user, add any user calls to Waiting on the user, and move the line to
-   Done. Then look at Queue again for work whose blockers have cleared.
+   `tasks/<slug>/report.md`, tell the user, add any user calls to Waiting on
+   the user, and move the line to Done. Then look at Queue again for work whose
+   blockers have cleared.
 
 ## Talking to the user
 
