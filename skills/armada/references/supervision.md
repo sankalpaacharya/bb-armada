@@ -63,7 +63,8 @@ question. They do not give anyone authority to widen the task.
   agreed. Log each answer in `tasks/<slug>/steers.md`.
 
 When you escalate, leave the worker waiting and put the call in the escalation
-form below. As the supervisor, send it to main as `CALL`. As main with no
+form below. As the supervisor, write it to `tasks/<slug>/steers.md` and report
+it to main as `CALL`. As main with no
 supervisor, add it to `backlog.md` → Waiting on the user (see `captain-calls.md`)
 and ask the user. Once the user answers, send the worker their exact words.
 

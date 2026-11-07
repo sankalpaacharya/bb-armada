@@ -23,6 +23,7 @@ the Boundary section, which binds you too.
 | You own | Main owns |
 | --- | --- |
 | `supervisor.md` in the home: your ledger | `captain.md`, `learnings.md`, `backlog.md` |
+| `outbox.md`: your reports, append-only | `Outbox acked through:` in `backlog.md` |
 | `tasks/<slug>/steers.md` and `tasks/<slug>/report.md` | `tasks/<slug>/brief.md` |
 
 Never write main's files. Read them freely: the briefs for what was agreed,
@@ -58,12 +59,14 @@ each blocker. Main also messages you. On every wake:
 
 ## Reporting to main
 
-Send only outcomes the user must hear, one message per outcome, queued so
-that main is never interrupted mid-reply:
+Send only outcomes the user must hear. Main's chat can compact and lose a
+message, so each report is first a line in `outbox.md`
+(`references/outbox.md`): write the detail file, append the line, then send
+one queued message per outcome so that main is never interrupted mid-reply:
 
 ```sh
 bb thread tell <main-id> --mode queue --message-file - <<'EOF'
-[supervisor] <KIND> <slug>
+[supervisor] <KIND> <slug> (outbox <n>)
 <plain outcome, evidence, consequence; full PR URL if any>
 EOF
 ```

@@ -18,6 +18,7 @@ Load these references when their moment comes:
 | When | Read |
 | --- | --- |
 | Starting or recovering the supervisor | `references/supervisor.md` |
+| Every turn, to read the supervisor's reports | `references/outbox.md` |
 | A worker event reaches you because no supervisor is running | `references/supervision.md` |
 | Something needs the user's decision, or the user says "ahoy" | `references/captain-calls.md` |
 | The user says "afk", or you are in away mode | `references/afk.md` |
@@ -39,6 +40,7 @@ compacted; the home does not.
     report.md    the checked outcome; for a scout, the findings (supervisor writes)
   archive.md     cold storage: old Done entries, expired learnings
   supervisor.md  the supervisor's ledger; only the supervisor writes it
+  outbox.md      the supervisor's reports, one numbered line each; append-only
 ```
 
 - **Startup memory** is `captain.md`, `learnings.md`, and `backlog.md`. Read all
@@ -108,11 +110,10 @@ user.
   Record its id. If you replaced a dead supervisor, move live workers to the new
   one with `bb thread update <worker> --parent-thread <new>` and send it a `TASK`
   line for each.
-- Messages starting `[supervisor]` are its reports. Handle each one:
-  - `READY` and `FINDINGS`: tell the user.
-  - `CALL`: add it to Waiting on the user.
-  - `FAILED`: tell the user.
-  - `LESSON`: add it to `learnings.md`.
+- Its reports (`READY`, `FINDINGS`, `CALL`, `FAILED`, `LESSON`) are lines in
+  `outbox.md`. A `[supervisor]` message only says one arrived. At the start of
+  every turn, handle the lines past `Outbox acked through:` in `backlog.md` and
+  advance it, as `references/outbox.md` says.
 
   When the user answers a call, send
   `bb thread tell <supervisor> --mode queue 'ANSWER <slug>: "<their words>"'`.
@@ -159,8 +160,8 @@ user.
 6. **Let the supervisor supervise.** Don't answer workers yourself while a
    supervisor is running; one owner per task. If no supervisor can run, parent
    workers to yourself (`--parent-self`) and follow `references/supervision.md`.
-7. **Land.** On `READY` or `FINDINGS`, read `tasks/<slug>/report.md`, tell the
-   user, add any user calls to Waiting on the user, and move the line to
+7. **Land.** On a `READY` or `FINDINGS` outbox line, read
+   `tasks/<slug>/report.md`, tell the user, add any user calls to Waiting on the user, and move the line to
    Done. Then look at Queue again for work whose blockers have cleared.
 
 ## Talking to the user
