@@ -10,7 +10,13 @@ import {
   type CaptainRecord,
 } from "./lib/captains";
 import { listRecords } from "./lib/kv-records";
-import { CAPTAINS_TAG, rpcContract } from "./lib/rpc";
+import {
+  PARK_KEY_PREFIX,
+  parkKey,
+  parseStoredPark,
+  type ParkRecord,
+} from "./lib/lifecycle";
+import { CAPTAINS_TAG, PARKS_TAG, rpcContract } from "./lib/rpc";
 
 const RECORD_ATTEMPTS = 3;
 
@@ -42,20 +48,24 @@ export default async function plugin(bb: BbPluginApi) {
   const { kv } = bb.storage;
   await migrateLegacyCaptains(bb);
 
-  const list = () =>
-    listRecords(kv, CAPTAIN_KEY_PREFIX, parseStoredCaptain, bb.log.warn);
-
-  const find = async (threadId: string): Promise<CaptainRecord | null> =>
+  const findCaptain = async (threadId: string): Promise<CaptainRecord | null> =>
     parseStoredCaptain(await kv.get<unknown>(captainKey(threadId)));
 
-  const save = async (record: CaptainRecord): Promise<CaptainRecord> => {
+  const saveCaptain = async (record: CaptainRecord): Promise<CaptainRecord> => {
     await kv.set(captainKey(record.threadId), record);
     bb.rpc.experimental_invalidate([CAPTAINS_TAG]);
     return record;
   };
 
+  const savePark = async (record: ParkRecord): Promise<ParkRecord> => {
+    await kv.set(parkKey(record.threadId), record);
+    bb.rpc.experimental_invalidate([PARKS_TAG]);
+    return record;
+  };
+
   bb.rpc.register(rpcContract, {
-    captains_list: list,
+    captains_list: () =>
+      listRecords(kv, CAPTAIN_KEY_PREFIX, parseStoredCaptain, bb.log.warn),
 
     captains_create: async ({ projectId, projectName, logo, color }) => {
       const thread = await bb.sdk.threads.spawn({
@@ -73,7 +83,7 @@ export default async function plugin(bb: BbPluginApi) {
       let failure: unknown;
       for (let attempt = 0; attempt < RECORD_ATTEMPTS; attempt += 1) {
         try {
-          return await save(record);
+          return await saveCaptain(record);
         } catch (cause) {
           failure = cause;
         }
@@ -86,15 +96,15 @@ export default async function plugin(bb: BbPluginApi) {
 
     captains_adopt: async ({ threadId, logo, color }) => {
       const createdAt =
-        (await find(threadId))?.createdAt ?? new Date().toISOString();
-      return save({ threadId, logo, color, createdAt });
+        (await findCaptain(threadId))?.createdAt ?? new Date().toISOString();
+      return saveCaptain({ threadId, logo, color, createdAt });
     },
 
     captains_update: async ({ threadId, logo, color }) => {
-      const current = await find(threadId);
+      const current = await findCaptain(threadId);
       if (current === null)
         throw new Error(`Thread ${threadId} is not a captain`);
-      return save({
+      return saveCaptain({
         ...current,
         logo: logo ?? current.logo,
         color: color ?? current.color,
@@ -104,6 +114,24 @@ export default async function plugin(bb: BbPluginApi) {
     captains_remove: async ({ threadId }) => {
       await kv.delete(captainKey(threadId));
       bb.rpc.experimental_invalidate([CAPTAINS_TAG]);
+      return null;
+    },
+
+    parks_list: () =>
+      listRecords(kv, PARK_KEY_PREFIX, parseStoredPark, bb.log.warn),
+
+    parks_settle: ({ threadId }) =>
+      savePark({ threadId, kind: "settled", at: Date.now() }),
+
+    parks_snooze: ({ threadId, until }) => {
+      const at = Date.now();
+      if (until <= at) throw new Error("A snooze must end in the future");
+      return savePark({ threadId, kind: "snoozed", at, until });
+    },
+
+    parks_unpark: async ({ threadId }) => {
+      await kv.delete(parkKey(threadId));
+      bb.rpc.experimental_invalidate([PARKS_TAG]);
       return null;
     },
   });

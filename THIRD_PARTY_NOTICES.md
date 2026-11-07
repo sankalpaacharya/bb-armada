@@ -38,7 +38,10 @@ MIT License, Copyright (c) 2026 Michael Yong.
 
 The thread cards in `components/thread-card.tsx`, `components/worker-card.tsx`
 and `components/place-line.tsx` (their markup, type scale, status slot, branch
-line and pull request colours) are adapted from t3sidebar.
+line and pull request colours), the hover park buttons in
+`components/park-buttons.tsx`, the one-line shelf row in
+`components/shelf-row.tsx`, and the settle and snooze rules and presets in
+`lib/lifecycle.ts` are adapted from t3sidebar.
 
 Source: <https://github.com/SawyerHood/sawyer-plugins/tree/main/plugins/t3sidebar>
 

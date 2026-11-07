@@ -1,4 +1,5 @@
 import { useNow } from "@/lib/clock";
+import { wakeLabel } from "@/lib/lifecycle";
 import { AGE_TEXT } from "@/lib/styles";
 import { formatAge } from "@/lib/time";
 
@@ -6,4 +7,13 @@ import { formatAge } from "@/lib/time";
 export function Age({ at }: { at: number }) {
   const now = useNow();
   return <span className={AGE_TEXT}>{formatAge(at, now)}</span>;
+}
+
+export function WakesIn({ until }: { until: number }) {
+  const now = useNow();
+  return (
+    <span className={AGE_TEXT} title="Wakes in">
+      {wakeLabel(until, now)}
+    </span>
+  );
 }

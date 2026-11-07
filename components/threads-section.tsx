@@ -6,48 +6,51 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 
 import { Icon } from "@/components/ui/icon";
-import { useStoredState } from "@/hooks/use-stored-state";
+import type { ParkActions } from "@/hooks/use-park-actions";
 import type { ThreadEntry } from "@/lib/model";
-import {
-  countByProject,
-  parseScope,
-  resolveScope,
-  scopeThreads,
-} from "@/lib/scope";
+import { countByProject, type ThreadScope } from "@/lib/scope";
 import { HEADER_ACTION } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { makeCaptainItem } from "./captain-menu";
 import { ChoiceList, type Choice } from "./choice-list";
+import { makeCaptainItem, parkItems } from "./menu-items";
 import { Note, SectionHeader } from "./section";
 import { ThreadCard } from "./thread-card";
 import type { OpenThread } from "./thread-link";
 
-const SCOPE_KEY = "armada/thread-scope";
-
 export function ThreadsSection({
   entries,
+  scoped,
+  parkedCount,
   projects,
+  scope,
+  onScope,
   status,
   activeThreadId,
+  parkActions,
   onOpen,
   onAdopt,
 }: {
+  /** Every active entry, for the picker's counts. */
   entries: readonly ThreadEntry[];
+  /** The active entries within the scope. */
+  scoped: readonly ThreadEntry[];
+  /** Parked entries within the scope, so an empty list can say where they went. */
+  parkedCount: number;
   /** Pickable projects, in picker order. */
   projects: readonly PluginSidebarProject[];
+  scope: ThreadScope;
+  onScope: (scope: ThreadScope) => void;
   status: PluginSidebarThreadsState["status"] | "loading-captains";
   activeThreadId: string | null;
+  parkActions: ParkActions;
   onOpen: OpenThread;
   onAdopt: (thread: PluginSidebarThread) => void;
 }) {
-  const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, null);
   const [open, setOpen] = useState(false);
   const listId = useId();
   const sectionRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const scope = resolveScope(storedScope, projects);
-  const scoped = useMemo(() => scopeThreads(entries, scope), [entries, scope]);
   const counts = useMemo(() => countByProject(entries), [entries]);
   const scopeName =
     projects.find((project) => project.id === scope)?.name ?? null;
@@ -61,9 +64,9 @@ export function ThreadsSection({
     })),
   ];
 
-  const close = (refocus: boolean) => {
+  const close = () => {
     setOpen(false);
-    if (refocus) triggerRef.current?.focus();
+    triggerRef.current?.focus();
   };
 
   useEffect(() => {
@@ -116,10 +119,10 @@ export function ThreadsSection({
           choices={choices}
           value={scope}
           onChange={(next) => {
-            setScope(next);
-            close(true);
+            onScope(next);
+            close();
           }}
-          onClose={() => close(true)}
+          onClose={close}
           autoFocus
           className="mb-2 max-h-64 overflow-y-auto"
         />
@@ -130,9 +133,11 @@ export function ThreadsSection({
         <Note>Could not load threads</Note>
       ) : scoped.length === 0 ? (
         <Note>
-          {scopeName === null
-            ? "No threads yet"
-            : `No threads in ${scopeName} yet.`}
+          {parkedCount > 0
+            ? "Nothing active. Settled and snoozed threads are below."
+            : scopeName === null
+              ? "No threads yet"
+              : `No threads in ${scopeName} yet.`}
         </Note>
       ) : (
         <ul aria-label="Threads" className="m-0 flex flex-col gap-px p-0">
@@ -142,11 +147,13 @@ export function ThreadsSection({
               entry={entry}
               active={entry.thread.id === activeThreadId}
               showProject={scope === null}
-              inline={
-                entry.adoptable
+              parkActions={parkActions}
+              inline={[
+                ...(entry.adoptable
                   ? [makeCaptainItem(() => onAdopt(entry.thread))]
-                  : undefined
-              }
+                  : []),
+                ...parkItems(entry, parkActions),
+              ]}
               onOpen={onOpen}
             />
           ))}

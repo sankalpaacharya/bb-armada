@@ -18,6 +18,8 @@ const { threads } = buildArmada(
   ],
   projects,
   [],
+  [],
+  0,
 );
 const ids = (entries: ReturnType<typeof scopeThreads>) =>
   entries.map((entry) => entry.thread.id).sort();

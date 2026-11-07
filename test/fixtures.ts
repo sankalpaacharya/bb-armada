@@ -3,6 +3,8 @@ import type {
   PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
 
+import type { ParkRecord } from "../lib/lifecycle";
+
 export const NOW = new Date(2026, 9, 1, 15, 0).getTime();
 
 export function thread(
@@ -67,3 +69,15 @@ export function project(
     settingsHref: `/projects/${id}/settings`,
   };
 }
+
+export const settledAt = (threadId: string, at: number): ParkRecord => ({
+  threadId,
+  kind: "settled",
+  at,
+});
+
+export const snoozedUntil = (
+  threadId: string,
+  until: number,
+  at = until - 3_600_000,
+): ParkRecord => ({ threadId, kind: "snoozed", at, until });

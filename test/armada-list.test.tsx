@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   fireEvent,
   screen,
@@ -11,7 +12,8 @@ import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 
 import app from "../app";
 import type { CaptainRecord } from "../lib/captains";
-import { NOW, project, thread } from "./fixtures";
+import type { ParkRecord } from "../lib/lifecycle";
+import { NOW, project, settledAt, snoozedUntil, thread } from "./fixtures";
 
 const stored = new Map<string, string>();
 vi.stubGlobal("localStorage", {
@@ -63,6 +65,7 @@ const threads = [
 async function render(
   options: {
     registry?: CaptainRecord[];
+    parks?: ParkRecord[];
     threads?: typeof threads;
     activeThreadId?: string | null;
     rpc?: Record<string, (input: never) => unknown>;
@@ -91,6 +94,7 @@ async function render(
       },
       rpc: {
         captains_list: () => options.registry ?? registry("cap"),
+        parks_list: () => options.parks ?? [],
         ...options.rpc,
       } as never,
     },
@@ -616,6 +620,131 @@ describe("thread menu", () => {
           (call) => call.method === "captains_update",
         )?.input,
       ).toMatchObject({ threadId: "cap", logo: "map" }),
+    );
+  });
+});
+
+describe("shelves", () => {
+  const HOUR = 3_600_000;
+
+  it("settles a card from its hover button, lists it under Settled, and brings it back with Move to active", async () => {
+    let parks: ParkRecord[] = [];
+    const { view } = await render({
+      threads: [
+        thread("done", { title: "Finished work", projectId: "proj_b" }),
+        thread("other", { title: "Other work", projectId: "proj_b" }),
+      ],
+      rpc: {
+        parks_list: () => parks,
+        parks_settle: ({ threadId }: { threadId: string }) => {
+          const park = settledAt(threadId, NOW);
+          parks = [park];
+          return park;
+        },
+        parks_unpark: ({ threadId }: { threadId: string }) => {
+          parks = parks.filter((park) => park.threadId !== threadId);
+          return null;
+        },
+      },
+    });
+    await waitFor(() => expect(rowOf(view.container, "done")).not.toBeNull());
+    fireEvent.click(
+      within(rowOf(view.container, "done")!).getByRole("button", {
+        name: "Settle",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
+          ?.input,
+      ).toEqual({ threadId: "done" }),
+    );
+    await view.experimental_invalidateRpc(["parks"]);
+    await waitFor(() => expect(listOf(view.container, "done")).toBeNull());
+    expect(listOf(view.container, "other")).toBe("Threads");
+    expect(screen.getByRole("heading", { name: /Settled/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show settled" }));
+    expect(listOf(view.container, "done")).toBe("Settled");
+    fireEvent.click(
+      within(rowOf(view.container, "done")!).getByRole("button", {
+        name: "Move to active",
+      }),
+    );
+    await waitFor(() => expect(listOf(view.container, "done")).toBe("Threads"));
+    expect(
+      view.inspection.rpcCalls.find((call) => call.method === "parks_unpark")
+        ?.input,
+    ).toEqual({ threadId: "done" });
+  });
+
+  it("offers no park buttons on a working card, and keeps a stored settle from hiding it", async () => {
+    const { view } = await render({
+      threads: [thread("busy", { title: "Busy", ...busy })],
+      parks: [settledAt("busy", NOW)],
+    });
+    await waitFor(() => expect(rowOf(view.container, "busy")).not.toBeNull());
+    expect(listOf(view.container, "busy")).toBe("Threads");
+    expect(
+      within(rowOf(view.container, "busy")!).queryByRole("button", {
+        name: "Settle",
+      }),
+    ).toBeNull();
+    expect(screen.queryByRole("heading", { name: /Settled/ })).toBeNull();
+  });
+
+  it("shows a snoozed thread with its wake time and wakes it on time", async () => {
+    vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
+    const { view } = await render({
+      threads: [thread("later", { title: "Later" })],
+      parks: [snoozedUntil("later", NOW + 2 * HOUR)],
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Show snoozed" })).toBeTruthy(),
+    );
+    expect(
+      screen.getByText("Nothing active. Settled and snoozed threads are below."),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show snoozed" }));
+    expect(listOf(view.container, "later")).toBe("Snoozed");
+    expect(within(rowOf(view.container, "later")!).getByText("2h")).toBeTruthy();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2 * HOUR + 100);
+    });
+    expect(listOf(view.container, "later")).toBe("Threads");
+  });
+
+  it("puts Settle, the snooze presets and Move to active in the thread menu", async () => {
+    const { view } = await render({
+      threads: [
+        thread("quiet", { title: "Quiet" }),
+        thread("parked", { title: "Parked" }),
+      ],
+      parks: [settledAt("parked", NOW)],
+    });
+    await waitFor(() => expect(anchorOf(view.container, "quiet")).not.toBeNull());
+    fireEvent.contextMenu(anchorOf(view.container, "quiet")!);
+    expect(await screen.findByRole("menuitem", { name: "Settle" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /Snooze/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Settle" }));
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
+          ?.input,
+      ).toEqual({ threadId: "quiet" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show settled" }));
+    fireEvent.contextMenu(anchorOf(view.container, "parked")!);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Move to active" }),
+    );
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find((call) => call.method === "parks_unpark")
+          ?.input,
+      ).toEqual({ threadId: "parked" }),
     );
   });
 });

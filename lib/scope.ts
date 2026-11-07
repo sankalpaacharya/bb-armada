@@ -14,10 +14,10 @@ export function resolveScope(
     : null;
 }
 
-export function scopeThreads(
-  entries: readonly ThreadEntry[],
+export function scopeThreads<Entry extends ThreadEntry>(
+  entries: readonly Entry[],
   scope: ThreadScope,
-): readonly ThreadEntry[] {
+): readonly Entry[] {
   return scope === null
     ? entries
     : entries.filter((entry) => entry.thread.projectId === scope);

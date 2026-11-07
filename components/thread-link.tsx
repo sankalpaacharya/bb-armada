@@ -38,6 +38,7 @@ export function ThreadLink({
   inline = NO_INLINE,
   onOpen,
   className,
+  titleClassName,
   children,
 }: {
   thread: PluginSidebarThread;
@@ -47,6 +48,7 @@ export function ThreadLink({
   inline?: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
   className?: string;
+  titleClassName?: string;
   children: (slots: ThreadLinkSlots) => ReactNode;
 }) {
   const { splitProps } = experimental_useSidebarThreadSplit(thread.id);
@@ -71,6 +73,7 @@ export function ThreadLink({
       className={cn(
         "min-w-0 flex-1 truncate text-sm text-foreground",
         thread.isUnread && "font-medium",
+        titleClassName,
       )}
     >
       {label ?? <ThreadTitle threadId={thread.id} />}

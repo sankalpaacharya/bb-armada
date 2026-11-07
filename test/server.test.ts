@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import plugin from "../server";
 import { LEGACY_CAPTAINS_KEY, type CaptainRecord } from "../lib/captains";
+import type { ParkRecord } from "../lib/lifecycle";
 
 async function load(options: { seed?: (kv: Kv) => Promise<void> } = {}) {
   const { bb, harness } = createFakePluginHost({
@@ -183,6 +184,62 @@ describe("captain records", () => {
     expect(harness.logEntries).toContainEqual({
       level: "warn",
       message: expect.stringContaining("captain:bad"),
+    });
+  });
+});
+
+describe("parks", () => {
+  const list = (harness: Awaited<ReturnType<typeof load>>["harness"]) =>
+    harness.callRpc("parks_list", null) as Promise<ParkRecord[]>;
+
+  it("settles, snoozes and unparks a thread, invalidating the parks read each time", async () => {
+    const { harness } = await load();
+    const settled = (await harness.callRpc("parks_settle", {
+      threadId: "t",
+    })) as ParkRecord;
+    expect(settled).toMatchObject({ threadId: "t", kind: "settled" });
+    expect(await list(harness)).toEqual([settled]);
+
+    const until = Date.now() + 60_000;
+    const snoozed = (await harness.callRpc("parks_snooze", {
+      threadId: "t",
+      until,
+    })) as ParkRecord;
+    expect(snoozed).toMatchObject({ threadId: "t", kind: "snoozed", until });
+    expect(await list(harness)).toEqual([snoozed]);
+
+    await harness.callRpc("parks_unpark", { threadId: "t" });
+    await harness.callRpc("parks_unpark", { threadId: "t" });
+    expect(await list(harness)).toEqual([]);
+    expect(harness.experimental_rpcInvalidations).toEqual([
+      ["parks"],
+      ["parks"],
+      ["parks"],
+      ["parks"],
+    ]);
+  });
+
+  it("refuses a snooze that would end in the past", async () => {
+    const { harness } = await load();
+    await expect(
+      harness.callRpc("parks_snooze", { threadId: "t", until: Date.now() - 1 }),
+    ).rejects.toThrow(/future/);
+    expect(await list(harness)).toEqual([]);
+  });
+
+  it("skips a park it cannot read, with a log line", async () => {
+    const { harness } = await load({
+      seed: async (kv) => {
+        await kv.set("park:good", { threadId: "good", kind: "settled", at: 5 });
+        await kv.set("park:bad", { threadId: "bad", kind: "snoozed" });
+      },
+    });
+    expect(await list(harness)).toEqual([
+      { threadId: "good", kind: "settled", at: 5 },
+    ]);
+    expect(harness.logEntries).toContainEqual({
+      level: "warn",
+      message: expect.stringContaining("park:bad"),
     });
   });
 });

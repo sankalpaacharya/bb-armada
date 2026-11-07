@@ -1,11 +1,13 @@
 # bb-plugin-armada
 
 A sidebar for people who run many bb threads. Long-lived **captain** threads sit
-at the top with their workers nested underneath, and every other thread sits in
-one list you can filter by project.
+at the top with their workers nested underneath, every other thread sits in one
+list you can filter by project, and finished threads can be settled or snoozed
+onto quiet shelves below it.
 
 - `app.tsx` registers the thread list (`app.slots.experimental_threadList`).
-- `server.ts` owns the captain records in plugin KV and exposes them over RPC.
+- `server.ts` owns the captain and park records in plugin KV and exposes them
+  over RPC.
 - `PLUGIN_OVERVIEW.md` is the store listing text.
 
 ## How it works
@@ -18,8 +20,12 @@ on reconnect, and from any client. Records that cannot be parsed are skipped
 and logged. On start the server moves records out of the old single
 `captains` key, then deletes it.
 
-`lib/model.ts` turns the sidebar's threads, projects and the captain records
-into what the list draws. It is pure and unit-tested.
+Parks follow the same pattern at `park:<threadId>` with the `parks` tag. A park
+is `settled { at }` or `snoozed { at, until }`. The server stamps the time, and
+a new settle or snooze replaces whatever park the thread had.
+
+`lib/model.ts` turns the sidebar's threads, projects, captain records and
+parks into what the list draws. It is pure and unit-tested.
 
 - A captain's workers are its children, through `parentThreadId` or
   `lifecycleOwnerThreadId`. Each worker folds its own descendants, the same way
@@ -28,8 +34,14 @@ into what the list draws. It is pure and unit-tested.
 - Every entry carries a folded status, the newest activity and the newest
   attention time of its subtree. A captain folds itself and all its workers.
 - Root cards can be made captains; workers cannot.
-- Records whose thread is archived, hidden or gone are ignored. The record
-  stays until you remove it.
+- Each root card and each worker resolves a shelf from its park and its folded
+  status (`lib/lifecycle.ts`): a working, queued or needs-you thread is always
+  active, a snooze wakes on its timer or on attention after it was set, and a
+  settle returns on new attention. Captains are never parked. A parked worker
+  leaves its captain's list for the shelf. Snoozed is ordered by soonest wake,
+  Settled by newest settle.
+- Records and parks whose thread is archived, hidden or gone are ignored. They
+  stay in KV until you remove them.
 
 `lib/status.ts` is one table: each status has a rank, a word, a colour tone,
 a glyph, whether it counts as live, and whether a thread in it can be parked.
@@ -44,6 +56,10 @@ Every row reads from the table through `StatusMark`.
 | `captains_adopt`  | `threadId`, `logo`, `color`                 | captain record |
 | `captains_update` | `threadId`, optional `logo`, `color`        | captain record |
 | `captains_remove` | `threadId`                                  | none           |
+| `parks_list`      | none                                        | park records   |
+| `parks_settle`    | `threadId`                                  | park record    |
+| `parks_snooze`    | `threadId`, `until` (must be in the future) | park record    |
+| `parks_unpark`    | `threadId` (idempotent)                     | none           |
 
 `captains_create` spawns a thread titled `🧭 Captain · <project>` whose first
 prompt tells the agent to follow the `/captain` skill and keep notes in
@@ -59,9 +75,9 @@ Nothing shows when that plugin is absent.
 
 ### Local state
 
-The sidebar remembers two things in `localStorage`: `armada/thread-scope` (the
-project filter) and `armada/captain-toggles` (which captains have their workers
-open).
+The sidebar remembers three things in `localStorage`: `armada/thread-scope`
+(the project filter), `armada/captain-toggles` (which captains have their
+workers open) and `armada/shelves` (which shelves are open).
 
 ## Logos and colours
 
@@ -76,8 +92,11 @@ worker cards use t3sidebar's three-line card. Section headers are a `div` with
 an `h2` title and the actions beside it. Every row shares `ThreadLink`, which
 owns bb's row contract: the full-bleed anchor, `data-sidebar-thread-id`, split
 on cmd-click, the jump shortcuts, bb's context menu and inline rename. Pickers
-are one `ChoiceList` with listbox semantics. Ages come from one clock in
-`lib/clock.ts` through the `Age` leaf, so a tick re-renders only ages.
+are one `ChoiceList` with listbox semantics. Ages and "wakes in" labels come
+from one clock in `lib/clock.ts` through the `Age` and `WakesIn` leaves, and
+the same clock takes one scheduled tick at the next snooze wake so a snoozed
+thread returns on time. Shelf rows are one line in t3sidebar's style, and a
+parkable card swaps its status for Snooze and Settle buttons on hover.
 
 ## Develop
 
@@ -95,11 +114,11 @@ Then pick **Armada** under Settings, Appearance, Sidebar.
 ```
 app.tsx               registers the thread list
 server.ts             captain records, migration and RPC handlers
-lib/                  model, status table, captain schema, scope, clock, styles
-hooks/                captains query, stored state, arrow-key rows
-components/           sections, row layouts, ThreadLink, ChoiceList, dialog
+lib/                  model, status table, lifecycle rules, schemas, scope, clock, styles
+hooks/                captains and parks queries, park actions, stored state, arrow-key rows
+components/           sections, shelves, row layouts, ThreadLink, ChoiceList, dialog
 components/ui/        vendored bb components (dialog, button, icon, hooks)
-test/                 model, server, status and rendered-list tests
+test/                 model, lifecycle, server, status and rendered-list tests
 ```
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for what is adapted from

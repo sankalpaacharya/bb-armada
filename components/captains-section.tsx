@@ -2,6 +2,7 @@ import { useState } from "react";
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 
 import { Icon } from "@/components/ui/icon";
+import type { ParkActions } from "@/hooks/use-park-actions";
 import { useStoredState } from "@/hooks/use-stored-state";
 import { withoutLeadingEmoji } from "@/lib/captain-text";
 import type { CaptainEntry } from "@/lib/model";
@@ -12,7 +13,7 @@ import { FOCUS_RING, HEADER_ACTION } from "@/lib/styles";
 import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { CaptainDialogState } from "./captain-dialog";
-import { captainItems } from "./captain-menu";
+import { captainItems } from "./menu-items";
 import { CaptainRow } from "./captain-row";
 import { Note, SectionHeader } from "./section";
 import type { OpenThread } from "./thread-link";
@@ -40,11 +41,13 @@ function pruneToggles(
 export function CaptainsSection({
   captains,
   activeThreadId,
+  parkActions,
   onOpen,
   onDialog,
 }: {
   captains: readonly CaptainEntry[];
   activeThreadId: string | null;
+  parkActions: ParkActions;
   onOpen: OpenThread;
   onDialog: (state: CaptainDialogState) => void;
 }) {
@@ -124,6 +127,7 @@ export function CaptainsSection({
                         key={worker.thread.id}
                         entry={worker}
                         active={worker.thread.id === activeThreadId}
+                        parkActions={parkActions}
                         onOpen={onOpen}
                       />
                     ))}

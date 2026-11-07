@@ -4,6 +4,13 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 
 import type { CaptainRecord } from "./captains";
+import {
+  resolveShelf,
+  type Park,
+  type ParkRecord,
+  type Shelf,
+  type Snooze,
+} from "./lifecycle";
 import { statusOf, strongerStatus, type Status } from "./status";
 
 type Fold = {
@@ -17,15 +24,25 @@ export type ThreadEntry = Fold & {
   projectName: string | null;
   /** Root cards can become captains; a captain's workers cannot. */
   adoptable: boolean;
+  park: Park | null;
+  shelf: Shelf;
 };
+
+export type ParkedEntry<Kind extends Park> = ThreadEntry & { park: Kind };
 
 export type CaptainEntry = Fold & {
   record: CaptainRecord;
   thread: PluginSidebarThread;
+  /** Active workers; parked ones sit on the shelves. */
   workers: ThreadEntry[];
 };
 
-export type ArmadaModel = { captains: CaptainEntry[]; threads: ThreadEntry[] };
+export type ArmadaModel = {
+  captains: CaptainEntry[];
+  threads: ThreadEntry[];
+  snoozed: ParkedEntry<Snooze>[];
+  settled: ParkedEntry<Extract<Park, { kind: "settled" }>>[];
+};
 
 function parentIdOf(thread: PluginSidebarThread): string | null {
   return thread.parentThreadId ?? thread.lifecycleOwnerThreadId;
@@ -67,10 +84,22 @@ function byActivity(a: Fold, b: Fold): number {
   return b.activityAt - a.activityAt;
 }
 
+function isSnoozed(entry: ThreadEntry): entry is ParkedEntry<Snooze> {
+  return entry.shelf === "snoozed" && entry.park?.kind === "snoozed";
+}
+
+function isSettled(
+  entry: ThreadEntry,
+): entry is ParkedEntry<Extract<Park, { kind: "settled" }>> {
+  return entry.shelf === "settled" && entry.park?.kind === "settled";
+}
+
 export function buildArmada(
   threads: readonly PluginSidebarThread[],
   projects: readonly PluginSidebarProject[],
   records: readonly CaptainRecord[],
+  parks: readonly ParkRecord[],
+  now: number,
 ): ArmadaModel {
   const visible = threads.filter(
     (thread) => !thread.isHidden && !thread.isArchived,
@@ -79,6 +108,7 @@ export function buildArmada(
   const projectNames = new Map(
     projects.map((project) => [project.id, project.name]),
   );
+  const parkOf = new Map(parks.map((park) => [park.threadId, park]));
   const childrenOf = new Map<string, PluginSidebarThread[]>();
   for (const thread of visible) {
     const parentId = parentIdOf(thread);
@@ -110,13 +140,23 @@ export function buildArmada(
     return found;
   };
 
-  const entryOf = (thread: PluginSidebarThread, adoptable: boolean): ThreadEntry => ({
-    thread,
-    projectName: projectNames.get(thread.projectId) ?? null,
-    adoptable,
-    ...fold([thread, ...subtreeOf(thread.id)]),
-  });
+  const entryOf = (
+    thread: PluginSidebarThread,
+    adoptable: boolean,
+  ): ThreadEntry => {
+    const folded = fold([thread, ...subtreeOf(thread.id)]);
+    const park = parkOf.get(thread.id) ?? null;
+    return {
+      thread,
+      projectName: projectNames.get(thread.projectId) ?? null,
+      adoptable,
+      park,
+      shelf: resolveShelf(park ?? undefined, folded, now),
+      ...folded,
+    };
+  };
 
+  const parked: ThreadEntry[] = [];
   const owned = new Set(captainIds);
   const captains = captainRecords
     .map(({ record, thread }): CaptainEntry => {
@@ -126,7 +166,14 @@ export function buildArmada(
         .filter((child) => !captainIds.has(child.id))
         .map((child) => entryOf(child, false))
         .sort(byActivity);
-      return { record, thread, workers, ...fold([thread, ...subtree]) };
+      for (const worker of workers)
+        if (worker.shelf !== "active") parked.push(worker);
+      return {
+        record,
+        thread,
+        workers: workers.filter((worker) => worker.shelf === "active"),
+        ...fold([thread, ...subtree]),
+      };
     })
     .sort(
       (a, b) =>
@@ -153,6 +200,12 @@ export function buildArmada(
     roots.set(root.id, root);
   }
   const entries = [...roots.values()].map((root) => entryOf(root, true));
+  for (const entry of entries) if (entry.shelf !== "active") parked.push(entry);
 
-  return { captains, threads: entries.sort(entryOrder) };
+  return {
+    captains,
+    threads: entries.filter((entry) => entry.shelf === "active").sort(entryOrder),
+    snoozed: parked.filter(isSnoozed).sort((a, b) => a.park.until - b.park.until),
+    settled: parked.filter(isSettled).sort((a, b) => b.park.at - a.park.at),
+  };
 }

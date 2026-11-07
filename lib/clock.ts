@@ -1,10 +1,13 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 /**
- * One clock for every age and wake label. It ticks every 30 s while anything
- * listens, and a listener can ask for one extra tick at a given time.
+ * One clock for every age, wake label and shelf. It ticks every 30 s while
+ * anything listens, and useScheduledTick adds one tick at a chosen time.
  */
 const TICK_MS = 30_000;
+
+/** setTimeout delays are signed 32-bit; a longer wait fires at once. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 let now = Date.now();
 let interval: ReturnType<typeof setInterval> | undefined;
@@ -34,4 +37,14 @@ const readClock = (): number => now;
 
 export function useNow(): number {
   return useSyncExternalStore(subscribeClock, readClock, readClock);
+}
+
+/** Ticks the clock once at `at`, re-arming every ~24.8 days until it is in range. */
+export function useScheduledTick(at: number | null): void {
+  useEffect(() => {
+    if (at === null) return;
+    const delay = Math.min(Math.max(0, at - Date.now()) + 50, MAX_TIMEOUT_MS);
+    const timer = setTimeout(tick, delay);
+    return () => clearTimeout(timer);
+  }, [at]);
 }

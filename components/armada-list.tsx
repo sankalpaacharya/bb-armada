@@ -7,12 +7,27 @@ import {
 
 import { useArrowKeyRows } from "@/hooks/use-arrow-key-rows";
 import { useCaptains } from "@/hooks/use-captains";
+import { useParkActions } from "@/hooks/use-park-actions";
+import { useParks } from "@/hooks/use-parks";
+import { useStoredState } from "@/hooks/use-stored-state";
+import { useNow, useScheduledTick } from "@/lib/clock";
+import { nextWakeAt } from "@/lib/lifecycle";
 import { buildArmada } from "@/lib/model";
-import { pickableProjects } from "@/lib/scope";
+import {
+  parseScope,
+  pickableProjects,
+  resolveScope,
+  scopeThreads,
+} from "@/lib/scope";
+import { parseBooleanMap } from "@/lib/storage";
 import { CaptainDialog, type CaptainDialogState } from "./captain-dialog";
 import { CaptainsSection } from "./captains-section";
+import { ShelfSection } from "./shelf-section";
 import type { OpenThread } from "./thread-link";
 import { ThreadsSection } from "./threads-section";
+
+const SCOPE_KEY = "armada/thread-scope";
+const SHELVES_KEY = "armada/shelves";
 
 export function ArmadaList({
   activeThreadId,
@@ -21,20 +36,38 @@ export function ArmadaList({
 }: PluginThreadListProps) {
   const { status, threads, projects } = experimental_useSidebarThreads();
   const captains = useCaptains();
+  const parks = useParks();
+  const parkActions = useParkActions();
   const navigate = useBbNavigate();
+  const now = useNow();
   const [dialog, setDialog] = useState<CaptainDialogState | null>(null);
+  const [storedScope, setScope] = useStoredState(SCOPE_KEY, parseScope, null);
+  const [shelves, setShelves] = useStoredState(SHELVES_KEY, parseBooleanMap, {});
   const rows = useArrowKeyRows();
 
   const model = useMemo(
-    () => buildArmada(threads, projects, captains ?? []),
-    [threads, projects, captains],
+    () => buildArmada(threads, projects, captains ?? [], parks, now),
+    [threads, projects, captains, parks, now],
   );
+  useScheduledTick(nextWakeAt(parks, now));
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
+  const scope = resolveScope(storedScope, pickable);
+  const scoped = useMemo(() => scopeThreads(model.threads, scope), [model, scope]);
+  const snoozed = scopeThreads(model.snoozed, scope);
+  const settled = scopeThreads(model.settled, scope);
 
   const open: OpenThread = (threadId, split) => {
     navigate.toThread(threadId, { split });
     onNavigate();
   };
+
+  const shelf = (name: "snoozed" | "settled") => ({
+    expanded: shelves[name] ?? false,
+    onToggle: () => setShelves({ ...shelves, [name]: !(shelves[name] ?? false) }),
+    activeThreadId,
+    actions: parkActions,
+    onOpen: open,
+  });
 
   return (
     <div
@@ -45,17 +78,25 @@ export function ArmadaList({
       <CaptainsSection
         captains={model.captains}
         activeThreadId={activeThreadId}
+        parkActions={parkActions}
         onOpen={open}
         onDialog={setDialog}
       />
       <ThreadsSection
         entries={model.threads}
+        scoped={scoped}
+        parkedCount={snoozed.length + settled.length}
         projects={pickable}
+        scope={scope}
+        onScope={setScope}
         status={captains === undefined ? "loading-captains" : status}
         activeThreadId={activeThreadId}
+        parkActions={parkActions}
         onOpen={open}
         onAdopt={(thread) => setDialog({ kind: "adopt", thread })}
       />
+      <ShelfSection title="Snoozed" entries={snoozed} {...shelf("snoozed")} />
+      <ShelfSection title="Settled" entries={settled} {...shelf("settled")} />
       {dialog === null ? null : (
         <CaptainDialog
           state={dialog}
