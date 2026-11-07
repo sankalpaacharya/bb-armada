@@ -36,8 +36,8 @@ number, and the harness icon. The thread's status comes last.
   bold.
 - bb's own icons mark a thread that needs you or that failed.
 
-When a thread can be put away, hovering it shows a **Settle** button where the
-status was. Right-click a thread for bb's menu, the snooze presets and **Make
+When a thread can be put away, hovering it shows a **Settle** button at the
+end of its title line. Right-click a thread for bb's menu, the snooze presets and **Make
 captain…**.
 
 Armada finds a project's logo in its repository, the same way T3 Code does. It

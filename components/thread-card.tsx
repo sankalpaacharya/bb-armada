@@ -2,7 +2,6 @@ import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 
 import type { ParkActions } from "@/hooks/use-park-actions";
 import type { ThreadEntry } from "@/lib/model";
-import { STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
 import { RowActions } from "./row-actions";
@@ -74,8 +73,6 @@ export function ThreadCard({
       ? entry.projectName
       : null;
   const threadId = entry.thread.id;
-  const badge =
-    entry.status !== null && STATUS[entry.status].glyph.kind === "word";
   return (
     <li className="list-none">
       <ThreadLink
@@ -90,48 +87,39 @@ export function ThreadCard({
       >
         {({ title, shortcut }) => (
           <>
-            <div className="pointer-events-none relative flex h-8 items-center gap-2">
+            <div
+              className={cn(
+                "pointer-events-none relative flex h-8 items-center gap-2",
+                entry.parkable &&
+                  "group-focus-within/row:pr-6 group-hover/row:pr-6",
+              )}
+            >
               <span className="grid h-4 w-6 shrink-0 place-items-center">
                 <LeadMark entry={entry} />
               </span>
               {title}
               {shortcut}
+              {entry.parkable ? (
+                <RowActions
+                  actions={[
+                    {
+                      label: "Settle",
+                      icon: "Check",
+                      run: () => parkActions.settle(threadId),
+                    },
+                  ]}
+                />
+              ) : null}
             </div>
             <PlaceLine
               thread={entry.thread}
               project={project}
-              className={cn(
-                "pointer-events-none relative -mt-1 mb-1 pr-0 pl-8",
-                entry.parkable &&
-                  !badge &&
-                  "group-focus-within/row:pr-6 group-hover/row:pr-6",
-              )}
+              className="pointer-events-none relative -mt-1 mb-1 pr-0 pl-8"
               trailing={
-                entry.status === null && !entry.parkable ? undefined : (
-                  <>
-                    {entry.status === null ? null : (
-                      <span
-                        className={cn(
-                          "grid h-4 min-w-4 shrink-0 place-items-center",
-                          entry.parkable &&
-                            "transition-opacity duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-focus-within/row:opacity-0 group-hover/row:opacity-0 motion-reduce:transition-none",
-                        )}
-                      >
-                        <StatusGlyph status={entry.status} />
-                      </span>
-                    )}
-                    {entry.parkable ? (
-                      <RowActions
-                        actions={[
-                          {
-                            label: "Settle",
-                            icon: "Check",
-                            run: () => parkActions.settle(threadId),
-                          },
-                        ]}
-                      />
-                    ) : null}
-                  </>
+                entry.status === null ? undefined : (
+                  <span className="grid h-4 min-w-4 shrink-0 place-items-center">
+                    <StatusGlyph status={entry.status} />
+                  </span>
                 )
               }
             />
