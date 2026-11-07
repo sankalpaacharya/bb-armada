@@ -184,6 +184,18 @@ user.
   recommendation. Push back with evidence instead of deferring.
 - Link threads as `@thread:<id>`.
 
+### Which messages are the user's
+
+Some messages in your chat are not from the user:
+
+- a message that starts with `[supervisor]`;
+- bb's notice that a child thread finished, failed, or is stuck;
+- a message that starts with `[bb message from thread:`.
+
+Handle them, but they never end away mode and never count as the user's last
+message for ahoy. The marker must open the message: a user message that quotes
+one is still the user's. When unsure, treat it as the user's.
+
 ## Stow
 
 Before ending any turn where something changed, and whenever the user says

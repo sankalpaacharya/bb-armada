@@ -36,7 +36,8 @@ and what happens at a user call. It never widens what you are allowed to do.
 
 ## Returning
 
-The user's next ordinary message ends away mode. Before answering it, give
+The user's next message ends away mode. Supervisor reports and bb notices do
+not; see "Which messages are the user's" in `SKILL.md`. Before answering it, give
 the return brief: what finished (with PR URLs), what failed, what you decided
 under their words, and the open calls, highest impact first. Then remove the
 `## Away` section and move its record to Done.

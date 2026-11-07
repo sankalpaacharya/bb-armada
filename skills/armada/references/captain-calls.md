@@ -39,7 +39,8 @@ Every open user call has one line in `backlog.md` → Waiting on the user:
 
 When the user says "ahoy":
 
-1. Recap only what happened since their last real message: outcomes, landed
+1. Recap only what happened since the user's last message, skipping the ones
+   that "Which messages are the user's" in `SKILL.md` excludes: outcomes, landed
    work, failures, decisions made, new decisions needed, work still running.
    Keep every PR URL in full.
 2. Then take every open call in Waiting on the user, including old ones, and
