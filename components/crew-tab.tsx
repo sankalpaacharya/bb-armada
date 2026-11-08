@@ -10,6 +10,7 @@ import {
 
 import { useArmadaModel } from "@/hooks/use-armada-model";
 import { useCrewActions } from "@/hooks/use-crew-actions";
+import { useParkActions, type ParkActions } from "@/hooks/use-park-actions";
 import { useProjectLogos } from "@/hooks/use-project-logos";
 import { toActionTarget } from "@/lib/action-target";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
@@ -21,9 +22,10 @@ import { Age } from "./age";
 import { Summary } from "./captain-row";
 import { CaptainTile } from "./captain-tile";
 import { MemorySection } from "./memory-section";
-import { removeFromCrewItems } from "./menu-items";
+import { parkItems, removeFromCrewItems } from "./menu-items";
 import { PlaceLine } from "./place-line";
 import { ProjectLogo } from "./project-logo";
+import { RowActions } from "./row-actions";
 import { Note } from "./section";
 import { StatusGlyph } from "./status-mark";
 import { Icon } from "./ui/icon";
@@ -136,20 +138,24 @@ function WorkerRow({
   current,
   onOpen,
   onRemove,
+  parkActions,
 }: {
   entry: ThreadEntry;
   current: boolean;
   onOpen: Open;
   onRemove: (threadId: string) => void;
+  parkActions: ParkActions;
 }) {
   const target = useMemo(() => toActionTarget(entry.thread), [entry.thread]);
+  const threadId = entry.thread.id;
   return (
-    <li className="list-none">
+    <li className="group/row relative list-none">
       <ThreadActionsContextMenu
         thread={target}
-        inline={removeFromCrewItems(entry.thread, () =>
-          onRemove(entry.thread.id),
-        )}
+        inline={[
+          ...parkItems(entry, parkActions),
+          ...removeFromCrewItems(entry.thread, () => onRemove(threadId)),
+        ]}
       >
         <button
           type="button"
@@ -172,8 +178,14 @@ function WorkerRow({
                 <ProjectLogo src={entry.projectLogo} />
               )}
             </span>
-            <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-              <ThreadTitle threadId={entry.thread.id} />
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-sm text-foreground",
+                entry.parkable &&
+                  "group-focus-within/row:pr-6 group-hover/row:pr-6",
+              )}
+            >
+              <ThreadTitle threadId={threadId} />
             </span>
           </span>
           <span className="w-full">
@@ -195,6 +207,19 @@ function WorkerRow({
           </span>
         </button>
       </ThreadActionsContextMenu>
+      {entry.parkable ? (
+        <span className="absolute top-1 right-2 h-7 w-6">
+          <RowActions
+            actions={[
+              {
+                label: "Settle",
+                icon: "Check",
+                run: () => parkActions.settle(threadId),
+              },
+            ]}
+          />
+        </span>
+      ) : null}
     </li>
   );
 }
@@ -217,6 +242,7 @@ function CrewView({
 }) {
   const { captain } = crew;
   const crewActions = useCrewActions();
+  const parkActions = useParkActions();
   const projectLogo = useProjectLogos()[captain.thread.projectId] ?? null;
   const workers = crew.active.length + crew.inactive.length + crew.parked.length;
   const rows = (entries: readonly ThreadEntry[]) =>
@@ -227,6 +253,7 @@ function CrewView({
         current={entry.thread.id === currentThreadId}
         onOpen={onOpen}
         onRemove={crewActions.remove}
+        parkActions={parkActions}
       />
     ));
   return (

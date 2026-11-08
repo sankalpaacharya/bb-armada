@@ -35,6 +35,7 @@ function renderCrew(
   options: {
     workers?: PluginSidebarThread[];
     sdk?: Record<string, unknown>;
+    rpc?: Record<string, unknown>;
   } = {},
 ) {
   const reads: unknown[] = [];
@@ -68,6 +69,7 @@ function renderCrew(
           reads.push(input);
           return home();
         },
+        ...options.rpc,
       } as never,
       sdk: options.sdk as never,
       settings: { inactiveAfterHours: 0 },
@@ -254,6 +256,46 @@ describe("the crew tab's workers", () => {
         },
       ]),
     );
+  });
+
+  it("settles a worker from its hover button, moving it under Settled", async () => {
+    let parks: unknown[] = [];
+    const { view } = renderCrew(() => ready(), {
+      workers,
+      rpc: {
+        parks_list: () => parks,
+        parks_settle: ({ threadId, at }: { threadId: string; at: number }) => {
+          const park = { threadId, kind: "settled", at, by: "user" };
+          parks = [park];
+          return park;
+        },
+      },
+    });
+    await screen.findByText("Fix login");
+    const row = workerRow("Fix login").closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Settle" }));
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
+          ?.input,
+      ).toEqual({ threadId: "w_fix", at: expect.any(Number) }),
+    );
+    await view.experimental_invalidateRpc(["parks"]);
+    await waitFor(() =>
+      expect(
+        within(
+          screen.getByRole("heading", { name: /^Settled/ }).closest("section")!,
+        ).getByText("Fix login"),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("offers Settle and Snooze in a worker's menu", async () => {
+    renderCrew(() => ready(), { workers });
+    await screen.findByText("Fix login");
+    fireEvent.contextMenu(workerRow("Fix login"));
+    expect(await screen.findByRole("menuitem", { name: "Settle" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /Snooze/ })).toBeTruthy();
   });
 
   it("does not offer it for a worker its lifecycle owner would keep in the crew", async () => {
