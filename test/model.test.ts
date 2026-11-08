@@ -180,6 +180,26 @@ describe("captains and their workers", () => {
       expect(captain!.status).toBe("needs-you");
     });
 
+    it("treats a captain's child titled as its supervisor as the supervisor, without its home naming it", () => {
+      const threads = [
+        thread("cap", { title: "cops" }),
+        thread("sup", { parentThreadId: "cap", title: "cops supervisor" }),
+        thread("w", { parentThreadId: "sup", ...busy }),
+      ];
+      const model = build(threads, registryOf(["cap"]));
+      expect(threadIds(model)).toEqual(["w"]);
+      expect(model.threads[0]).toMatchObject({ captain: badge("cap", "cops") });
+      expect(model.captains[0]!.counts.working).toBe(1);
+    });
+
+    it("leaves a thread titled supervisor alone when no captain is its parent", () => {
+      const threads = [
+        thread("root"),
+        thread("sup", { parentThreadId: "root", title: "a supervisor" }),
+      ];
+      expect(threadIds(build(threads, none))).toEqual(["root"]);
+    });
+
     it("ignores a supervisor whose parent is not a captain, which stays one card", () => {
       const threads = [
         thread("root"),

@@ -54,6 +54,9 @@ compacted; the home does not.
   2. Read the three startup files.
   3. Handle the outbox lines past `Outbox acked through:`
      (`references/outbox.md`).
+  4. If the user's message answers or settles an open call under Waiting on
+     the user, close it in `backlog.md` now (`references/captain-calls.md`).
+     The sidebar shows those lines as Needs you until you do.
 - If the home is missing, create it. If a legacy single file
   `~/.bb/captains/<project>.md` exists, split it into the new files, then add it
   verbatim to the end of `archive.md`.

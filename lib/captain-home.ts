@@ -6,7 +6,8 @@ import { captainSlug } from "./captain-text";
 export const homeFolder = (projectName: string): string =>
   `~/.bb/captains/${captainSlug(projectName)}`;
 
-const SUPERVISOR_LINE = /^Supervisor:\s*(thr_[A-Za-z0-9_]+)/m;
+const SUPERVISOR_LINE =
+  /^[\s>*_-]*Supervisor[*_]*:[*_\s]*`?(thr_[A-Za-z0-9_]+)/im;
 
 /** The supervisor thread a home's backlog names on its `Supervisor:` line. */
 export function supervisorIdOf(backlog: string): string | null {

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ThreadChat,
   ThreadTitle,
@@ -85,18 +85,24 @@ function Group({
 }
 
 /** What the captain's backlog keeps waiting on the user, answered in its thread. */
+/** Read again whenever the captain acts, since that is when it closes or opens a decision. */
 function NeedsYou({
   project,
+  captainActivityAt,
   onOpenCaptain,
 }: {
   project: string;
+  captainActivityAt: number;
   onOpenCaptain: () => void;
 }) {
-  const { data } = experimental_useRpcQuery({
+  const { data, refetch } = experimental_useRpcQuery({
     contract: rpcContract,
     method: "captain_home",
     input: { project },
   });
+  useEffect(() => {
+    void refetch();
+  }, [captainActivityAt, refetch]);
   const items = data?.status === "ready" ? data.needsYou : [];
   return (
     <Group title="Needs you" count={items.length}>
@@ -260,7 +266,11 @@ function CrewView({
         )}
       </header>
       {projectName === null ? null : (
-        <NeedsYou project={projectName} onOpenCaptain={onOpenCaptain} />
+        <NeedsYou
+          project={projectName}
+          captainActivityAt={captain.thread.updatedAt}
+          onOpenCaptain={onOpenCaptain}
+        />
       )}
       {workers === 0 ? (
         <Note className="px-2">

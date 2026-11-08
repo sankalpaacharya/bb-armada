@@ -19,9 +19,17 @@ Every open user call has one line in `backlog.md` → Waiting on the user:
   it raised has a line. Resolved findings and recommendations that need no
   choice do not get one.
 - Closing the originating task does not close its calls.
+- Only a real decision gets a line: a choice between options that gates work.
+  A general question to the user ("what are the priorities?") is not a call;
+  ask it in chat and record what they say in `captain.md` or Now.
+- The Armada sidebar shows every line under Waiting on the user as **Needs
+  you**, so a stale line keeps nagging the user. Keep the section exact.
 
 ## Closing a call
 
+- Before you reply to any user message, check it against every open call. If
+  it answers one, makes one moot, or gives you work that settles one, close
+  that call in `backlog.md` in this same turn, then reply.
 - Close a call only with what the user actually said. Move the line to Done
   with their words quoted: `answered "<user's words>"`.
 - Send the user's exact words to whoever holds the worker: the supervisor,

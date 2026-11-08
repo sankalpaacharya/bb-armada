@@ -24,6 +24,12 @@ describe("a backlog's supervisor", () => {
     ).toBe("thr_ab12_C");
   });
 
+  it("is found on a bulleted or bold Supervisor line too", () => {
+    expect(supervisorIdOf("- Supervisor: thr_a1 (started)")).toBe("thr_a1");
+    expect(supervisorIdOf("**Supervisor:** `thr_b2`")).toBe("thr_b2");
+    expect(supervisorIdOf("supervisor: thr_c3")).toBe("thr_c3");
+  });
+
   it("is missing before one starts, or when the line is not at a line start", () => {
     expect(
       supervisorIdOf("Supervisor: (none yet; started on first task)"),

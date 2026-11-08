@@ -140,11 +140,14 @@ describe("the crew tab's memory", () => {
     const { reads } = renderCrew(() => ready("backlog.md"));
     await screen.findByRole("button", { name: "Memory" });
     await waitFor(() => expect(reads.length).toBeGreaterThan(0));
-    const before = reads.length;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const beforeOpen = reads.length;
     await openMemory();
-    await waitFor(() => expect(reads.length).toBe(before + 1));
+    await waitFor(() => expect(reads.length).toBeGreaterThan(beforeOpen));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const beforeRefresh = reads.length;
     fireEvent.click(screen.getByRole("button", { name: "Refresh memory" }));
-    await waitFor(() => expect(reads.length).toBe(before + 2));
+    await waitFor(() => expect(reads.length).toBeGreaterThan(beforeRefresh));
   });
 
   it("starts folded, opens, and folds away again", async () => {
