@@ -151,6 +151,11 @@ user.
 3. **Check for duplicates.** Look at `bb thread list --project "$BB_PROJECT_ID"`
    and In flight before you start.
 4. **Write the brief** to `tasks/<slug>/brief.md`:
+   - The first line is `/pstack:poteto-mode`, alone, for every task: a
+     feature, a bug fix, an investigation, a review or anything else. It puts
+     the worker in poteto mode, which picks the right playbook for the task.
+     If the worker reports that it has no `pstack:poteto-mode` skill, tell the
+     user and carry on without it.
    - `## User's intent`: the user's exact words for this task.
    - `## Task`: the shape, goal, relevant memory, the files or areas to look at,
      what done means, and how to verify it.
