@@ -4,13 +4,13 @@ Adapted from firstmate's supervision host outcome store and its
 `mark-processed` acknowledgement (`docs/supervision-host.md`).
 
 A queued chat message is lost when the captain's chat compacts. So every
-supervisor report is also a line in `outbox.md` in the home, and the captain
+crew captain report is also a line in `outbox.md` in the home, and the captain
 keeps a cursor of the lines it has handled. A report is never lost, and a
 report already handled is not handled again.
 
 ## The file
 
-Only the supervisor writes `outbox.md`. It appends lines and never edits or
+Only the crew captain writes `outbox.md`. It appends lines and never edits or
 deletes one. Each line is one report:
 
 ```
@@ -27,11 +27,11 @@ with the task: `tasks/<slug>/report.md` for `READY`, `FINDINGS`, and `FAILED`,
 and the escalation form in `tasks/<slug>/steers.md` for `CALL`. A `LESSON`
 summary is the learning itself.
 
-## Supervisor: write, then tell
+## Crew captain: write, then tell
 
 1. Write the detail file.
 2. Append the outbox line.
-3. Send the `[supervisor]` message to the captain.
+3. Send the `[crew captain]` message to the captain.
 
 A crash after step 2 still leaves the report for the captain. Never send a
 message that has no outbox line.
@@ -48,7 +48,7 @@ past the cursor:
 awk -v n=<cursor> '$1+0 > n' ~/.bb/captains/<project>/outbox.md
 ```
 
-Handle them oldest first. A `[supervisor]` chat message only rings the bell:
+Handle them oldest first. A `[crew captain]` chat message only rings the bell:
 handle its outbox line, not the chat text.
 
 | KIND | Handled once |

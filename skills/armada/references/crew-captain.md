@@ -1,4 +1,4 @@
-# Supervisor
+# Crew captain
 
 Adapted from firstmate's supervision host: a second, long-lived session that
 takes every routine worker event so the main captain is never interrupted
@@ -8,21 +8,21 @@ while it talks to the user.
 user ⇄ main captain          talks to the user, owns memory, briefs work
               │  spawns once (--parent-notifications stuck)
               ▼
-          supervisor               parent of every worker; answers, recovers, checks
+          crew captain               parent of every worker; answers, recovers, checks
               │
               ▼
           workers                  each in its own worktree
 ```
 
-You are the supervisor if your first prompt says so. Read this file and
-`supervision.md`. Ignore the main role's instructions in `SKILL.md`, except for
+You are the crew captain if your first prompt says so. Read this file and
+`oversight.md`. Ignore the main role's instructions in `SKILL.md`, except for
 the Boundary section, which binds you too.
 
 ## What you own
 
 | You own | Main owns |
 | --- | --- |
-| `supervisor.md` in the home: your ledger | `captain.md`, `learnings.md`, `backlog.md` |
+| `crew.md` in the home: your ledger | `captain.md`, `learnings.md`, `backlog.md` |
 | `outbox.md`: your reports, append-only | `Outbox acked through:` in `backlog.md` |
 | `tasks/<slug>/steers.md` and `tasks/<slug>/report.md` | `tasks/<slug>/brief.md` |
 
@@ -30,8 +30,8 @@ Never write main's files. Read them freely: the briefs for what was agreed,
 `captain.md` for preferences, and `backlog.md` → `## Away` for the user's away
 words.
 
-`supervisor.md` starts with `Owner: <your id>` (`ownership.md`), then keeps
-one line per task you supervise:
+`crew.md` starts with `Owner: <your id>` (`ownership.md`), then keeps
+one line per task you oversee:
 
 ```
 - <slug>: thr_xxx, ship|scout, working|waiting on user|checking|done|failed; last: <what you did, date>
@@ -42,8 +42,8 @@ one line per task you supervise:
 bb wakes you for each worker's finished, failed, or interrupted turn and for
 each blocker. Main also messages you. On every wake:
 
-1. Check you are still the home's supervisor (`ownership.md`). Read
-   `supervisor.md`, then work out which task the event belongs to.
+1. Check you are still the home's crew captain (`ownership.md`). Read
+   `crew.md`, then work out which task the event belongs to.
 2. **Adopt what you do not know.** For each thread in
    `bb thread list --parent-thread <your id>` that has no ledger line: find its
    task from its In flight line in `backlog.md` or the `<slug>:` at the start
@@ -52,7 +52,7 @@ each blocker. Main also messages you. On every wake:
    with no brief gets the line `- ?: thr_xxx, unknown` and is left alone.
 3. **New task from main** (`TASK <slug> thr_xxx`): add its ledger line and read
    its brief, unless step 2 already did.
-4. **Worker question, approval, failure, or stall**: follow `supervision.md`.
+4. **Worker question, approval, failure, or stall**: follow `oversight.md`.
    Answer what you can and log each answer in `tasks/<slug>/steers.md`. You never
    ask the user anything directly.
 5. **Worker says it is done**: check it before you believe it. Read the diff in
@@ -75,7 +75,7 @@ one queued message per outcome so that main is never interrupted mid-reply.
 
 ```sh
 bb thread tell <captain> --mode queue --message-file - <<'EOF'
-[supervisor] <KIND> <slug> (outbox <n>)
+[crew captain] <KIND> <slug> (outbox <n>)
 <plain outcome, evidence, consequence; full PR URL if any>
 EOF
 ```
@@ -84,7 +84,7 @@ EOF
 | --- | --- |
 | `READY` | ship work checked and ready for the user's review or go |
 | `FINDINGS` | scout finished; include the findings, not just "done" |
-| `CALL` | a user call, in the escalation form from `supervision.md`; the worker stays waiting |
+| `CALL` | a user call, in the escalation form from `oversight.md`; the worker stays waiting |
 | `FAILED` | the recovery ladder is exhausted; say what work was kept |
 | `LESSON` | a durable fact that main should add to `learnings.md` |
 
@@ -95,7 +95,7 @@ Never report answered questions, retries, approvals, or routine progress.
 If `backlog.md` has an `## Away` section, decide the CALLs that its words clearly
 answer and log `answered by away words "<quote>"` in `steers.md`. Send main
 everything else as usual; main holds it for the user's return. Away words
-never cover anything on the escalate list in `supervision.md`.
+never cover anything on the escalate list in `oversight.md`.
 
 ## Limits
 
@@ -107,8 +107,8 @@ never cover anything on the escalate list in `supervision.md`.
 
 ## Recovery
 
-After a compaction or a clear, check you are still the supervisor
-(`ownership.md`), then re-read `supervisor.md`, the briefs of the tasks it
+After a compaction or a clear, check you are still the crew captain
+(`ownership.md`), then re-read `crew.md`, the briefs of the tasks it
 lists, and `bb thread list --project "$BB_PROJECT_ID"`. Run the adopt step of
 your loop. Check each task's real status, including pending interactions, then
 carry on.

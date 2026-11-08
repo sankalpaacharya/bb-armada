@@ -24,6 +24,12 @@ describe("a backlog's supervisor", () => {
     ).toBe("thr_ab12_C");
   });
 
+  it("is the thread on a Crew captain line", () => {
+    expect(supervisorIdOf("# Backlog\n\nCrew captain: thr_crew1\n")).toBe(
+      "thr_crew1",
+    );
+  });
+
   it("is found on a bulleted or bold Supervisor line too", () => {
     expect(supervisorIdOf("- Supervisor: thr_a1 (started)")).toBe("thr_a1");
     expect(supervisorIdOf("**Supervisor:** `thr_b2`")).toBe("thr_b2");

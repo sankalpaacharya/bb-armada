@@ -24,7 +24,7 @@ and what happens at a user call. It never widens what you are allowed to do.
 
 ## While away
 
-- Keep supervising: answer worker questions, recover stuck workers, start
+- Keep overseeing: answer worker questions, recover stuck workers, start
   queued work the words cover.
 - At a user call that the words clearly answer, act on the words and record
   that as `answered by away words "<quote>"`. Otherwise leave it in Waiting on
@@ -36,7 +36,7 @@ and what happens at a user call. It never widens what you are allowed to do.
 
 ## Returning
 
-The user's next message ends away mode. Supervisor reports and bb notices do
+The user's next message ends away mode. Crew captain reports and bb notices do
 not; see "Which messages are the user's" in `SKILL.md`. Before answering it, give
 the return brief: what finished (with PR URLs), what failed, what you decided
 under their words, and the open calls, highest impact first. Then remove the

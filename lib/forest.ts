@@ -5,8 +5,8 @@ export type TreeThread = {
   title?: string | null;
 };
 
-/** The armada skill titles a captain's supervisor "<project> supervisor". */
-const SUPERVISOR_TITLE = /\bsupervisor$/i;
+/** The armada skill titles a captain's crew captain "<project> crew captain"; older homes said "supervisor". */
+const SUPERVISOR_TITLE = /\b(?:crew captain|supervisor)$/i;
 
 export const parentIdOf = (thread: TreeThread): string | null =>
   thread.parentThreadId ?? thread.lifecycleOwnerThreadId;

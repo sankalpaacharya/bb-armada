@@ -192,6 +192,15 @@ describe("captains and their workers", () => {
       expect(model.captains[0]!.counts.working).toBe(1);
     });
 
+    it("treats a captain's child titled as its crew captain the same way", () => {
+      const threads = [
+        thread("cap", { title: "cops" }),
+        thread("crew", { parentThreadId: "cap", title: "cops crew captain" }),
+        thread("w", { parentThreadId: "crew" }),
+      ];
+      expect(threadIds(build(threads, registryOf(["cap"])))).toEqual(["w"]);
+    });
+
     it("leaves a thread titled supervisor alone when no captain is its parent", () => {
       const threads = [
         thread("root"),

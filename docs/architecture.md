@@ -8,12 +8,12 @@ armada skill. The folder holds `captain.md`, `learnings.md`, `backlog.md`,
 section in Crew lists the `.md` files in that folder, up to two folders deep,
 and clicking one opens it in bb's file preview.
 
-A captain hands work to a supervisor thread, and the supervisor starts the
-workers. The first line of `backlog.md` names the supervisor
-(`Supervisor: thr_…`). Armada reads that line and treats the supervisor as part
+A captain hands work to a crew captain thread, and the crew captain starts the
+workers. The first line of `backlog.md` names the crew captain
+(`Crew captain: thr_…`, or `Supervisor:` in older homes). Armada reads that line and treats the crew captain as part
 of its captain. Workers count as the captain's own threads in its Crew tab and
-its row's summary, and the supervisor never shows as a row. The sidebar list
-leaves out every thread a captain started. A new supervisor appears within 5 minutes.
+its row's summary, and the crew captain never shows as a row. The sidebar list
+leaves out every thread a captain started. A new crew captain appears within 5 minutes.
 
 The Crew tab's Needs you section lists the bullets under `## Waiting on the
 user` in `backlog.md` (older homes say `## Waiting on captain`), and clicking
@@ -44,7 +44,7 @@ avatars.
 `lib/model.ts` turns bb's threads and projects and these records into the
 rows the list draws. Sub-threads fold into their parent, and the parent takes
 the most urgent status among them. `lib/forest.ts` holds that folding rule,
-including the supervisor rule above. The server's auto-settle job uses the same
+including the crew captain rule above. The server's auto-settle job uses the same
 rule. `lib/status.ts` is one table that gives each status its rank, word,
 colour and mark.
 
@@ -62,7 +62,7 @@ colour and mark.
 | `parks_keep` | `threadId`, `at` | park record |
 | `parks_evaluate` | none | the threads auto-settle just settled |
 | `captain_home` | `project` | the memory folder's file list and the backlog's open decisions for the user |
-| `captain_supervisors` | none | every supervisor's thread id |
+| `captain_supervisors` | none | every crew captain's thread id |
 | `project_logos` | none | a logo for each project that has one |
 
 `captains_create` starts the thread first and records it second, retrying
@@ -80,7 +80,7 @@ app.tsx          registers the sidebar list and the Crew tab
 skills/          the armada skill, which bb loads into agent threads
 server.ts        records, migration, RPC handlers and schedules
 lib/             model, folding, status table, shelves, scope, logos, memory reader
-hooks/           queries for captains, parks, supervisors and logos, park actions
+hooks/           queries for captains, parks, crew captains and logos, park actions
 components/      sections, rows, shelves, Crew tab, Memory, dialog, pickers
 components/ui/   bb components copied into the plugin
 docs/            screenshots and this file

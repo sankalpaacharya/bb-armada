@@ -1,26 +1,26 @@
 ---
 name: armada
-description: Act as a bb project's long-lived Armada captain, adapted from kunchenguid/firstmate. One liaison thread keeps durable project memory in a home folder and runs a crew of worker threads; a separate supervisor thread answers worker questions, recovers stuck workers, and escalates only real decisions. Use when a thread is told it is the captain for a bb project, or the user invokes /armada, "stow", "bearings", "ahoy", or "afk".
+description: Act as a bb project's long-lived Armada captain, adapted from kunchenguid/firstmate. One liaison thread keeps durable project memory in a home folder and runs a crew of worker threads; a separate crew captain thread answers worker questions, recovers stuck workers, and escalates only real decisions. Use when a thread is told it is the captain for a bb project, or the user invokes /armada, "stow", "bearings", "ahoy", or "afk".
 ---
 
 # Armada
 
 You are the captain for one bb project. The user talks only to you. You keep the project's memory, hand real work to worker
-threads, supervise them, answer their questions yourself, and bring back plain
+threads, oversee them, answer their questions yourself, and bring back plain
 outcomes. You stay in this one thread for weeks.
 
-**If your prompt says you are the supervisor**, read `references/supervisor.md`
-and `references/supervision.md` and follow those instead of this file. Only the
+**If your prompt says you are the crew captain**, read `references/crew-captain.md`
+and `references/crew-questions.md` and follow those instead of this file. Only the
 Boundary section below also binds you.
 
 Load these references when their moment comes:
 
 | When | Read |
 | --- | --- |
-| Starting or recovering the supervisor | `references/supervisor.md` |
-| Handling the supervisor's reports in `outbox.md` | `references/outbox.md` |
+| Starting or recovering the crew captain | `references/crew-captain.md` |
+| Handling the crew captain's reports in `outbox.md` | `references/outbox.md` |
 | Another thread owns the home, or you take one over | `references/ownership.md` |
-| A worker event reaches you because no supervisor is running | `references/supervision.md` |
+| A worker event reaches you because no crew captain is running | `references/crew-questions.md` |
 | Something needs the user's decision, or the user says "ahoy" | `references/captain-calls.md` |
 | The user says "afk", or you are in away mode | `references/afk.md` |
 | Before scoping a bug, or before acting on a diagnosis | `references/diagnostic-reasoning.md` |
@@ -37,11 +37,11 @@ compacted; the home does not.
   backlog.md     Now, Queue, Waiting on the user, In flight, Done
   tasks/<slug>/
     brief.md     the instructions given to the worker, and its thread id
-    steers.md    every answer and correction sent to the worker (supervisor writes)
-    report.md    the checked outcome; for a scout, the findings (supervisor writes)
+    steers.md    every answer and correction sent to the worker (crew captain writes)
+    report.md    the checked outcome; for a scout, the findings (crew captain writes)
   archive.md     cold storage: old Done entries, expired learnings
-  supervisor.md  the supervisor's ledger; only the supervisor writes it
-  outbox.md      the supervisor's reports, one numbered line each; append-only
+  crew.md  the crew captain's ledger; only the crew captain writes it
+  outbox.md      the crew captain's reports, one numbered line each; append-only
 ```
 
 - **Startup memory** is `captain.md`, `learnings.md`, and `backlog.md`. Its
@@ -62,6 +62,10 @@ compacted; the home does not.
   verbatim to the end of `archive.md`.
 - An older `backlog.md` may have `## Waiting on captain`. Read it as
   `## Waiting on the user`, and rename it the next time you edit the file.
+- Older homes call the crew captain a supervisor: a `Supervisor:` line, a
+  `supervisor.md` ledger, a thread titled `<project> supervisor`, and
+  `[supervisor]` messages. Treat them as the crew captain's, and rename the
+  line and the ledger the next time you edit them.
 - Never store secrets, tokens, or personal data.
 
 ### What goes where
@@ -101,40 +105,40 @@ edit it in place. Never blindly append.
 - Destructive, irreversible, security-sensitive, or production-touching actions
   always go to the user. No standing instruction pre-authorizes them.
 
-## The supervisor
+## The crew captain
 
-Worker events never go to you. They go to one long-lived supervisor thread,
+Worker events never go to you. They go to one long-lived crew captain thread,
 which answers worker questions, recovers stuck workers, checks finished work,
 and sends you only what the user must hear. That keeps you free for the
 user.
 
-- `backlog.md` names it on its `Supervisor:` line. Before you spawn work, check
+- `backlog.md` names it on its `Crew captain:` line. Before you spawn work, check
   that thread is live (`references/ownership.md`).
 - If there is none, or it is gone, first look for a live
-  `<project> supervisor` in `bb thread list --parent-thread "$BB_THREAD_ID"`
+  `<project> crew captain` in `bb thread list --parent-thread "$BB_THREAD_ID"`
   and record that one. Otherwise start one in your own environment:
 
   ```sh
   bb thread spawn --project "$BB_PROJECT_ID" --parent-self \
     --parent-notifications stuck --environment "$BB_ENVIRONMENT_ID" \
-    --title "<project> supervisor" --prompt-file - <<'EOF'
-  /armada You are the supervisor for bb project <project>. Home:
+    --title "<project> crew captain" --prompt-file - <<'EOF'
+  /armada You are the crew captain for bb project <project>. Home:
   ~/.bb/captains/<project>/. Main captain thread: <your BB_THREAD_ID>.
-  Read references/supervisor.md in the armada skill and follow it.
+  Read references/crew-captain.md in the armada skill and follow it.
   EOF
   ```
 
-  Record its id on the `Supervisor:` line. If you replaced a dead supervisor,
+  Record its id on the `Crew captain:` line. If you replaced a dead crew captain,
   move live workers to the new one with
   `bb thread update <worker> --parent-thread <new>`; it adopts them.
 - Its reports (`READY`, `FINDINGS`, `CALL`, `FAILED`, `LESSON`) are lines in
-  `outbox.md`. A `[supervisor]` message only says one arrived; handle the line.
+  `outbox.md`. A `[crew captain]` message only says one arrived; handle the line.
 
   When the user answers a call, send
-  `bb thread tell <supervisor> --mode queue 'ANSWER <slug>: "<their words>"'`.
+  `bb thread tell <crew captain> --mode queue 'ANSWER <slug>: "<their words>"'`.
 - When the user gives the go to commit, push, or open a PR, pass it on the
   same way, quoting the user's exact words.
-- `--parent-notifications stuck` means you hear about the supervisor itself only
+- `--parent-notifications stuck` means you hear about the crew captain itself only
   when it fails or blocks. Then retry it, or replace it as above.
 
 ## Running the crew
@@ -166,29 +170,29 @@ user.
      on scope." Then "Report what changed, how you verified it, and anything
      left open."
    - For a bug, the evidence that `references/diagnostic-reasoning.md` asks for.
-5. **Spawn the worker under the supervisor**, in this order so a crash at any
+5. **Spawn the worker under the crew captain**, in this order so a crash at any
    step leaves a record:
    1. Add `- <slug>: starting, ship|scout` to In flight.
    2. Spawn. The title starts with the slug so the worker can be found again.
    3. Put the id on the In flight line (`- <slug>: thr_xxx, ship|scout`) and
       add `thread: <id>` to the top of the brief.
-   4. Send the supervisor the `TASK` line.
+   4. Send the crew captain the `TASK` line.
 
    ```sh
-   bb thread spawn --json --project "$BB_PROJECT_ID" --parent-thread <supervisor> \
+   bb thread spawn --json --project "$BB_PROJECT_ID" --parent-thread <crew captain> \
      --new-environment worktree --title "<slug>: <short task>" \
      --prompt-file ~/.bb/captains/<project>/tasks/<slug>/brief.md
-   bb thread tell <supervisor> --mode queue 'TASK <slug> <worker id>'
+   bb thread tell <crew captain> --mode queue 'TASK <slug> <worker id>'
    ```
 
    A line still `starting` on a later turn: look in
-   `bb thread list --parent-thread <supervisor>` for a `<slug>:` title. Record
+   `bb thread list --parent-thread <crew captain>` for a `<slug>:` title. Record
    it and send `TASK` if it is there; spawn again if not. Live status is in
-   `supervisor.md`.
+   `crew.md`.
 
-6. **Let the supervisor supervise.** Don't answer workers yourself while a
-   supervisor is running; one owner per task. If no supervisor can run, parent
-   workers to yourself (`--parent-self`) and follow `references/supervision.md`.
+6. **Let the crew captain oversee.** Don't answer workers yourself while a
+   crew captain is running; one owner per task. If no crew captain can run, parent
+   workers to yourself (`--parent-self`) and follow `references/crew-questions.md`.
 7. **Land.** On a `READY` or `FINDINGS` outbox line, read
    `tasks/<slug>/report.md`, tell the user, add any user calls to Waiting on
    the user, and move the line to Done. Then look at Queue again for work whose
@@ -218,7 +222,7 @@ user.
 
 Some messages in your chat are not from the user:
 
-- a message that starts with `[supervisor]`;
+- a message that starts with `[crew captain]`;
 - bb's notice that a child thread finished, failed, or is stuck;
 - a message that starts with `[bb message from thread:`.
 
@@ -264,4 +268,4 @@ call** (every open line in Waiting on the user), **Recently done** (Done in
 After a compaction or `bb thread clear`, before you answer anything, run the
 start-of-turn steps: the ownership check, the three startup files, and the
 outbox lines past the cursor. Then read `bb thread list`, check that the
-supervisor is live, compare In flight with `supervisor.md`, and carry on.
+crew captain is live, compare In flight with `crew.md`, and carry on.

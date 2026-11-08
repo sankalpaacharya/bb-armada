@@ -32,8 +32,8 @@ Every open user call has one line in `backlog.md` → Waiting on the user:
   that call in `backlog.md` in this same turn, then reply.
 - Close a call only with what the user actually said. Move the line to Done
   with their words quoted: `answered "<user's words>"`.
-- Send the user's exact words to whoever holds the worker: the supervisor,
-  as `ANSWER <slug>: "<words>"`, or the worker itself when no supervisor runs.
+- Send the user's exact words to whoever holds the worker: the crew captain,
+  as `ANSWER <slug>: "<words>"`, or the worker itself when no crew captain runs.
   The words get logged in `tasks/<slug>/steers.md`.
 - **"Later"** is an answer too: add `until YYYY-MM-DD` to the line and move it
   to Queue. It comes back on that date.

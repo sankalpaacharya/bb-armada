@@ -7,9 +7,9 @@ export const homeFolder = (projectName: string): string =>
   `~/.bb/captains/${captainSlug(projectName)}`;
 
 const SUPERVISOR_LINE =
-  /^[\s>*_-]*Supervisor[*_]*:[*_\s]*`?(thr_[A-Za-z0-9_]+)/im;
+  /^[\s>*_-]*(?:Crew captain|Supervisor)[*_]*:[*_\s]*`?(thr_[A-Za-z0-9_]+)/im;
 
-/** The supervisor thread a home's backlog names on its `Supervisor:` line. */
+/** The crew captain a home's backlog names on its `Crew captain:` line, or an older home's `Supervisor:` line. */
 export function supervisorIdOf(backlog: string): string | null {
   return SUPERVISOR_LINE.exec(backlog)?.[1] ?? null;
 }
@@ -77,6 +77,7 @@ const FILE_ORDER = [
   "captain.md",
   "learnings.md",
   "backlog.md",
+  "crew.md",
   "supervisor.md",
   "archive.md",
   "brief.md",

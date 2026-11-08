@@ -1,4 +1,4 @@
-# Supervision
+# Oversight
 
 Adapted from firstmate's `ask-user-authority` and `stuck-crewmate-recovery`.
 
@@ -63,9 +63,9 @@ question. They do not give anyone authority to widen the task.
   agreed. Log each answer in `tasks/<slug>/steers.md`.
 
 When you escalate, leave the worker waiting and put the call in the escalation
-form below. As the supervisor, write it to `tasks/<slug>/steers.md` and report
+form below. As the crew captain, write it to `tasks/<slug>/steers.md` and report
 it to main as `CALL`. As main with no
-supervisor, add it to `backlog.md` → Waiting on the user (see `captain-calls.md`)
+crew captain, add it to `backlog.md` → Waiting on the user (see `captain-calls.md`)
 and ask the user. Once the user answers, send the worker their exact words.
 
 ### Escalation form
@@ -95,7 +95,7 @@ Go up this ladder one step at a time:
    brief plus a short progress note, then archive the old thread. A low
    context reading is not wedging; threads compact and keep going.
 5. **A second replacement also fails**: report the plain failure, what work was
-   kept, and what it means. As the supervisor, send `FAILED` to main. As main,
+   kept, and what it means. As the crew captain, send `FAILED` to main. As main,
    mark the backlog line `failed` and tell the user.
 
 A worker that claims some tool or service is dead is guessing until you check.
