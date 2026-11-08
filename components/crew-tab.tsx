@@ -12,10 +12,12 @@ import { useArmadaModel } from "@/hooks/use-armada-model";
 import { useCrewActions } from "@/hooks/use-crew-actions";
 import { useParkActions, type ParkActions } from "@/hooks/use-park-actions";
 import { useProjectLogos } from "@/hooks/use-project-logos";
+import { useStoredState } from "@/hooks/use-stored-state";
 import { toActionTarget } from "@/lib/action-target";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
 import type { CaptainEntry, ThreadEntry } from "@/lib/model";
 import { rpcContract } from "@/lib/rpc";
+import { parseBooleanMap } from "@/lib/storage";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age } from "./age";
@@ -27,6 +29,7 @@ import { PlaceLine } from "./place-line";
 import { ProjectLogo } from "./project-logo";
 import { RowActions } from "./row-actions";
 import { Note } from "./section";
+import { ShelfHeading } from "./shelf-section";
 import { StatusGlyph } from "./status-mark";
 import { Icon } from "./ui/icon";
 
@@ -82,6 +85,37 @@ function Group({
         </span>
       </h3>
       <ul className="m-0 flex flex-col gap-px p-0">{children}</ul>
+    </section>
+  );
+}
+
+const CREW_GROUPS_KEY = "armada:crew-groups";
+
+/** A group of workers that folds away, drawn like the sidebar's shelves. */
+function FoldGroup({
+  title,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  if (count === 0) return null;
+  return (
+    <section aria-label={title} className="flex flex-col gap-1">
+      <ShelfHeading
+        title={title}
+        count={count}
+        open={open}
+        onToggle={onToggle}
+        className="px-2"
+      />
+      {open ? <ul className="m-0 flex flex-col gap-px p-0">{children}</ul> : null}
     </section>
   );
 }
@@ -243,6 +277,12 @@ function CrewView({
   const { captain } = crew;
   const crewActions = useCrewActions();
   const parkActions = useParkActions();
+  const [groups, setGroups] = useStoredState(
+    CREW_GROUPS_KEY,
+    parseBooleanMap,
+    {},
+  );
+  const groupOpen = (title: string) => groups[title] ?? title === "Active";
   const projectLogo = useProjectLogos()[captain.thread.projectId] ?? null;
   const workers = crew.active.length + crew.inactive.length + crew.parked.length;
   const rows = (entries: readonly ThreadEntry[]) =>
@@ -310,15 +350,25 @@ function CrewView({
         </Note>
       ) : (
         <>
-          <Group title="Active" count={crew.active.length}>
-            {rows(crew.active)}
-          </Group>
-          <Group title="Inactive" count={crew.inactive.length}>
-            {rows(crew.inactive)}
-          </Group>
-          <Group title="Settled" count={crew.parked.length}>
-            {rows(crew.parked)}
-          </Group>
+          {(
+            [
+              ["Active", crew.active],
+              ["Inactive", crew.inactive],
+              ["Settled", crew.parked],
+            ] as const
+          ).map(([title, entries]) => (
+            <FoldGroup
+              key={title}
+              title={title}
+              count={entries.length}
+              open={groupOpen(title)}
+              onToggle={() =>
+                setGroups({ ...groups, [title]: !groupOpen(title) })
+              }
+            >
+              {rows(entries)}
+            </FoldGroup>
+          ))}
         </>
       )}
       {projectName === null ? null : (

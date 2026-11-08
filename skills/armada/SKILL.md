@@ -56,7 +56,9 @@ compacted; the home does not.
      (`references/outbox.md`).
   4. If the user's message answers or settles an open call under Waiting on
      the user, close it in `backlog.md` now (`references/captain-calls.md`).
-     The sidebar shows those lines as Needs you until you do.
+     The Crew tab shows those lines as Needs you until you do.
+  5. Move any call older than four hours to `archive.md`
+     (`references/captain-calls.md`, Expiring a call).
 - If the home is missing, create it. If a legacy single file
   `~/.bb/captains/<project>.md` exists, split it into the new files, then add it
   verbatim to the end of `archive.md`.

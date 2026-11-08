@@ -11,6 +11,49 @@ import type { OpenThread } from "./thread-link";
 /** Rows a shelf shows before it offers the rest. */
 const PREVIEW = 8;
 
+/** A quiet label with a rule to the edge, which opens and closes what is under it. */
+export function ShelfHeading({
+  title,
+  count,
+  open,
+  onToggle,
+  className,
+}: {
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onToggle}
+      className={cn(
+        "group/shelf flex h-6 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left",
+        FOCUS_RING,
+        className,
+      )}
+    >
+      <span className="text-2xs font-medium text-muted-foreground/70 transition-colors group-hover/shelf:text-foreground">
+        {title}
+      </span>
+      <span className="text-2xs tabular-nums text-muted-foreground/50">
+        {count}
+      </span>
+      <span aria-hidden="true" className="h-px flex-1 bg-sidebar-border/70" />
+      <Icon
+        name="ChevronDown"
+        className={cn(
+          "size-3 shrink-0 text-muted-foreground/50 transition-transform motion-reduce:transition-none group-hover/shelf:text-foreground",
+          !open && "-rotate-90",
+        )}
+      />
+    </button>
+  );
+}
+
 /**
  * A shelf under the active list, drawn like T3 Code's: a quiet label with a
  * rule to the edge, then its threads as muted lines. The label opens and
@@ -40,30 +83,12 @@ export function ShelfSection({
   const hidden = entries.length - shown.length;
   return (
     <section aria-label={title} className="flex flex-col pt-3">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={onToggleOpen}
-        className={cn(
-          "group/shelf flex h-6 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left",
-          FOCUS_RING,
-        )}
-      >
-        <span className="text-2xs font-medium text-muted-foreground/70 transition-colors group-hover/shelf:text-foreground">
-          {title}
-        </span>
-        <span className="text-2xs tabular-nums text-muted-foreground/50">
-          {entries.length}
-        </span>
-        <span aria-hidden="true" className="h-px flex-1 bg-sidebar-border/70" />
-        <Icon
-          name="ChevronDown"
-          className={cn(
-            "size-3 shrink-0 text-muted-foreground/50 transition-transform motion-reduce:transition-none group-hover/shelf:text-foreground",
-            !open && "-rotate-90",
-          )}
-        />
-      </button>
+      <ShelfHeading
+        title={title}
+        count={entries.length}
+        open={open}
+        onToggle={onToggleOpen}
+      />
       {open ? (
         <ul aria-label={title} className="m-0 flex flex-col gap-px p-0">
           {shown.map((entry) => (

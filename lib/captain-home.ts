@@ -34,6 +34,30 @@ export function waitingOnUser(backlog: string): string[] {
   return items;
 }
 
+/** A decision left unanswered this long stops showing as Needs you. */
+export const NEEDS_YOU_TTL_MS = 4 * 60 * 60 * 1000;
+
+export const needsYouSeenSchema = z.record(z.string(), z.number());
+
+/**
+ * The decisions still within their time, and when each was first seen. A
+ * backlog line carries no reliable time of its own, so the first read starts
+ * its clock; a line that leaves the backlog is forgotten.
+ */
+export function expireNeedsYou(
+  items: readonly string[],
+  seen: Readonly<Record<string, number>>,
+  now: number,
+): { fresh: string[]; seen: Record<string, number> } {
+  const next = Object.fromEntries(
+    items.map((item) => [item, seen[item] ?? now]),
+  );
+  return {
+    fresh: items.filter((item) => now - next[item]! < NEEDS_YOU_TTL_MS),
+    seen: next,
+  };
+}
+
 /**
  * A markdown file at most three folders deep, named relative to its home. A
  * segment cannot start with a dot, which rules out `..` and hidden files.

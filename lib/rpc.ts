@@ -4,18 +4,11 @@ import { z } from "zod";
 import { captainHomeSchema } from "./captain-home";
 import { avatarSchema, captainRecordSchema, idSchema } from "./captains";
 import { parkRecordSchema } from "./lifecycle";
-import { focusedStepsSchema } from "./steps";
 
 export const CAPTAINS_TAG = "captains";
 export const PARKS_TAG = "parks";
 export const HOMES_TAG = "homes";
 export const LOGOS_TAG = "logos";
-
-/** The most of a thread's turns the Steps list reads. */
-export const MAX_TURNS = 200;
-
-/** One thread's steps, invalidated when that thread changes. */
-export const stepsTag = (threadId: string): string => `steps:${threadId}`;
 
 const threadId = idSchema;
 const avatar = avatarSchema;
@@ -110,24 +103,5 @@ export const rpcContract = defineRpcContract({
     input: z.null(),
     output: z.record(idSchema, z.string().startsWith("data:image/")),
     tags: () => [LOGOS_TAG],
-  },
-  /** The thread's newest `turns` turns as steps, with where their time went. */
-  thread_steps: {
-    input: z.strictObject({
-      threadId,
-      turns: z.number().int().min(1).max(MAX_TURNS),
-      turnId: z.string().min(1).max(1000).nullable(),
-    }),
-    output: focusedStepsSchema,
-    tags: ({ threadId }) => [stepsTag(threadId)],
-  },
-  /** A step's own output, read only when the step is opened. */
-  step_output: {
-    input: z.strictObject({
-      threadId,
-      stepId: z.string().min(1).max(1000),
-      turns: z.number().int().min(1).max(MAX_TURNS),
-    }),
-    output: z.object({ output: z.string().nullable() }),
   },
 });

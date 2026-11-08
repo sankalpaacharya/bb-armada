@@ -11,6 +11,7 @@ import {
   parseStoredCaptain,
   type CaptainRecord,
 } from "./lib/captains";
+import { expireNeedsYou, needsYouSeenSchema } from "./lib/captain-home";
 import { createHomeReader, supervisorIdsOf } from "./lib/home-reader";
 import { listRecords, queueByKey } from "./lib/kv-records";
 import {
@@ -26,49 +27,15 @@ import {
   LOGOS_TAG,
   PARKS_TAG,
   rpcContract,
-  stepsTag,
   type Created,
 } from "./lib/rpc";
 import { SETTINGS, logoSkipProjects, parseSettings } from "./lib/settings";
-import { buildThreadSteps, focusTurn, outputOfRow } from "./lib/steps";
 
 /** A failed record write is retried after each wait, longer each time. */
 const RECORD_BACKOFF_MS = [100, 400] as const;
 
 const messageOf = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
-
-/** Thread statuses with a turn under way. */
-const RUNNING_STATUSES = new Set(["active", "starting", "pending"]);
-
-/** Thread events that only stream text or counters, and so change no step. */
-const DELTA_EVENTS = new Set([
-  "item/agentMessage/delta",
-  "item/reasoning/summaryTextDelta",
-  "item/reasoning/textDelta",
-  "item/commandExecution/outputDelta",
-  "item/fileChange/outputDelta",
-  "item/plan/delta",
-  "thread/tokenUsage/updated",
-  "thread/contextWindowUsage/updated",
-  "provider/rateLimits/updated",
-  "item/toolCall/progress",
-  "item/mcpToolCall/progress",
-  "item/backgroundTask/progress",
-  "turn/diff/updated",
-]);
-
-type TimelineRead = Extract<
-  Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["timeline"]>>,
-  { rows: unknown }
->;
-type TimelineRow = TimelineRead["rows"][number];
-
-/** Enough pages for the longest Steps list, should a thread read short. */
-const MAX_TIMELINE_PAGES = 40;
-
-/** Changes to one thread within this window refresh its steps once. */
-const STEPS_COALESCE_MS = 700;
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -160,41 +127,6 @@ export default async function plugin(bb: BbPluginApi) {
     run().catch((cause: unknown) =>
       bb.log.warn(`auto-settle failed: ${messageOf(cause)}`),
     );
-  };
-
-  /** bb caps one read, so older history comes back a page at a time. */
-  const readTimeline = async (threadId: string, segments: number) => {
-    const byId = new Map<string, TimelineRow>();
-    let older: { anchorId: string; anchorSeq: number } | null = null;
-    let rows: TimelineRow[] = [];
-    let read = 0;
-    for (let page = 0; page < MAX_TIMELINE_PAGES; page += 1) {
-      const timeline: TimelineRead = await bb.sdk.threads.timeline({
-        threadId,
-        includeNestedRows: "true",
-        segmentLimit: String(segments - read),
-        ...(older === null
-          ? {}
-          : {
-              beforeAnchorId: older.anchorId,
-              beforeAnchorSeq: String(older.anchorSeq),
-            }),
-      });
-      for (const row of timeline.timelinePage?.olderRowUpdates ?? [])
-        if (byId.has(row.id)) byId.set(row.id, row);
-      rows = [...timeline.rows, ...rows];
-      for (const row of timeline.rows) byId.set(row.id, row);
-      older = timeline.timelinePage?.olderCursor ?? null;
-      read += timeline.timelinePage?.returnedSegmentCount ?? segments;
-      if (older === null || read >= segments) break;
-    }
-    const seen = new Set<string>();
-    const merged = rows.flatMap((row) => {
-      if (seen.has(row.id)) return [];
-      seen.add(row.id);
-      return [byId.get(row.id) ?? row];
-    });
-    return { rows: merged, hasOlder: older !== null };
   };
 
   bb.rpc.register(rpcContract, {
@@ -289,53 +221,27 @@ export default async function plugin(bb: BbPluginApi) {
 
     parks_evaluate: async () => ({ changed: await evaluate() }),
 
-    captain_home: ({ project }) => homes.home(project),
+    captain_home: async ({ project }) => {
+      const home = await homes.home(project);
+      if (home.status !== "ready") return home;
+      return queue(`needs-you:${project}`, async () => {
+        const key = `needs-you-seen:${project}`;
+        const stored = needsYouSeenSchema.safeParse(await kv.get<unknown>(key));
+        const before = stored.success ? stored.data : {};
+        const { fresh, seen } = expireNeedsYou(
+          home.needsYou,
+          before,
+          Date.now(),
+        );
+        if (JSON.stringify(seen) !== JSON.stringify(before))
+          await kv.set(key, seen);
+        return { ...home, needsYou: fresh };
+      });
+    },
 
     captain_supervisors: async () => supervisorIdsOf(await homes.backlogs()),
 
     project_logos: () => logos.logos(),
-
-    thread_steps: async ({ threadId, turns, turnId }) => {
-      const [thread, timeline] = await Promise.all([
-        bb.sdk.threads.get({ threadId }),
-        readTimeline(threadId, turns + 1),
-      ]);
-      const steps = buildThreadSteps(timeline.rows, {
-        threadId,
-        running: RUNNING_STATUSES.has(thread.status),
-        now: Date.now(),
-        hasOlder: timeline.hasOlder,
-      });
-      return focusTurn(steps, turnId, turns);
-    },
-
-    step_output: async ({ threadId, stepId, turns }) => {
-      const { rows } = await readTimeline(threadId, turns + 1);
-      return { output: outputOfRow(rows, stepId) };
-    },
-  });
-
-  const changedThreads = new Set<string>();
-  let stepsTimer: ReturnType<typeof setTimeout> | null = null;
-  const unsubscribe = bb.sdk.subscribe({
-    event: "thread:changed",
-    callback: (event) => {
-      const types = event.metadata?.eventTypes;
-      if (types?.length && types.every((type) => DELTA_EVENTS.has(type)))
-        return;
-      if (event.id === undefined) return;
-      changedThreads.add(event.id);
-      stepsTimer ??= setTimeout(() => {
-        stepsTimer = null;
-        const tags = [...changedThreads].map(stepsTag);
-        changedThreads.clear();
-        bb.rpc.experimental_invalidate(tags);
-      }, STEPS_COALESCE_MS);
-    },
-  });
-  bb.onDispose(() => {
-    unsubscribe();
-    if (stepsTimer !== null) clearTimeout(stepsTimer);
   });
 
   bb.background.schedule("auto-settle", "*/5 * * * *", async () => {

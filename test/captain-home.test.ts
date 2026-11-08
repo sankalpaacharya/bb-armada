@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  expireNeedsYou,
   homeFolder,
   memoryTree,
   supervisorIdOf,
@@ -139,5 +140,28 @@ describe("a home's memory tree", () => {
 
   it("leaves out files a home does not have", () => {
     expect(shape(memoryTree([file("backlog.md")]))).toEqual(["backlog.md"]);
+  });
+});
+
+describe("how long a decision shows", () => {
+  const FOUR_HOURS = 4 * 60 * 60 * 1000;
+
+  it("starts a new decision's clock the first time it is read", () => {
+    expect(expireNeedsYou(["a"], {}, 1_000)).toEqual({
+      fresh: ["a"],
+      seen: { a: 1_000 },
+    });
+  });
+
+  it("hides a decision after four hours, and keeps its clock", () => {
+    const seen = { old: 0, young: 3 * 60 * 60 * 1000 };
+    expect(expireNeedsYou(["old", "young"], seen, FOUR_HOURS)).toEqual({
+      fresh: ["young"],
+      seen,
+    });
+  });
+
+  it("forgets a decision that left the backlog", () => {
+    expect(expireNeedsYou(["b"], { a: 0, b: 5 }, 10).seen).toEqual({ b: 5 });
   });
 });

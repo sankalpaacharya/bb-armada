@@ -59,7 +59,6 @@ async function load(
     settings,
     sdk: {
       threads: { list: async () => [] },
-      subscribe: () => () => {},
       files: { listPaths: async () => ({ paths: [], truncated: false }) },
       projects: {
         list: async () =>

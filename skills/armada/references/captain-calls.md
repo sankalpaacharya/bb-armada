@@ -10,7 +10,7 @@ on them, not a separate thing.
 Every open user call has one line in `backlog.md` → Waiting on the user:
 
 ```
-- <slug>: <question>; options: <a> / <b>; recommend <a>; gates <task slug or "nothing"> (since YYYY-MM-DD)
+- <slug>: <question>; options: <a> / <b>; recommend <a>; gates <task slug or "nothing"> (since YYYY-MM-DDTHH:MM)
 ```
 
 - Put the line on the work it blocks. A review that raised several questions is
@@ -22,8 +22,17 @@ Every open user call has one line in `backlog.md` → Waiting on the user:
 - Only a real decision gets a line: a choice between options that gates work.
   A general question to the user ("what are the priorities?") is not a call;
   ask it in chat and record what they say in `captain.md` or Now.
-- The Armada sidebar shows every line under Waiting on the user as **Needs
-  you**, so a stale line keeps nagging the user. Keep the section exact.
+- The Armada Crew tab shows lines under Waiting on the user as **Needs you**
+  for four hours, then hides them. Keep the section exact.
+
+## Expiring a call
+
+A call the user has not answered in four hours has gone stale. At the start of
+every turn, move each line older than that out of Waiting on the user and into
+`archive.md`, marked `expired: no answer after 4 hours`. A line with only a date,
+or no `since`, counts as expired once it is from an earlier day or you have no
+sign the user is still on it. Do not raise an expired call again unless the user
+brings it up. If it gated a task, keep that task parked in Queue with a note.
 
 ## Closing a call
 

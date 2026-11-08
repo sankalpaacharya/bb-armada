@@ -6,7 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 
@@ -24,6 +24,8 @@ vi.stubGlobal("localStorage", {
   setItem: (key: string, value: string) => void stored.set(key, value),
   removeItem: (key: string) => void stored.delete(key),
 });
+
+beforeEach(() => stored.clear());
 
 const ready = (...paths: string[]): ReadyHome => ({
   status: "ready",
@@ -301,13 +303,30 @@ describe("the crew tab's workers", () => {
       ).toEqual({ threadId: "w_fix", at: expect.any(Number) }),
     );
     await view.experimental_invalidateRpc(["parks"]);
-    await waitFor(() =>
-      expect(
-        within(
-          screen.getByRole("heading", { name: /^Settled/ }).closest("section")!,
-        ).getByText("Fix login"),
-      ).toBeTruthy(),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: /^Settled/ }));
+    expect(
+      within(screen.getByRole("region", { name: "Settled" })).getByText("Fix login"),
+    ).toBeTruthy();
+  });
+
+  it("folds Active, and keeps Settled folded until it is opened", async () => {
+    renderCrew(() => ready(), {
+      workers,
+      rpc: {
+        parks_list: () => [
+          { threadId: "w_fix", kind: "settled", at: Date.now(), by: "user" },
+        ],
+      },
+    });
+    const settled = await screen.findByRole("button", { name: /^Settled/ });
+    expect(settled.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Fix login")).toBeNull();
+    fireEvent.click(settled);
+    expect(await screen.findByText("Fix login")).toBeTruthy();
+    const active = screen.getByRole("button", { name: /^Active/ });
+    expect(screen.getByText("Owned helper")).toBeTruthy();
+    fireEvent.click(active);
+    expect(screen.queryByText("Owned helper")).toBeNull();
   });
 
   it("offers Settle and Snooze in a worker's menu", async () => {
