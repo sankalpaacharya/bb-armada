@@ -40,12 +40,14 @@
     "sonner": "^1.7.4",
     "tailwind-merge": "^3.4.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "yaml": "^2.9.1"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "bb plugin build",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run check:skills && npm run build",
+    "check:skills": "node scripts/check-skills.mjs"
   }
 }
