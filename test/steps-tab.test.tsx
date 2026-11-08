@@ -177,6 +177,14 @@ describe("the steps tab", () => {
     expect(within(row).getByText("3s")).toBeTruthy();
   });
 
+  it("hides the message sidebar and brings it back", async () => {
+    renderSteps(ready);
+    fireEvent.click(await screen.findByRole("button", { name: "Hide messages" }));
+    expect(screen.queryByRole("navigation", { name: "Messages" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show messages" }));
+    expect(screen.getByRole("navigation", { name: "Messages" })).toBeTruthy();
+  });
+
   it("moves through the messages with the arrow keys", async () => {
     const { reads } = renderSteps(ready);
     const list = await screen.findByRole("navigation", { name: "Messages" });

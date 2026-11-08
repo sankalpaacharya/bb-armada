@@ -15,6 +15,7 @@ import {
   type ExperimentalThreadActionTabProps,
 } from "@get-bb/plugin-sdk/app";
 
+import { useStoredState } from "@/hooks/use-stored-state";
 import { useLiveNow } from "@/lib/clock";
 import { MAX_TURNS, rpcContract } from "@/lib/rpc";
 import { dayLabel, messageLabel } from "@/lib/step-flow";
@@ -26,7 +27,7 @@ import {
   type ThreadSteps,
   type TurnSteps,
 } from "@/lib/steps";
-import { FOCUS_RING, PANEL_ROW } from "@/lib/styles";
+import { FOCUS_RING, HEADER_ACTION, PANEL_ROW } from "@/lib/styles";
 import { formatElapsed } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { ResizeHandle, useStoredSize } from "./resize-handle";
@@ -45,6 +46,11 @@ import {
 const TURNS_PAGE = 10;
 
 const SIDEBAR_KEY = "armada:steps-sidebar-width";
+const SIDEBAR_OPEN_KEY = "armada:steps-sidebar-open";
+const parseOpen = (raw: string): boolean | undefined => {
+  const value: unknown = JSON.parse(raw);
+  return typeof value === "boolean" ? value : undefined;
+};
 const SIDEBAR_WIDTH = { min: 120, max: () => 420, initial: () => 176 };
 
 const CHIP = `inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-2xs text-foreground/80 hover:bg-accent/60 aria-pressed:bg-accent aria-pressed:text-foreground ${FOCUS_RING}`;
@@ -113,12 +119,16 @@ function TurnBody({
   openFile,
   threadId,
   turns,
+  sidebarOpen,
+  onToggleSidebar,
 }: {
   turn: TurnSteps;
   now: number;
   openFile: OpenFile;
   threadId: string;
   turns: number;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
 }) {
   const [filter, setFilter] = useState<StepKind | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
@@ -149,11 +159,21 @@ function TurnBody({
   return (
     <div className="flex flex-col pb-3">
       <div className="sticky top-0 z-10 flex flex-col gap-2 bg-sidebar px-2 pt-3 pb-2">
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-start gap-1.5">
+          <button
+            type="button"
+            aria-expanded={sidebarOpen}
+            aria-label={sidebarOpen ? "Hide messages" : "Show messages"}
+            title={sidebarOpen ? "Hide messages" : "Show messages"}
+            onClick={onToggleSidebar}
+            className={cn(HEADER_ACTION, "-mt-0.5 -ml-1")}
+          >
+            <Icon name="PanelLeft" className="size-3.5" aria-hidden />
+          </button>
           <p className="m-0 line-clamp-2 min-w-0 flex-1 text-[13px] leading-5 font-medium text-foreground">
             {messageLabel(turn.prompt).text || turn.prompt}
           </p>
-          <p className="m-0 shrink-0 text-xs tabular-nums text-muted-foreground">
+          <p className="m-0 ml-1.5 shrink-0 text-xs leading-5 tabular-nums text-muted-foreground">
             {formatElapsed(Math.max(turnEndedAt - turn.startedAt, 0))}, {stepCount}{" "}
             {stepCount === 1 ? "step" : "steps"}
           </p>
@@ -295,6 +315,11 @@ export function StepsTab({ threadId }: ExperimentalThreadActionTabProps) {
   const visible = experimental_useTabVisible();
   const [turns, setTurns] = useState(TURNS_PAGE);
   const sidebar = useStoredSize(SIDEBAR_KEY, SIDEBAR_WIDTH);
+  const [sidebarOpen, setSidebarOpen] = useStoredState(
+    SIDEBAR_OPEN_KEY,
+    parseOpen,
+    true,
+  );
   const [pick, setPick] = useState<{ threadId: string; turnId: string } | null>(
     null,
   );
@@ -355,52 +380,54 @@ export function StepsTab({ threadId }: ExperimentalThreadActionTabProps) {
       steps.hasOlder && steps.turnsRead === turns && turns < MAX_TURNS;
     return (
       <div className="flex h-full min-h-0">
-        <div
-          className="relative shrink-0"
-          style={{ width: sidebar.size, maxWidth: "70%" }}
-        >
-          <nav
-            aria-label="Messages"
-            onKeyDown={moveThroughMessages}
-            className="h-full overflow-y-auto border-r border-border px-1.5 pb-1.5"
+        {sidebarOpen ? (
+          <div
+            className="relative shrink-0"
+            style={{ width: sidebar.size, maxWidth: "70%" }}
           >
-            <ol className="m-0 flex flex-col gap-0.5 p-0">
-              {steps.turns.map((turn, index) => {
-                const day = dayLabel(turn.startedAt, Date.now());
-                const previous = steps.turns[index - 1];
-                return (
-                  <Fragment key={turn.id}>
-                    {previous !== undefined &&
-                    dayLabel(previous.startedAt, Date.now()) === day ? null : (
-                      <li className="sticky top-0 z-[1] list-none bg-sidebar px-2 pt-2.5 pb-1 text-[11px] font-medium text-muted-foreground">
-                        {day}
-                      </li>
-                    )}
-                    <MessageRow
-                      turn={turn}
-                      selected={turn.id === (picked ?? steps.focus)}
-                      now={now}
-                      onSelect={() => setPick({ threadId, turnId: turn.id })}
-                    />
-                  </Fragment>
-                );
-              })}
-              {canLoadMore ? (
-                <LoadMore
-                  onVisible={() =>
-                    setTurns(Math.min(turns + TURNS_PAGE, MAX_TURNS))
-                  }
-                />
-              ) : null}
-            </ol>
-          </nav>
-          <ResizeHandle
-            axis="x"
-            label="Resize messages"
-            pane={sidebar}
-            className="absolute inset-y-0 -right-1 w-2"
-          />
-        </div>
+            <nav
+              aria-label="Messages"
+              onKeyDown={moveThroughMessages}
+              className="h-full overflow-y-auto border-r border-border px-1.5 pb-1.5"
+            >
+              <ol className="m-0 flex flex-col gap-0.5 p-0">
+                {steps.turns.map((turn, index) => {
+                  const day = dayLabel(turn.startedAt, Date.now());
+                  const previous = steps.turns[index - 1];
+                  return (
+                    <Fragment key={turn.id}>
+                      {previous !== undefined &&
+                      dayLabel(previous.startedAt, Date.now()) === day ? null : (
+                        <li className="sticky top-0 z-[1] list-none bg-sidebar px-2 pt-2.5 pb-1 text-[11px] font-medium text-muted-foreground">
+                          {day}
+                        </li>
+                      )}
+                      <MessageRow
+                        turn={turn}
+                        selected={turn.id === (picked ?? steps.focus)}
+                        now={now}
+                        onSelect={() => setPick({ threadId, turnId: turn.id })}
+                      />
+                    </Fragment>
+                  );
+                })}
+                {canLoadMore ? (
+                  <LoadMore
+                    onVisible={() =>
+                      setTurns(Math.min(turns + TURNS_PAGE, MAX_TURNS))
+                    }
+                  />
+                ) : null}
+              </ol>
+            </nav>
+            <ResizeHandle
+              axis="x"
+              label="Resize messages"
+              pane={sidebar}
+              className="absolute inset-y-0 -right-1 w-2"
+            />
+          </div>
+        ) : null}
         <div className="min-w-0 flex-1 overflow-y-auto px-1">
           {steps.running ? (
             <div className="px-2 pt-3">
@@ -419,6 +446,8 @@ export function StepsTab({ threadId }: ExperimentalThreadActionTabProps) {
               openFile={openFile}
               threadId={threadId}
               turns={turns}
+              sidebarOpen={sidebarOpen}
+              onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             />
           )}
         </div>
