@@ -4,11 +4,15 @@ import { z } from "zod";
 import { captainHomeSchema } from "./captain-home";
 import { avatarSchema, captainRecordSchema, idSchema } from "./captains";
 import { parkRecordSchema } from "./lifecycle";
+import { threadStepsSchema } from "./steps";
 
 export const CAPTAINS_TAG = "captains";
 export const PARKS_TAG = "parks";
 export const HOMES_TAG = "homes";
 export const LOGOS_TAG = "logos";
+
+/** One thread's steps, invalidated when that thread changes. */
+export const stepsTag = (threadId: string): string => `steps:${threadId}`;
 
 const threadId = idSchema;
 const avatar = avatarSchema;
@@ -103,5 +107,11 @@ export const rpcContract = defineRpcContract({
     input: z.null(),
     output: z.record(idSchema, z.string().startsWith("data:image/")),
     tags: () => [LOGOS_TAG],
+  },
+  /** The thread's newest `turns` turns as steps, with where their time went. */
+  thread_steps: {
+    input: z.strictObject({ threadId, turns: z.number().int().min(1).max(40) }),
+    output: threadStepsSchema,
+    tags: ({ threadId }) => [stepsTag(threadId)],
   },
 });

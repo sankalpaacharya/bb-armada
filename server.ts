@@ -26,15 +26,40 @@ import {
   LOGOS_TAG,
   PARKS_TAG,
   rpcContract,
+  stepsTag,
   type Created,
 } from "./lib/rpc";
 import { SETTINGS, logoSkipProjects, parseSettings } from "./lib/settings";
+import { buildThreadSteps } from "./lib/steps";
 
 /** A failed record write is retried after each wait, longer each time. */
 const RECORD_BACKOFF_MS = [100, 400] as const;
 
 const messageOf = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
+
+/** Thread statuses with a turn under way. */
+const RUNNING_STATUSES = new Set(["active", "starting", "pending"]);
+
+/** Thread events that only stream text or counters, and so change no step. */
+const DELTA_EVENTS = new Set([
+  "item/agentMessage/delta",
+  "item/reasoning/summaryTextDelta",
+  "item/reasoning/textDelta",
+  "item/commandExecution/outputDelta",
+  "item/fileChange/outputDelta",
+  "item/plan/delta",
+  "thread/tokenUsage/updated",
+  "thread/contextWindowUsage/updated",
+  "provider/rateLimits/updated",
+  "item/toolCall/progress",
+  "item/mcpToolCall/progress",
+  "item/backgroundTask/progress",
+  "turn/diff/updated",
+]);
+
+/** Changes to one thread within this window refresh its steps once. */
+const STEPS_COALESCE_MS = 700;
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -225,6 +250,46 @@ export default async function plugin(bb: BbPluginApi) {
     captain_supervisors: async () => supervisorIdsOf(await homes.backlogs()),
 
     project_logos: () => logos.logos(),
+
+    thread_steps: async ({ threadId, turns }) => {
+      const [thread, timeline] = await Promise.all([
+        bb.sdk.threads.get({ threadId }),
+        bb.sdk.threads.timeline({
+          threadId,
+          includeNestedRows: "true",
+          segmentLimit: String(turns + 1),
+        }),
+      ]);
+      return buildThreadSteps(timeline.rows, {
+        threadId,
+        running: RUNNING_STATUSES.has(thread.status),
+        now: Date.now(),
+        hasOlder: timeline.timelinePage?.olderCursor != null,
+      });
+    },
+  });
+
+  const changedThreads = new Set<string>();
+  let stepsTimer: ReturnType<typeof setTimeout> | null = null;
+  const unsubscribe = bb.sdk.subscribe({
+    event: "thread:changed",
+    callback: (event) => {
+      const types = event.metadata?.eventTypes;
+      if (types?.length && types.every((type) => DELTA_EVENTS.has(type)))
+        return;
+      if (event.id === undefined) return;
+      changedThreads.add(event.id);
+      stepsTimer ??= setTimeout(() => {
+        stepsTimer = null;
+        const tags = [...changedThreads].map(stepsTag);
+        changedThreads.clear();
+        bb.rpc.experimental_invalidate(tags);
+      }, STEPS_COALESCE_MS);
+    },
+  });
+  bb.onDispose(() => {
+    unsubscribe();
+    if (stepsTimer !== null) clearTimeout(stepsTimer);
   });
 
   bb.background.schedule("auto-settle", "*/5 * * * *", async () => {
