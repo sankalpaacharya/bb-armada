@@ -127,11 +127,11 @@ describe("the steps tab", () => {
     const ribbon = await screen.findByRole("slider");
     fireEvent.keyDown(ribbon, { key: "ArrowRight" });
     fireEvent.keyDown(ribbon, { key: "ArrowRight" });
-    expect(ribbon.getAttribute("aria-valuetext")).toBe("0:01 · Reading forest.ts");
+    expect(ribbon.getAttribute("aria-valuetext")).toBe("0:01 · Read forest.ts");
     fireEvent.keyDown(ribbon, { key: "ArrowRight" });
     fireEvent.keyDown(ribbon, { key: "ArrowRight" });
     expect(ribbon.getAttribute("aria-valuetext")).toBe(
-      "0:03 · Running npm run check",
+      "0:03 · Ran npm run check",
     );
     fireEvent.keyDown(ribbon, { key: "Enter" });
     expect(await screen.findByText("cd /repo && npm run check")).toBeTruthy();

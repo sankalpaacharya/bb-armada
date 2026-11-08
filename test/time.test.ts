@@ -50,7 +50,8 @@ describe("formatDuration rounding up", () => {
 
 describe("formatElapsed", () => {
   it("reads a step's length to a tenth under a second, then whole seconds, minutes and hours", () => {
-    expect(formatElapsed(4)).toBe("0s");
+    expect(formatElapsed(0)).toBe("0s");
+    expect(formatElapsed(4)).toBe("<0.1s");
     expect(formatElapsed(180)).toBe("0.2s");
     expect(formatElapsed(960)).toBe("1s");
     expect(formatElapsed(8_200)).toBe("8s");

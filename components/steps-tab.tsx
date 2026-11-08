@@ -144,18 +144,22 @@ function TurnBody({
   const label =
     at === null || span === null
       ? ""
-      : `${formatOffset(at - turn.startedAt)} · ${STEP_KINDS[span.kind].label}${
-          owner?.target ? ` ${owner.target}` : ""
+      : `${formatOffset(at - turn.startedAt)} · ${
+          owner === null
+            ? STEP_KINDS[span.kind].label
+            : [owner.verb, owner.target].filter(Boolean).join(" ")
         }`;
 
+  const pinnedStep =
+    pinned === null ? null : (spanAt(turn.spans, pinned)?.stepId ?? null);
   useEffect(() => {
-    if (highlighted === null) return;
+    if (pinnedStep === null) return;
     const rows = listRef.current?.querySelectorAll<HTMLElement>("[data-step]");
     const row = Array.from(rows ?? []).find(
-      (element) => element.dataset.step === highlighted,
+      (element) => element.dataset.step === pinnedStep,
     );
     row?.scrollIntoView?.({ block: "nearest" });
-  }, [highlighted]);
+  }, [pinnedStep]);
 
   const toggle = (stepId: string) =>
     setExpanded((current) => {
@@ -188,7 +192,7 @@ function TurnBody({
 
   return (
     <div className="flex flex-col pb-3">
-      <div className="sticky top-0 z-10 flex flex-col gap-2 bg-background px-2 pt-1 pb-2">
+      <div className="sticky top-0 z-10 flex flex-col gap-2 bg-sidebar px-2 pt-1 pb-2">
         <Ribbon
           turn={turn}
           filter={filter}

@@ -43,7 +43,8 @@ const pad = (value: number): string => String(value).padStart(2, "0");
 export function formatElapsed(ms: number): string {
   if (ms < 950) {
     const tenths = Math.round(Math.max(ms, 0) / 100);
-    return tenths === 0 ? "0s" : `0.${tenths}s`;
+    if (tenths > 0) return `0.${tenths}s`;
+    return ms > 0 ? "<0.1s" : "0s";
   }
   const seconds = Math.round(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
