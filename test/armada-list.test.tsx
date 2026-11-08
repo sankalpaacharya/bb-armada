@@ -1305,11 +1305,7 @@ describe("shelves", () => {
     await waitFor(() =>
       expect(screen.getByRole("region", { name: "Snoozed" })).toBeTruthy(),
     );
-    expect(
-      screen.getByText(
-        "Nothing active. Inactive, snoozed and settled threads are below.",
-      ),
-    ).toBeTruthy();
+    expect(screen.queryByText(/Nothing active/)).toBeNull();
     expect(listOf(view.container, "later")).toBe("Snoozed");
     expect(
       within(rowOf(view.container, "later")!).getByText("2h"),

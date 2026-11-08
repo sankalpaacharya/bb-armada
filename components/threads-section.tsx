@@ -118,11 +118,9 @@ export function ThreadsSection({
         <Note>Loading threads…</Note>
       ) : status === "error" && entries.length === 0 ? (
         <Note>Could not load threads</Note>
-      ) : scoped.length === 0 ? (
+      ) : scoped.length === 0 && shelvedCount > 0 ? null : scoped.length === 0 ? (
         <Note>
-          {shelvedCount > 0
-            ? "Nothing active. Inactive, snoozed and settled threads are below."
-            : scopeName === null
+          {scopeName === null
               ? "No threads yet"
               : chosenNames.length === 1
                 ? `No threads in ${scopeName} yet.`
