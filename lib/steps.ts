@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const KIND_IDS = [
+export const STEP_KIND_IDS = [
   "read",
   "run",
   "edit",
@@ -11,9 +11,9 @@ const KIND_IDS = [
   "tool",
 ] as const;
 
-export type StepKind = (typeof KIND_IDS)[number];
+export type StepKind = (typeof STEP_KIND_IDS)[number];
 
-export interface StepKindInfo {
+interface StepKindInfo {
   /** What the agent was doing, for the legend and the Now line. */
   label: string;
   /**
@@ -27,7 +27,7 @@ export interface StepKindInfo {
   detail: "code" | "prose";
 }
 
-/** Every step kind and how it is drawn. "think" is model time; "wait" is waiting on the user. */
+/** Every step kind and how it is drawn: "think" is model time, "wait" is the user's. */
 export const STEP_KINDS: Record<StepKind, StepKindInfo> = {
   wait: {
     label: "Waiting on you",
@@ -74,10 +74,10 @@ export const STEP_KINDS: Record<StepKind, StepKindInfo> = {
   },
 };
 
-const stepKindSchema = z.enum(KIND_IDS);
+const stepKindSchema = z.enum(STEP_KIND_IDS);
 const stepStatusSchema = z.enum(["running", "done", "error", "interrupted"]);
 
-export const stepSchema = z.object({
+const stepSchema = z.object({
   id: z.string(),
   kind: stepKindSchema,
   verb: z.string(),
@@ -97,7 +97,7 @@ export const stepSchema = z.object({
 
 export type Step = z.infer<typeof stepSchema>;
 
-/** A stretch of a turn's wall clock, owned by one step or, with no step, by the model. */
+/** A stretch of a turn's wall clock, owned by a step or, with none, the model. */
 const spanSchema = z.object({
   kind: stepKindSchema,
   from: z.number(),
@@ -587,7 +587,7 @@ const zeroTotals = (): Record<StepKind, number> => ({
  * the latest started on a tie, or the model when no step is. A step with no
  * end runs to `now` while running and is an instant otherwise.
  */
-export function attribute(
+function attribute(
   steps: readonly Step[],
   from: number,
   to: number,
@@ -636,7 +636,15 @@ export function attribute(
   return spans;
 }
 
-export function totalsOf(spans: readonly Span[]): Record<StepKind, number> {
+/** The span under a time; the last one at or past the end. */
+export function spanAt(spans: readonly Span[], time: number): Span | null {
+  return (
+    spans.find((span) => span.from <= time && time < span.to) ??
+    (time >= (spans.at(-1)?.to ?? Infinity) ? spans.at(-1)! : null)
+  );
+}
+
+function totalsOf(spans: readonly Span[]): Record<StepKind, number> {
   const totals = zeroTotals();
   for (const span of spans) totals[span.kind] += span.to - span.from;
   return totals;
@@ -761,14 +769,14 @@ function buildTurn(
   };
 }
 
-/** The running step deepest inside the running steps, the latest started at each level. */
+/** The deepest running step, taking the latest started at each level. */
 function currentStep(steps: readonly Step[]): Step | null {
   const running = steps.filter((step) => step.status === "running").at(-1);
   if (running === undefined) return null;
   return currentStep(running.children) ?? running;
 }
 
-/** A thread's timeline rows as steps per turn, with where each turn's time went. */
+/** A thread's timeline rows as steps per turn, and where each turn's time went. */
 export function buildThreadSteps(
   rows: readonly unknown[],
   options: { threadId: string; running: boolean; now: number; hasOlder: boolean },

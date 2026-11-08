@@ -2,6 +2,7 @@ import { definePluginApp } from "@get-bb/plugin-sdk/app";
 
 import { ArmadaList } from "./components/armada-list";
 import { CrewTab } from "./components/crew-tab";
+import { StepsTab } from "./components/steps-tab";
 
 export default definePluginApp((app) => {
   app.slots.experimental_threadList({
@@ -20,5 +21,15 @@ export default definePluginApp((app) => {
     icon: "Layers",
     layout: "flush",
     component: CrewTab,
+  });
+  app.slots.experimental_tab({
+    context: { kind: "thread" },
+    availability: "action",
+    id: "steps",
+    title: "Steps",
+    tooltip: "Where this thread's time went",
+    icon: "Clock",
+    layout: "flush",
+    component: StepsTab,
   });
 });
