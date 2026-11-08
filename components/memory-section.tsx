@@ -9,6 +9,7 @@ import { rpcContract } from "@/lib/rpc";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age } from "./age";
+import { Disclosure, EASE_OUT } from "./disclosure";
 import { Note } from "./section";
 import { Icon } from "./ui/icon";
 
@@ -18,25 +19,9 @@ type OpenFile = ((path: string) => void) | null;
 
 const ICON = "size-3.5 shrink-0 text-muted-foreground";
 const NODE_ROW = cn(PANEL_ROW, "h-7 items-center gap-1.5 px-2");
-const EASE_OUT = "duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]";
 
 const sizeLabel = (bytes: number): string =>
   bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
-
-function Disclosure({ open }: { open: boolean }) {
-  return (
-    <Icon
-      name="ChevronRight"
-      className={cn(
-        ICON,
-        "transition-transform motion-reduce:transition-none",
-        EASE_OUT,
-        open && "rotate-90",
-      )}
-      aria-hidden
-    />
-  );
-}
 
 function FileRow({ node, onOpen }: { node: FileNode; onOpen: OpenFile }) {
   return (
