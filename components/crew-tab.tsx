@@ -85,7 +85,10 @@ function Group({
 }
 
 /** What the captain's backlog keeps waiting on the user, answered in its thread. */
-/** Read again whenever the captain acts, since that is when it closes or opens a decision. */
+/** How often, at most, the decisions are read again while the captain keeps acting. */
+const NEEDS_YOU_REFRESH_MS = 30_000;
+
+/** Read again when the captain acts, since that is when it closes or opens a decision. */
 function NeedsYou({
   project,
   captainActivityAt,
@@ -100,9 +103,10 @@ function NeedsYou({
     method: "captain_home",
     input: { project },
   });
+  const activityWindow = Math.floor(captainActivityAt / NEEDS_YOU_REFRESH_MS);
   useEffect(() => {
     void refetch();
-  }, [captainActivityAt, refetch]);
+  }, [activityWindow, refetch]);
   const items = data?.status === "ready" ? data.needsYou : [];
   return (
     <Group title="Needs you" count={items.length}>

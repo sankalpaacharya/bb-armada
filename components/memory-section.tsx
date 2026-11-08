@@ -137,7 +137,8 @@ export function MemorySection({
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useBbNavigate();
-  const { data, error, isFetching, refetch } = experimental_useRpcQuery({
+  const [refreshing, setRefreshing] = useState(false);
+  const { data, error, refetch } = experimental_useRpcQuery({
     contract: rpcContract,
     method: "captain_home",
     input: { project },
@@ -194,7 +195,10 @@ export function MemorySection({
           type="button"
           aria-label="Refresh memory"
           title="Refresh memory"
-          onClick={() => void refetch()}
+          onClick={() => {
+            setRefreshing(true);
+            void refetch().finally(() => setRefreshing(false));
+          }}
           className={cn(
             "grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground",
             FOCUS_RING,
@@ -205,7 +209,7 @@ export function MemorySection({
             aria-hidden
             className={cn(
               "size-3.5",
-              isFetching && "animate-spin motion-reduce:animate-none",
+              refreshing && "animate-spin motion-reduce:animate-none",
             )}
           />
         </button>
