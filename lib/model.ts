@@ -162,9 +162,12 @@ export function buildArmada(
     const thread = byId.get(record.threadId);
     return thread === undefined ? [] : [{ record, thread }];
   });
-  const { roots, subtreeOf, parentOf } = threadForest(
-    visible,
-    new Set(captainRecords.map(({ thread }) => thread.id)),
+  const captainIds = new Set(captainRecords.map(({ thread }) => thread.id));
+  const { roots, parentOf } = threadForest(visible, captainIds, supervisorIds);
+  /** Hidden threads are never cards, but their work still lights their card. */
+  const { subtreeOf: liveSubtreeOf } = threadForest(
+    threads.filter((thread) => !thread.isArchived),
+    captainIds,
     supervisorIds,
   );
 
@@ -177,7 +180,7 @@ export function buildArmada(
   const expiredParks: string[] = [];
 
   const entryOf = (thread: PluginSidebarThread): ThreadEntry => {
-    const folded = fold([thread, ...subtreeOf(thread.id)]);
+    const folded = fold([thread, ...liveSubtreeOf(thread.id)]);
     const park = parkOf.get(thread.id) ?? null;
     if (park !== null && isExpired(park, folded, now))
       expiredParks.push(thread.id);
@@ -203,7 +206,7 @@ export function buildArmada(
 
   const captains = captainRecords
     .map(({ record, thread }): CaptainEntry => {
-      const tree = [thread, ...subtreeOf(thread.id)];
+      const tree = [thread, ...liveSubtreeOf(thread.id)];
       return { record, thread, counts: countStatuses(tree), ...fold(tree) };
     })
     .sort(

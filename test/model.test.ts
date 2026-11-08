@@ -212,6 +212,16 @@ describe("captains and their workers", () => {
     });
   });
 
+  it("shows a card as working while a hidden child of it works, without making the child a card", () => {
+    const threads = [
+      thread("parent"),
+      thread("helper", { parentThreadId: "parent", isHidden: true, ...busy }),
+    ];
+    const model = build(threads, none);
+    expect(threadIds(model)).toEqual(["parent"]);
+    expect(model.threads[0]).toMatchObject({ status: "working" });
+  });
+
   it("ignores records whose thread is gone, archived or hidden", () => {
     const threads = [
       thread("archived", { isArchived: true, archivedAt: NOW }),
