@@ -6,7 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 
@@ -17,6 +17,13 @@ import { project, thread } from "./fixtures";
 afterEach(cleanup);
 
 type ReadyHome = Extract<CaptainHome, { status: "ready" }>;
+
+const stored = new Map<string, string>();
+vi.stubGlobal("localStorage", {
+  getItem: (key: string) => stored.get(key) ?? null,
+  setItem: (key: string, value: string) => void stored.set(key, value),
+  removeItem: (key: string) => void stored.delete(key),
+});
 
 const ready = (...paths: string[]): ReadyHome => ({
   status: "ready",
@@ -150,6 +157,19 @@ describe("the crew tab's memory", () => {
     const beforeRefresh = reads.length;
     fireEvent.click(screen.getByRole("button", { name: "Refresh memory" }));
     await waitFor(() => expect(reads.length).toBeGreaterThan(beforeRefresh));
+  });
+
+  it("resizes the open folder from its top edge, and keeps the height", async () => {
+    stored.clear();
+    renderCrew(() => ready("captain.md"));
+    await openMemory();
+    const handle = await screen.findByRole("separator", { name: "Resize memory" });
+    const before = Number(handle.getAttribute("aria-valuenow"));
+    fireEvent.keyDown(handle, { key: "ArrowUp" });
+    expect(Number(handle.getAttribute("aria-valuenow"))).toBe(before + 24);
+    expect(stored.get("armada:memory-height")).toBe(String(before + 24));
+    fireEvent.doubleClick(handle);
+    expect(Number(handle.getAttribute("aria-valuenow"))).toBe(before);
   });
 
   it("starts folded, opens, and folds away again", async () => {
