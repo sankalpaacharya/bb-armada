@@ -25,6 +25,8 @@ interface StepKindInfo {
   color: string;
   /** How the expanded row shows the step's detail. */
   detail: "code" | "prose";
+  /** The host icon on the step's node. */
+  icon: string;
 }
 
 /** Every step kind and how it is drawn: "think" is model time, "wait" is the user's. */
@@ -34,43 +36,56 @@ export const STEP_KINDS: Record<StepKind, StepKindInfo> = {
     rank: 0,
     color: "oklch(0.72 0.14 45)",
     detail: "prose",
+    icon: "MessageSquare",
   },
   edit: {
     label: "Editing",
     rank: 1,
     color: "oklch(0.72 0.14 80)",
     detail: "code",
+    icon: "EditFile",
   },
   run: {
     label: "Running",
     rank: 2,
     color: "oklch(0.72 0.14 150)",
     detail: "code",
+    icon: "Terminal",
   },
   read: {
     label: "Reading",
     rank: 3,
     color: "oklch(0.72 0.14 220)",
     detail: "code",
+    icon: "FileText",
   },
-  web: { label: "Web", rank: 4, color: "oklch(0.72 0.14 285)", detail: "code" },
+  web: {
+    label: "Web",
+    rank: 4,
+    color: "oklch(0.72 0.14 285)",
+    detail: "code",
+    icon: "Globe",
+  },
   agent: {
     label: "Subagents",
     rank: 5,
     color: "oklch(0.72 0.14 340)",
     detail: "prose",
+    icon: "Bot",
   },
   tool: {
     label: "Tools",
     rank: 6,
     color: "oklch(0.72 0.03 250)",
     detail: "code",
+    icon: "ToolCase",
   },
   think: {
     label: "Thinking",
     rank: 7,
     color: "currentColor",
     detail: "prose",
+    icon: "Lightbulb",
   },
 };
 
@@ -155,10 +170,33 @@ const absolute = (path: string | null | undefined, cwd?: string | null) => {
   return cwd?.startsWith("/") ? `${cwd.replace(/\/$/, "")}/${path}` : null;
 };
 
-/** A command's gist: its first line, without the `cd somewhere &&` in front. */
+const HEREDOC = /\s*<<-?\s*['"]?\w+['"]?/;
+const WRITE_HEREDOC = /^cat\s*>\s*(\S+)\s*<</;
+const REDIRECT = /\s+(?:\d?>>?|&>)\s*\S+|\s*\d>&\d/g;
+const SETUP = /^(?:cd\s|\w+=\S*$|export\s|set\s)/;
+
+/** One part of a command chain as people say it. */
+function gistOf(part: string): string {
+  const write = WRITE_HEREDOC.exec(part);
+  if (write !== null) return `write ${write[1]}`;
+  const heredoc = HEREDOC.test(part);
+  const bare = part.replace(HEREDOC, "").replace(REDIRECT, "").trim();
+  return heredoc && /\s-$/.test(bare) ? `${bare.slice(0, -2)} script` : bare;
+}
+
+/**
+ * A command's gist from its first line: the parts that do the work, without
+ * moving into a folder, setting variables, redirects or heredoc markers.
+ */
 function shortCommand(command: string): string {
   const first = command.trim().split("\n")[0] ?? "";
-  return oneLine(first.replace(/^(cd\s+\S+\s*(&&|;)\s*)+/, ""));
+  const parts = first
+    .split(/\s*(?:&&|\|\||;)\s*/)
+    .map((part) => part.trim())
+    .filter((part) => part !== "" && !SETUP.test(part))
+    .map(gistOf)
+    .filter((part) => part !== "");
+  return oneLine(parts.length > 0 ? parts.join(" && ") : first);
 }
 
 function urlTarget(url: string): string {

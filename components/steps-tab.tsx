@@ -26,13 +26,19 @@ import {
   type ThreadSteps,
   type TurnSteps,
 } from "@/lib/steps";
-import { AGE_TEXT, FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
+import { AGE_TEXT, FOCUS_RING, PANEL_ROW } from "@/lib/styles";
 import { formatElapsed, formatOffset } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { Collapsible, Disclosure } from "./disclosure";
 import { Note } from "./section";
-import { StepList, lengthOf, type OpenFile, type RowContext } from "./step-row";
-import { KindSwatch, MiniRibbon, Ribbon } from "./steps-ribbon";
+import {
+  KindIcon,
+  Node,
+  StepFlow,
+  type OpenFile,
+  type RowContext,
+} from "./step-row";
+import { MiniRibbon, Ribbon } from "./steps-ribbon";
 
 /** Turns read at first, and how many more each "Show older turns" adds. */
 const TURNS_PAGE = 10;
@@ -77,7 +83,7 @@ function Legend({
           onClick={() => onFilter(filter === kind ? null : kind)}
           className={CHIP}
         >
-          <KindSwatch kind={kind} className="size-2 rounded-[3px]" />
+          <KindIcon kind={kind} />
           {STEP_KINDS[kind].label}
           <span className="text-muted-foreground tabular-nums">
             {formatElapsed(totals[kind])}
@@ -156,7 +162,9 @@ function TurnBody({
     if (pinnedStep === null) return;
     const rows = listRef.current?.querySelectorAll<HTMLElement>("[data-step]");
     const row = Array.from(rows ?? []).find(
-      (element) => element.dataset.step === pinnedStep,
+      (element) =>
+        element.dataset.step === pinnedStep ||
+        element.dataset.holds?.split(" ").includes(pinnedStep),
     );
     row?.scrollIntoView?.({ block: "nearest" });
   }, [pinnedStep]);
@@ -177,11 +185,6 @@ function TurnBody({
     filter === null
       ? turn.steps
       : turn.steps.filter((step) => step.kind === filter);
-  const rows =
-    order === "order"
-      ? shown
-      : [...shown].sort((a, b) => lengthOf(b, now) - lengthOf(a, now));
-  const scale = Math.max(1, ...turn.steps.map((step) => lengthOf(step, now)));
   const context: RowContext = {
     turnStartedAt: turn.startedAt,
     now,
@@ -208,12 +211,12 @@ function TurnBody({
         ) : null}
       </div>
       <div ref={listRef}>
-        {rows.length > 0 ? (
-          <StepList
-            steps={rows}
+        {shown.length > 0 ? (
+          <StepFlow
+            steps={shown}
+            order={order}
             context={context}
             highlighted={highlighted}
-            scale={scale}
           />
         ) : (
           <Note>
@@ -276,20 +279,20 @@ function NowLine({ steps, now }: { steps: ThreadSteps; now: number }) {
   const kind = step?.kind ?? "think";
   const since = step?.startedAt ?? steps.turns[0]?.spans.at(-1)?.from ?? now;
   return (
-    <p className="m-0 flex h-7 items-center gap-2 px-2 text-[13px]">
-      <span className={SECTION_TITLE}>Now</span>
-      <KindSwatch
-        kind={kind}
-        className="size-2 animate-pulse rounded-full motion-reduce:animate-none"
-      />
-      <span className="shrink-0 text-foreground/70">
-        {STEP_KINDS[kind].label}
+    <div className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5">
+      <Node kind={kind} icon={STEP_KINDS[kind].icon} running />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[13px] leading-5 font-medium text-foreground">
+          {step?.target || STEP_KINDS[kind].label}
+        </span>
+        <span className="text-[11px] leading-4 text-muted-foreground">
+          {STEP_KINDS[kind].label} now
+        </span>
       </span>
-      <span className="min-w-0 flex-1 truncate text-foreground">
-        {step?.target ?? ""}
+      <span className="shrink-0 text-[11px] tabular-nums text-foreground">
+        {formatElapsed(Math.max(now - since, 0))}
       </span>
-      <span className={AGE_TEXT}>{formatElapsed(Math.max(now - since, 0))}</span>
-    </p>
+    </div>
   );
 }
 

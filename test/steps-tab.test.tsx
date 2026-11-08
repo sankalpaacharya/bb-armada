@@ -55,14 +55,19 @@ function renderSteps(steps: () => unknown) {
   return { view, reads };
 }
 
-/** The newest turn's rows, as "verb target" in the order shown. */
+/** The open turn's cards, top level only, as "title: second line" in the order shown. */
 const shownSteps = () =>
-  Array.from(document.querySelectorAll("[data-step] > button")).map((button) =>
-    Array.from(button.children)
-      .slice(1, 3)
-      .map((part) => part.textContent)
-      .join(" "),
-  );
+  Array.from(document.querySelectorAll("li[data-step]"))
+    .filter((item) => item.parentElement?.closest("li[data-step]") == null)
+    .map((item) => {
+      const button = item.querySelector("button")!;
+      const lines = button.querySelector(":scope > span")!;
+      return lines.children.length === 2
+        ? Array.from(lines.children)
+            .map((line) => line.textContent)
+            .join(": ")
+        : (button.textContent ?? "");
+    });
 
 describe("the steps tab", () => {
   it("opens the newest turn on its ribbon and a legend of where its time went, biggest first", async () => {
@@ -76,10 +81,10 @@ describe("the steps tab", () => {
     ).toEqual(["Running40s", "Thinking18s", "Reading1s", "Editing1s"]);
     expect(reads).toContainEqual({ threadId: "thr", turns: 10 });
     expect(shownSteps()).toEqual([
-      "Read forest.ts",
-      "Ran npm run check",
-      "Thought Checking what the failing test expects.",
-      "Edited forest.ts",
+      "forest.ts: Read in /repo/lib",
+      "npm run check: Ran in /repo",
+      "Thought for 8s",
+      "forest.ts: Edited in /repo/lib",
     ]);
     expect(
       screen.getByRole("button", { name: /first, look around/ }).getAttribute(
@@ -93,7 +98,7 @@ describe("the steps tab", () => {
     const reading = await screen.findByRole("button", { name: /^Reading/ });
     fireEvent.click(reading);
     expect(reading.getAttribute("aria-pressed")).toBe("true");
-    expect(shownSteps()).toEqual(["Read forest.ts"]);
+    expect(shownSteps()).toEqual(["forest.ts: Read in /repo/lib"]);
     fireEvent.click(reading);
     expect(shownSteps()).toHaveLength(4);
   });
@@ -101,17 +106,15 @@ describe("the steps tab", () => {
   it("puts the slowest step first when asked", async () => {
     renderSteps(ready);
     fireEvent.click(await screen.findByRole("button", { name: "Slowest" }));
-    expect(shownSteps()[0]).toBe("Ran npm run check");
-    expect(shownSteps()[1]).toBe(
-      "Thought Checking what the failing test expects.",
-    );
+    expect(shownSteps()[0]).toBe("npm run check: Ran in /repo");
+    expect(shownSteps()[1]).toBe("Thought: Checking what the failing test expects.");
   });
 
   it("opens a step to its full command, and a read file in bb's preview", async () => {
     const { view } = renderSteps(ready);
     fireEvent.click((await screen.findByText("npm run check")).closest("button")!);
     expect(await screen.findByText("cd /repo && npm run check")).toBeTruthy();
-    fireEvent.click(screen.getByText("Read").closest("button")!);
+    fireEvent.click(screen.getByText("Read in /repo/lib").closest("button")!);
     fireEvent.click(await screen.findByRole("button", { name: "Open file" }));
     expect(view.inspection.navigateCalls).toContainEqual({
       method: "experimental_openFilePreview",

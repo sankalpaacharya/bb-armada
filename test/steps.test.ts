@@ -60,6 +60,22 @@ describe("what kind of step a row is", () => {
     expect(turn.steps[4]!.detail).toBe("cd /repo && npm run check");
   });
 
+  it("names a command by the parts that do the work", () => {
+    const turn = onlyTurn([
+      prompt("t1", 0, "go"),
+      command("t1", 1, 2, "bb plugin reload armada >/dev/null 2>&1; cd ~/shot && node steps.mjs dark"),
+      command("t1", 3, 4, "cat > ag.mjs <<'EOF'\nconsole.log(1)\nEOF"),
+      command("t1", 5, 6, "cd ~/repo && python3 - <<'EOF'\nprint(1)\nEOF"),
+      command("t1", 7, 8, "R=/tmp/x; ls $R | head -3"),
+    ]);
+    expect(turn.steps.map((step) => step.target)).toEqual([
+      "bb plugin reload armada && node steps.mjs dark",
+      "write ag.mjs",
+      "python3 script",
+      "ls $R | head -3",
+    ]);
+  });
+
   it("reads file reads, edits, web, questions and reasoning as their own kinds, and an unknown kind as a tool", () => {
     const turn = onlyTurn([
       prompt("t1", 0, "go"),
