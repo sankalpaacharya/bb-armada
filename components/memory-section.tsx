@@ -1,22 +1,16 @@
-import {
-  useMemo,
-  useState,
-  type KeyboardEvent,
-  type PointerEvent,
-  type ReactNode,
-} from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   experimental_useRpcQuery,
   useBbNavigate,
 } from "@get-bb/plugin-sdk/app";
 
-import { useStoredState } from "@/hooks/use-stored-state";
 import { memoryTree, type MemoryNode } from "@/lib/captain-home";
 import { rpcContract } from "@/lib/rpc";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Age } from "./age";
 import { Disclosure, EASE_OUT } from "./disclosure";
+import { ResizeHandle, useStoredSize } from "./resize-handle";
 import { Note } from "./section";
 import { Icon } from "./ui/icon";
 
@@ -28,103 +22,11 @@ const ICON = "size-3.5 shrink-0 text-muted-foreground";
 const NODE_ROW = cn(PANEL_ROW, "h-7 items-center gap-1.5 px-2");
 
 const HEIGHT_KEY = "armada:memory-height";
-const MIN_HEIGHT = 96;
-const KEY_STEP = 24;
-
-const defaultHeight = (): number => Math.round(window.innerHeight * 0.4);
-const maxHeight = (): number => Math.round(window.innerHeight * 0.8);
-const clampHeight = (height: number): number =>
-  Math.round(Math.min(Math.max(height, MIN_HEIGHT), maxHeight()));
-
-const parseHeight = (raw: string): number | undefined => {
-  const value: unknown = JSON.parse(raw);
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+const HEIGHT = {
+  min: 96,
+  max: () => Math.round(window.innerHeight * 0.8),
+  initial: () => Math.round(window.innerHeight * 0.4),
 };
-
-/**
- * The open folder's height. A drag moves it live and stores it once on
- * release, so the next Crew tab opens at the same height.
- */
-function useMemoryHeight() {
-  const [stored, setStored] = useStoredState(HEIGHT_KEY, parseHeight, 0);
-  const [dragging, setDragging] = useState<number | null>(null);
-  const height = clampHeight(dragging ?? (stored || defaultHeight()));
-  return {
-    height,
-    drag: (next: number) => setDragging(clampHeight(next)),
-    commit: (next: number) => {
-      setDragging(null);
-      setStored(clampHeight(next));
-    },
-    reset: () => {
-      setDragging(null);
-      setStored(0);
-    },
-  };
-}
-
-/** The top edge of the open folder; drag it, or use the arrow keys. */
-function ResizeHandle({
-  height,
-  onDrag,
-  onCommit,
-  onReset,
-}: {
-  height: number;
-  onDrag: (height: number) => void;
-  onCommit: (height: number) => void;
-  onReset: () => void;
-}) {
-  const [start, setStart] = useState<{ y: number; height: number } | null>(
-    null,
-  );
-  const heightAt = (event: PointerEvent<HTMLDivElement>): number =>
-    start === null ? height : start.height + (start.y - event.clientY);
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "ArrowUp") onCommit(height + KEY_STEP);
-    else if (event.key === "ArrowDown") onCommit(height - KEY_STEP);
-    else return;
-    event.preventDefault();
-  };
-  return (
-    <div
-      role="separator"
-      aria-orientation="horizontal"
-      aria-label="Resize memory"
-      aria-valuenow={height}
-      aria-valuemin={MIN_HEIGHT}
-      tabIndex={0}
-      title="Drag to resize, double-click to reset"
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-        setStart({ y: event.clientY, height });
-      }}
-      onPointerMove={(event) => {
-        if (start !== null) onDrag(heightAt(event));
-      }}
-      onPointerUp={(event) => {
-        if (start === null) return;
-        onCommit(heightAt(event));
-        setStart(null);
-      }}
-      onPointerCancel={() => setStart(null)}
-      onDoubleClick={onReset}
-      onKeyDown={onKeyDown}
-      className={cn(
-        "group/resize absolute inset-x-0 -top-[13px] z-10 flex h-2 cursor-row-resize touch-none items-center",
-        FOCUS_RING,
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          "h-0.5 w-full bg-transparent transition-colors duration-150 group-hover/resize:bg-ring/60",
-          start !== null && "bg-ring",
-        )}
-      />
-    </div>
-  );
-}
 
 const sizeLabel = (bytes: number): string =>
   bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
@@ -227,7 +129,7 @@ export function MemorySection({
   hostId: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const memoryHeight = useMemoryHeight();
+  const height = useStoredSize(HEIGHT_KEY, HEIGHT);
   const navigate = useBbNavigate();
   const [refreshing, setRefreshing] = useState(false);
   const { data, error, refetch } = experimental_useRpcQuery({
@@ -272,10 +174,10 @@ export function MemorySection({
     <section className="relative flex flex-col gap-1">
       {open ? (
         <ResizeHandle
-          height={memoryHeight.height}
-          onDrag={memoryHeight.drag}
-          onCommit={memoryHeight.commit}
-          onReset={memoryHeight.reset}
+          axis="y"
+          label="Resize memory"
+          pane={height}
+          className="absolute inset-x-0 -top-[13px] h-2"
         />
       ) : null}
       <h3 className="m-0 flex items-center gap-1">
@@ -325,7 +227,7 @@ export function MemorySection({
       >
         <div
           className="min-h-0 overflow-y-auto"
-          style={{ maxHeight: memoryHeight.height }}
+          style={{ maxHeight: height.size }}
         >
           {body}
         </div>

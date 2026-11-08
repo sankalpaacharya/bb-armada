@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildThreadSteps,
   extendTo,
+  focusTurn,
+  outputOfRow,
   type Step,
   type TurnSteps,
 } from "../lib/steps";
@@ -70,7 +72,7 @@ describe("what kind of step a row is", () => {
     ]);
     expect(turn.steps.map((step) => step.target)).toEqual([
       "bb plugin reload armada && node steps.mjs dark",
-      "write ag.mjs",
+      "Wrote ag.mjs",
       "python3 script",
       "ls $R | head -3",
     ]);
@@ -353,5 +355,48 @@ describe("a real thread", () => {
 
   it("shows the newest turn's last command as running, and as now", () => {
     expect(steps.now).toMatchObject({ kind: "run", status: "running" });
+  });
+});
+
+describe("a step's output", () => {
+  it("finds it on nested rows, and is null when bb kept none", () => {
+    const rows = [
+      { id: "turn", children: [{ id: "cmd", output: "3 passed" }, { id: "read" }] },
+      { id: "agent", childRows: [{ id: "inner", output: "done" }], output: "report" },
+      "not a row",
+    ];
+    expect(outputOfRow(rows, "cmd")).toBe("3 passed");
+    expect(outputOfRow(rows, "inner")).toBe("done");
+    expect(outputOfRow(rows, "agent")).toBe("report");
+    expect(outputOfRow(rows, "read")).toBeNull();
+    expect(outputOfRow(rows, "missing")).toBeNull();
+  });
+});
+
+describe("the turn in focus", () => {
+  const steps = buildThreadSteps(
+    [
+      prompt("t1", 0, "first"),
+      command("t1", 1, 2, "ls"),
+      prompt("t2", 10, "second"),
+      command("t2", 11, 12, "pwd"),
+    ],
+    { threadId: "thr", running: false, now: at(100), hasOlder: false },
+  );
+  const stepCounts = (turnId: string | null) =>
+    focusTurn(steps, turnId, 10).turns.map((turn) => turn.steps.length);
+
+  it("sends the newest turn's steps until one is named", () => {
+    expect(stepCounts(null)).toEqual([1, 0]);
+    expect(focusTurn(steps, null, 10).focus).toBe(steps.turns[0]!.id);
+  });
+
+  it("sends the named turn's steps, and still lists every turn", () => {
+    const older = steps.turns[1]!.id;
+    expect(stepCounts(older)).toEqual([0, 1]);
+    expect(focusTurn(steps, older, 10).turns.map((turn) => turn.prompt)).toEqual([
+      "second",
+      "first",
+    ]);
   });
 });

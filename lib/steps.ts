@@ -27,6 +27,8 @@ interface StepKindInfo {
   detail: "code" | "prose";
   /** The host icon on the step's node. */
   icon: string;
+  /** What one step of this kind is called. */
+  type: string;
 }
 
 /** Every step kind and how it is drawn: "think" is model time, "wait" is the user's. */
@@ -34,58 +36,66 @@ export const STEP_KINDS: Record<StepKind, StepKindInfo> = {
   wait: {
     label: "Waiting on you",
     rank: 0,
-    color: "oklch(0.72 0.14 45)",
+    color: "oklch(0.62 0.15 45)",
     detail: "prose",
     icon: "MessageSquare",
+    type: "Question",
   },
   edit: {
     label: "Editing",
     rank: 1,
-    color: "oklch(0.72 0.14 80)",
+    color: "oklch(0.62 0.15 80)",
     detail: "code",
     icon: "EditFile",
+    type: "Edit",
   },
   run: {
     label: "Running",
     rank: 2,
-    color: "oklch(0.72 0.14 150)",
+    color: "oklch(0.62 0.15 150)",
     detail: "code",
     icon: "Terminal",
+    type: "Command",
   },
   read: {
     label: "Reading",
     rank: 3,
-    color: "oklch(0.72 0.14 220)",
+    color: "oklch(0.62 0.15 220)",
     detail: "code",
     icon: "FileText",
+    type: "Read",
   },
   web: {
     label: "Web",
     rank: 4,
-    color: "oklch(0.72 0.14 285)",
+    color: "oklch(0.62 0.15 285)",
     detail: "code",
-    icon: "Globe",
+    icon: "Browser",
+    type: "Web",
   },
   agent: {
     label: "Subagents",
     rank: 5,
-    color: "oklch(0.72 0.14 340)",
+    color: "oklch(0.62 0.15 340)",
     detail: "prose",
-    icon: "Bot",
+    icon: "UserRound",
+    type: "Subagent",
   },
   tool: {
     label: "Tools",
     rank: 6,
-    color: "oklch(0.72 0.03 250)",
+    color: "oklch(0.58 0.03 250)",
     detail: "code",
     icon: "ToolCase",
+    type: "Tool",
   },
   think: {
     label: "Thinking",
     rank: 7,
     color: "currentColor",
     detail: "prose",
-    icon: "Lightbulb",
+    icon: "Brain",
+    type: "Thought",
   },
 };
 
@@ -150,6 +160,15 @@ export const threadStepsSchema = z.object({
 
 export type ThreadSteps = z.infer<typeof threadStepsSchema>;
 
+export const focusedStepsSchema = threadStepsSchema.extend({
+  /** The one turn sent with its steps; the others are only listed. */
+  focus: z.string().nullable(),
+  /** The `turns` this answer read, so a reader knows when it has caught up. */
+  turnsRead: z.number(),
+});
+
+export type FocusedSteps = z.infer<typeof focusedStepsSchema>;
+
 /** Expanded rows show this much of a step's detail at most. */
 const DETAIL_CAP = 4000;
 const TARGET_CAP = 160;
@@ -178,7 +197,7 @@ const SETUP = /^(?:cd\s|\w+=\S*$|export\s|set\s)/;
 /** One part of a command chain as people say it. */
 function gistOf(part: string): string {
   const write = WRITE_HEREDOC.exec(part);
-  if (write !== null) return `write ${write[1]}`;
+  if (write !== null) return `Wrote ${write[1]}`;
   const heredoc = HEREDOC.test(part);
   const bare = part.replace(HEREDOC, "").replace(REDIRECT, "").trim();
   return heredoc && /\s-$/.test(bare) ? `${bare.slice(0, -2)} script` : bare;
@@ -675,11 +694,29 @@ function attribute(
 }
 
 /** The span under a time; the last one at or past the end. */
-export function spanAt(spans: readonly Span[], time: number): Span | null {
-  return (
-    spans.find((span) => span.from <= time && time < span.to) ??
-    (time >= (spans.at(-1)?.to ?? Infinity) ? spans.at(-1)! : null)
-  );
+const OUTPUT_CAP = 20_000;
+
+const outputRowSchema = z.object({
+  id: z.string(),
+  output: z.string().nullish().catch(null),
+  children: z.array(z.unknown()).nullish().catch(null),
+  childRows: z.array(z.unknown()).nullish().catch(null),
+});
+
+/** What a step printed or handed back, or null when bb kept none. */
+export function outputOfRow(
+  rows: readonly unknown[],
+  stepId: string,
+): string | null {
+  for (const row of rows) {
+    const parsed = outputRowSchema.safeParse(row);
+    if (!parsed.success) continue;
+    const { id, output, children, childRows } = parsed.data;
+    if (id === stepId) return output ? clip(output, OUTPUT_CAP) : null;
+    const found = outputOfRow([...(children ?? []), ...(childRows ?? [])], stepId);
+    if (found !== null) return found;
+  }
+  return null;
 }
 
 function totalsOf(spans: readonly Span[]): Record<StepKind, number> {
@@ -692,6 +729,31 @@ function totalsOf(spans: readonly Span[]): Record<StepKind, number> {
  * A running turn carried forward to `now` on the client, between reads: its
  * last span, the step or the model still going, grows to now.
  */
+/** Keeps the steps of one turn, the newest unless named, and lists the rest. */
+export function focusTurn(
+  steps: ThreadSteps,
+  turnId: string | null,
+  turnsRead: number,
+): FocusedSteps {
+  const focus =
+    steps.turns.find((turn) => turn.id === turnId) ?? steps.turns[0] ?? null;
+  return {
+    ...steps,
+    focus: focus?.id ?? null,
+    turnsRead,
+    turns: steps.turns.map((turn) =>
+      turn === focus
+        ? turn
+        : {
+            ...turn,
+            steps: [],
+            spans: turn.running ? turn.spans : [],
+            totals: totalsOf([]),
+          },
+    ),
+  };
+}
+
 export function extendTo(turn: TurnSteps, now: number): TurnSteps {
   if (!turn.running) return turn;
   const last = turn.spans.at(-1);

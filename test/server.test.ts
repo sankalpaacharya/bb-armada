@@ -69,7 +69,7 @@ async function load(
   options: {
     seed?: (kv: Kv) => Promise<void>;
     homes?: Record<string, string>;
-    timeline?: { status: string; rows: unknown[] };
+    timeline?: { status: string; rows: unknown[]; pages?: unknown[] };
   } = {},
 ) {
   const listeners = new Set<ThreadListener>();
@@ -82,6 +82,7 @@ async function load(
         get: async ({ threadId }: { threadId: string }) =>
           ({ id: threadId, status: options.timeline?.status ?? "idle" }) as never,
         timeline: async () =>
+          (options.timeline?.pages?.shift() as never) ??
           ({
             rows: options.timeline?.rows ?? [],
             timelinePage: { olderCursor: null },
@@ -1079,6 +1080,7 @@ describe("thread steps", () => {
     const steps = (await harness.callRpc("thread_steps", {
       threadId: "thr_a",
       turns: 10,
+      turnId: null,
     })) as { running: boolean; now: { target: string } | null };
     expect(since.calls("threads.timeline").map((call) => call.args)).toEqual([
       [{ threadId: "thr_a", includeNestedRows: "true", segmentLimit: "11" }],
@@ -1088,10 +1090,47 @@ describe("thread steps", () => {
     expect(JSON.stringify(steps)).not.toContain("a very long output");
   });
 
-  it("refuses more than 40 turns", async () => {
+  it("pages back through older history until it has read enough", async () => {
+    const page = (segment: string, cursor: boolean) => ({
+      rows: [{ ...rows[0], id: `row-${segment}` }],
+      timelinePage: {
+        returnedSegmentCount: 5,
+        olderCursor: cursor ? { anchorId: `a-${segment}`, anchorSeq: 7 } : null,
+      },
+    });
+    const { harness, since } = await load({
+      timeline: {
+        status: "idle",
+        rows: [],
+        pages: [page("new", true), page("old", true)],
+      },
+    });
+    const steps = (await harness.callRpc("thread_steps", {
+      threadId: "thr_a",
+      turns: 9,
+      turnId: null,
+    })) as { hasOlder: boolean; turnsRead: number };
+    expect(since.calls("threads.timeline").map((call) => call.args[0])).toEqual([
+      { threadId: "thr_a", includeNestedRows: "true", segmentLimit: "10" },
+      {
+        threadId: "thr_a",
+        includeNestedRows: "true",
+        segmentLimit: "5",
+        beforeAnchorId: "a-new",
+        beforeAnchorSeq: "7",
+      },
+    ]);
+    expect(steps).toMatchObject({ hasOlder: true, turnsRead: 9 });
+  });
+
+  it("refuses more than 200 turns", async () => {
     const { harness } = await load();
     await expect(
-      harness.callRpc("thread_steps", { threadId: "thr_a", turns: 41 }),
+      harness.callRpc("thread_steps", {
+        threadId: "thr_a",
+        turns: 201,
+        turnId: null,
+      }),
     ).rejects.toThrow();
   });
 

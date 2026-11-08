@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 
 import { StepsTab } from "../components/steps-tab";
-import { buildThreadSteps, type ThreadSteps } from "../lib/steps";
+import { buildThreadSteps, focusTurn, type ThreadSteps } from "../lib/steps";
 import { thread } from "./fixtures";
 import { at, command, prompt, reply, thought, work } from "./timeline-rows";
 
@@ -32,7 +32,7 @@ const ready = (): ThreadSteps =>
     hasOlder: false,
   });
 
-function renderSteps(steps: () => unknown) {
+function renderSteps(steps: () => ThreadSteps) {
   const reads: unknown[] = [];
   const view = renderSlot(
     { component: StepsTab },
@@ -45,52 +45,45 @@ function renderSteps(steps: () => unknown) {
         sections: [],
       },
       rpc: {
-        thread_steps: (input: unknown) => {
+        thread_steps: (input: { turnId: string | null; turns: number }) => {
           reads.push(input);
-          return steps();
+          return focusTurn(steps(), input.turnId, input.turns);
         },
+        step_output: () => ({ output: "3 passed" }),
       } as never,
     },
   );
   return { view, reads };
 }
 
-/** The open turn's cards, top level only, as "title: second line" in the order shown. */
+/** The open turn's rows, by name, top to bottom. */
 const shownSteps = () =>
-  Array.from(document.querySelectorAll("li[data-step]"))
-    .filter((item) => item.parentElement?.closest("li[data-step]") == null)
-    .map((item) => {
-      const button = item.querySelector("button")!;
-      const lines = button.querySelector(":scope > span")!;
-      return lines.children.length === 2
-        ? Array.from(lines.children)
-            .map((line) => line.textContent)
-            .join(": ")
-        : (button.textContent ?? "");
-    });
+  Array.from(document.querySelectorAll("li[data-step]")).map(
+    (item) => item.querySelector("button .truncate")?.textContent,
+  );
 
 describe("the steps tab", () => {
-  it("opens the newest turn on its ribbon and a legend of where its time went, biggest first", async () => {
+  it("opens the newest turn on its waterfall and a legend of where its time went, biggest first", async () => {
     const { reads } = renderSteps(ready);
-    expect(await screen.findByRole("slider")).toBeTruthy();
+    expect(await screen.findByRole("group", { name: "Show one kind" })).toBeTruthy();
     const legend = screen.getByRole("group", { name: "Show one kind" });
     expect(
       within(legend)
         .getAllByRole("button")
         .map((chip) => chip.textContent),
     ).toEqual(["Running40s", "Thinking18s", "Reading1s", "Editing1s"]);
-    expect(reads).toContainEqual({ threadId: "thr", turns: 10 });
+    expect(reads).toContainEqual({ threadId: "thr", turns: 10, turnId: null });
     expect(shownSteps()).toEqual([
-      "forest.ts: Read in /repo/lib",
-      "npm run check: Ran in /repo",
-      "Thought for 8s",
-      "forest.ts: Edited in /repo/lib",
+      "forest.ts",
+      "npm run check",
+      "Thought",
+      "forest.ts",
     ]);
     expect(
-      screen.getByRole("button", { name: /first, look around/ }).getAttribute(
-        "aria-expanded",
-      ),
-    ).toBe("false");
+      within(screen.getByRole("navigation", { name: "Messages" }))
+        .getAllByRole("button")
+        .map((row) => row.getAttribute("aria-current")),
+    ).toEqual(["true", null]);
   });
 
   it("shows only one kind while its chip is pressed", async () => {
@@ -98,23 +91,17 @@ describe("the steps tab", () => {
     const reading = await screen.findByRole("button", { name: /^Reading/ });
     fireEvent.click(reading);
     expect(reading.getAttribute("aria-pressed")).toBe("true");
-    expect(shownSteps()).toEqual(["forest.ts: Read in /repo/lib"]);
+    expect(shownSteps()).toEqual(["forest.ts"]);
     fireEvent.click(reading);
     expect(shownSteps()).toHaveLength(4);
-  });
-
-  it("puts the slowest step first when asked", async () => {
-    renderSteps(ready);
-    fireEvent.click(await screen.findByRole("button", { name: "Slowest" }));
-    expect(shownSteps()[0]).toBe("npm run check: Ran in /repo");
-    expect(shownSteps()[1]).toBe("Thought: Checking what the failing test expects.");
   });
 
   it("opens a step to its full command, and a read file in bb's preview", async () => {
     const { view } = renderSteps(ready);
     fireEvent.click((await screen.findByText("npm run check")).closest("button")!);
     expect(await screen.findByText("cd /repo && npm run check")).toBeTruthy();
-    fireEvent.click(screen.getByText("Read in /repo/lib").closest("button")!);
+    expect(await screen.findByText("3 passed")).toBeTruthy();
+    fireEvent.click(screen.getAllByText("forest.ts")[0]!.closest("button")!);
     fireEvent.click(await screen.findByRole("button", { name: "Open file" }));
     expect(view.inspection.navigateCalls).toContainEqual({
       method: "experimental_openFilePreview",
@@ -125,28 +112,96 @@ describe("the steps tab", () => {
     });
   });
 
-  it("walks the ribbon step by step from the keyboard, and Enter opens the step under it", async () => {
-    renderSteps(ready);
-    const ribbon = await screen.findByRole("slider");
-    fireEvent.keyDown(ribbon, { key: "ArrowRight" });
-    fireEvent.keyDown(ribbon, { key: "ArrowRight" });
-    expect(ribbon.getAttribute("aria-valuetext")).toBe("0:01 · Read forest.ts");
-    fireEvent.keyDown(ribbon, { key: "ArrowRight" });
-    fireEvent.keyDown(ribbon, { key: "ArrowRight" });
-    expect(ribbon.getAttribute("aria-valuetext")).toBe(
-      "0:03 · Ran npm run check",
+  it("opens a message's waterfall when it is picked in the list", async () => {
+    const { reads } = renderSteps(ready);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /first, look around/ }),
     );
-    fireEvent.keyDown(ribbon, { key: "Enter" });
-    expect(await screen.findByText("cd /repo && npm run check")).toBeTruthy();
+    expect(await screen.findByText("ls")).toBeTruthy();
+    expect(reads).toContainEqual({
+      threadId: "thr",
+      turns: 10,
+      turnId: expect.stringContaining("t1"),
+    });
   });
 
-  it("asks for ten more turns when older ones are shown", async () => {
-    const { reads } = renderSteps(() => ({ ...ready(), hasOlder: true }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Show older turns" }),
+  it("reads older messages by itself when the end of the list comes into view", async () => {
+    let reveal: (entries: { isIntersecting: boolean }[]) => void = () => {};
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: typeof reveal) {
+          reveal = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
     );
-    await screen.findByRole("slider");
-    expect(reads).toContainEqual({ threadId: "thr", turns: 20 });
+    const { reads } = renderSteps(() => ({ ...ready(), hasOlder: true }));
+    await screen.findByRole("group", { name: "Show one kind" });
+    act(() => reveal([{ isIntersecting: true }]));
+    await waitFor(() =>
+      expect(reads).toContainEqual({ threadId: "thr", turns: 20, turnId: null }),
+    );
+    expect(screen.queryByRole("button", { name: "Show older turns" })).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("resizes the message sidebar from its edge, and double-click resets it", async () => {
+    renderSteps(ready);
+    const edge = await screen.findByRole("separator", { name: "Resize messages" });
+    const before = Number(edge.getAttribute("aria-valuenow"));
+    fireEvent.keyDown(edge, { key: "ArrowRight" });
+    expect(Number(edge.getAttribute("aria-valuenow"))).toBe(before + 24);
+    fireEvent.keyDown(edge, { key: "ArrowLeft" });
+    fireEvent.keyDown(edge, { key: "ArrowLeft" });
+    expect(Number(edge.getAttribute("aria-valuenow"))).toBe(before - 24);
+    fireEvent.doubleClick(edge);
+    expect(Number(edge.getAttribute("aria-valuenow"))).toBe(before);
+  });
+
+  it("times a folded row by its steps, without the gaps between them", async () => {
+    renderSteps(() =>
+      buildThreadSteps(
+        [
+          prompt("t1", 0, "look"),
+          work("t1", 1, 2, "file-read", { path: "/repo/a.ts" }),
+          work("t1", 12, 13, "file-read", { path: "/repo/b.ts" }),
+          work("t1", 23, 24, "file-read", { path: "/repo/c.ts" }),
+          reply("t1", 30),
+        ],
+        { threadId: "thr", running: false, now: at(1000), hasOlder: false },
+      ),
+    );
+    const row = (await screen.findByText("Read 3 files")).closest("button")!;
+    expect(within(row).getByText("3s")).toBeTruthy();
+  });
+
+  it("moves through the messages with the arrow keys", async () => {
+    const { reads } = renderSteps(ready);
+    const list = await screen.findByRole("navigation", { name: "Messages" });
+    const [newest] = within(list).getAllByRole("button");
+    newest!.focus();
+    fireEvent.keyDown(newest!, { key: "ArrowDown" });
+    await waitFor(() =>
+      expect(reads).toContainEqual({
+        threadId: "thr",
+        turns: 10,
+        turnId: expect.stringContaining("t1"),
+      }),
+    );
+  });
+
+  it("shows a message's leading skill apart from its words", async () => {
+    renderSteps(() =>
+      buildThreadSteps(
+        [prompt("t1", 0, "/pstack:unslop tidy this"), reply("t1", 5)],
+        { threadId: "thr", running: false, now: at(1000), hasOlder: false },
+      ),
+    );
+    const list = await screen.findByRole("navigation", { name: "Messages" });
+    expect(within(list).getByText("unslop")).toBeTruthy();
+    expect(within(list).getByText("tidy this")).toBeTruthy();
   });
 
   it("says when there are no steps yet", async () => {
@@ -165,7 +220,7 @@ describe("the steps tab", () => {
     expect(await screen.findByText(/thread not found/)).toBeTruthy();
     fail = false;
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByRole("slider")).toBeTruthy();
+    expect(await screen.findByRole("group", { name: "Show one kind" })).toBeTruthy();
     expect(reads.length).toBeGreaterThan(1);
   });
 });

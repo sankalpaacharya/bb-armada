@@ -1,4 +1,4 @@
-import type { Step } from "./steps";
+import { STEP_KINDS, type Step, type StepKind } from "./steps";
 
 /** Thinking shorter than this is left off the flow; the ribbon still counts it. */
 export const THOUGHT_SHOWN_MS = 2_000;
@@ -102,4 +102,127 @@ export function groupTitle(steps: readonly Step[]): string {
   const nouns = GROUP_NOUNS[verb];
   if (nouns === undefined) return `${verb} ${steps.length} times`;
   return `${verb} ${steps.length} ${steps.length === 1 ? nouns[0] : nouns[1]}`;
+}
+
+/** Actions within a kind that read better with their own icon. */
+const VERB_ICONS: Record<string, string> = {
+  Searched: "Search",
+  "Searched the web": "Search",
+  Listed: "Folder",
+};
+
+const iconOf = (step: Pick<Step, "kind" | "verb">): string =>
+  VERB_ICONS[step.verb] ?? STEP_KINDS[step.kind].icon;
+
+/** One row of the run tree: a step, a thought, or a folded run of steps. */
+export interface RunNode {
+  id: string;
+  kind: StepKind;
+  icon: string;
+  title: string;
+  place: string;
+  startedAt: number;
+  endedAt: number | null;
+  status: Step["status"];
+  /** The step behind the row; a folded run has none of its own. */
+  step: Step | null;
+  children: readonly RunNode[];
+  /** How many steps a folded run holds. */
+  count: number | null;
+}
+
+function stepNode(step: Step, now: number): RunNode {
+  const thought = step.kind === "think";
+  const failed = step.status === "error";
+  const place = thought ? step.target : stepPlace(step);
+  return {
+    id: step.id,
+    kind: step.kind,
+    icon: iconOf(step),
+    title: thought ? step.verb : step.target || step.verb,
+    place: failed ? `Failed: ${place}` : place,
+    startedAt: step.startedAt,
+    endedAt: step.endedAt,
+    status: step.status,
+    step,
+    children: step.children.length > 0 ? runsOf(step.children, now) : [],
+    count: null,
+  };
+}
+
+function groupNode(id: string, steps: readonly Step[], now: number): RunNode {
+  const first = steps[0]!;
+  const last = steps.at(-1)!;
+  return {
+    id,
+    kind: first.kind,
+    icon: iconOf(first),
+    title: groupTitle(steps),
+    place: steps.map((step) => step.target).join(", "),
+    startedAt: first.startedAt,
+    endedAt: last.endedAt,
+    status: steps.some((step) => step.status === "error") ? "error" : "done",
+    step: null,
+    children: steps.map((step) => stepNode(step, now)),
+    count: steps.length,
+  };
+}
+
+/** Steps as rows of the waterfall. */
+export function runsOf(steps: readonly Step[], now: number): RunNode[] {
+  return flowOf(steps, now).map((item) =>
+    item.type === "group"
+      ? groupNode(item.id, item.steps, now)
+      : stepNode(item.step, now),
+  );
+}
+
+/** A row to draw, and how far it sits under its parents. */
+export interface VisibleRun {
+  node: RunNode;
+  depth: number;
+}
+
+/** The rows on screen: open rows are followed by their children. */
+export function visibleRuns(
+  nodes: readonly RunNode[],
+  open: ReadonlySet<string>,
+  depth = 0,
+): VisibleRun[] {
+  return nodes.flatMap((node) => {
+    const row: VisibleRun = { node, depth };
+    return open.has(node.id) && node.children.length > 0
+      ? [row, ...visibleRuns(node.children, open, depth + 1)]
+      : [row];
+  });
+}
+
+const LEADING_COMMANDS = /^(?:\/[\w:-]+(?:\s+|$))+/;
+
+/** A message as a list shows it: any leading skill commands apart from its words. */
+export function messageLabel(prompt: string): {
+  skills: string[];
+  text: string;
+} {
+  const commands = LEADING_COMMANDS.exec(prompt)?.[0] ?? "";
+  const skills = commands
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((command) => command.split(":").at(-1)!.replace(/^\//, ""));
+  return { skills, text: prompt.slice(commands.length).trim() };
+}
+
+const startOfDay = (time: number): number =>
+  new Date(time).setHours(0, 0, 0, 0);
+
+/** The day a message belongs under in the list. */
+export function dayLabel(time: number, now: number): string {
+  const days = Math.round((startOfDay(now) - startOfDay(time)) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return new Date(time).toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+  });
 }

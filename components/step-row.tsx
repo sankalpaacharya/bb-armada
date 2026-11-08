@@ -1,54 +1,71 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 
-import { flowOf, groupTitle, stepPlace, type FlowItem } from "@/lib/step-flow";
+import {
+  runsOf,
+  visibleRuns,
+  type RunNode,
+  type VisibleRun,
+} from "@/lib/step-flow";
+import { rpcContract } from "@/lib/rpc";
 import { STEP_KINDS, type Step, type StepKind } from "@/lib/steps";
 import { FOCUS_RING, PANEL_ROW } from "@/lib/styles";
 import { formatElapsed, formatOffset } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { Collapsible } from "./disclosure";
+import { Collapsible, Disclosure } from "./disclosure";
 import { Icon } from "./ui/icon";
 
 export type OpenFile = ((path: string) => void) | null;
 
 /** What every row in one list shares. */
 export interface RowContext {
+  threadId: string;
+  turns: number;
   turnStartedAt: number;
+  turnEndedAt: number;
   now: number;
   expanded: ReadonlySet<string>;
   onToggle: (id: string) => void;
   openFile: OpenFile;
 }
 
-/** A step's own length, up to now while it runs. */
-export const lengthOf = (step: Step, now: number): number =>
-  Math.max((step.endedAt ?? now) - step.startedAt, 0);
-
 const SMALL_BUTTON = `inline-flex h-6 cursor-pointer items-center gap-1 rounded-md px-1.5 text-2xs text-muted-foreground hover:bg-accent/60 hover:text-foreground ${FOCUS_RING}`;
 
 const PROSE_CLAMP_CHARS = 320;
 
-/** The line through every node, from the first node's middle to the last's. */
-const RAIL =
-  "relative before:absolute before:left-[calc(0.875rem-0.5px)] before:top-0 before:bottom-0 before:w-px before:bg-border first:before:top-4 last:before:bottom-[calc(100%-1rem)]";
+const CODE_BLOCK =
+  "m-0 max-h-48 overflow-auto rounded-md bg-muted/60 p-2 font-mono text-2xs leading-relaxed break-all whitespace-pre-wrap text-foreground/80";
 
-/** Actions within a kind that read better with their own icon. */
-const VERB_ICONS: Record<string, string> = {
-  Searched: "Search",
-  Listed: "Folder",
-  "Searched the web": "Search",
-  Viewed: "Image",
-};
+/** Name column and timeline column of a waterfall row, and of its time axis. */
+export const WATERFALL_COLUMNS =
+  "grid grid-cols-[minmax(0,min(60%,20rem))_minmax(0,1fr)]";
 
-const iconOf = (step: Pick<Step, "kind" | "verb">): string =>
-  VERB_ICONS[step.verb] ?? STEP_KINDS[step.kind].icon;
+/** Each level of nesting steps right by this. */
+const INDENT = 16;
 
-const tint = (kind: StepKind): CSSProperties =>
+const HATCH =
+  "repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 4px)";
+
+/** Paints a kind: a solid fill for tool time, a quiet hatch for model time. */
+function kindFill(kind: StepKind): { className: string; style: CSSProperties } {
+  return kind === "think"
+    ? {
+        className: "bg-foreground/[0.04] text-foreground/30",
+        style: { backgroundImage: HATCH },
+      }
+    : { className: "", style: { backgroundColor: STEP_KINDS[kind].color } };
+}
+
+/** A run's own time; a folded run is its steps' time, without the gaps. */
+const lengthOfRun = (run: RunNode, now: number): number =>
+  run.count === null
+    ? Math.max((run.endedAt ?? now) - run.startedAt, 0)
+    : run.children.reduce((sum, child) => sum + lengthOfRun(child, now), 0);
+
+const tileStyle = (kind: StepKind): CSSProperties | undefined =>
   kind === "think"
-    ? {}
-    : {
-        color: STEP_KINDS[kind].color,
-        backgroundColor: `color-mix(in oklab, ${STEP_KINDS[kind].color} 16%, transparent)`,
-      };
+    ? undefined
+    : { backgroundColor: STEP_KINDS[kind].color, color: "white" };
 
 /** A step kind's icon in its colour, for labels. */
 export function KindIcon({
@@ -74,41 +91,30 @@ export function Node({
   icon,
   running = false,
   failed = false,
-  count,
 }: {
   kind: StepKind;
   icon: string;
   running?: boolean;
   failed?: boolean;
-  count?: number;
 }) {
   return (
     <span
+      aria-hidden
       className={cn(
-        "relative z-[1] grid size-7 shrink-0 place-items-center rounded-lg bg-sidebar",
-        kind === "think" && "text-muted-foreground",
-        failed && "ring-1 ring-destructive-text",
+        "grid size-[18px] shrink-0 place-items-center rounded-[5px]",
+        kind === "think" && "bg-muted text-muted-foreground",
+        failed && "ring-2 ring-destructive-text",
       )}
+      style={tileStyle(kind)}
     >
-      <span
-        aria-hidden
-        className="grid size-full place-items-center rounded-lg bg-muted/60"
-        style={tint(kind)}
-      >
-        <Icon
-          name={running ? "Spinner" : icon}
-          fallback="Zap"
-          className={cn(
-            "size-3.5",
-            running && "animate-spin motion-reduce:animate-none",
-          )}
-        />
-      </span>
-      {count === undefined ? null : (
-        <span className="absolute -right-1.5 -bottom-1 min-w-4 rounded-full bg-sidebar px-0.5 text-center text-[10px] leading-4 font-medium tabular-nums text-foreground ring-1 ring-border">
-          {count}
-        </span>
-      )}
+      <Icon
+        name={running ? "Spinner" : icon}
+        fallback="Zap"
+        className={cn(
+          "size-3",
+          running && "animate-spin motion-reduce:animate-none",
+        )}
+      />
     </span>
   );
 }
@@ -139,17 +145,107 @@ function Prose({ text }: { text: string }) {
   );
 }
 
+function DetailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-1">
+      <h4 className="m-0 text-xs font-medium text-foreground">{title}</h4>
+      {children}
+    </section>
+  );
+}
+
+function StepOutput({ step, context }: { step: Step; context: RowContext }) {
+  const { data, error } = experimental_useRpcQuery({
+    contract: rpcContract,
+    method: "step_output",
+    input: { threadId: context.threadId, stepId: step.id, turns: context.turns },
+  });
+  if (error !== null)
+    return (
+      <DetailSection title="Output">
+        <p className="m-0 text-2xs text-muted-foreground">Could not read the output.</p>
+      </DetailSection>
+    );
+  if (data === undefined || data.output === null) return null;
+  return (
+    <DetailSection title="Output">
+      {STEP_KINDS[step.kind].detail === "code" ? (
+        <pre className={CODE_BLOCK}>{data.output}</pre>
+      ) : (
+        <Prose text={data.output} />
+      )}
+    </DetailSection>
+  );
+}
+
+const STATUS_WORD: Record<Step["status"], string> = {
+  running: "Running",
+  done: "Success",
+  error: "Failed",
+  interrupted: "Stopped",
+};
+
+const clockTime = (time: number): string =>
+  new Date(time).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-2xs text-muted-foreground">{label}</dt>
+      <dd className="m-0 text-xs tabular-nums text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+function StepFacts({ step, now }: { step: Step; now: number }) {
+  return (
+    <dl className="m-0 grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-x-3 gap-y-2">
+      <Fact label="Start">{clockTime(step.startedAt)}</Fact>
+      {step.endedAt === null ? null : (
+        <Fact label="End">{clockTime(step.endedAt)}</Fact>
+      )}
+      <Fact label="Status">
+        <span className="inline-flex items-center gap-1">
+          {step.status === "done" ? (
+            <Icon name="Check" className="size-3 text-success-foreground" aria-hidden />
+          ) : null}
+          {STATUS_WORD[step.status]}
+        </span>
+      </Fact>
+      <Fact label="Latency">{formatElapsed(Math.max((step.endedAt ?? now) - step.startedAt, 0))}</Fact>
+      <Fact label="Type">{STEP_KINDS[step.kind].type}</Fact>
+    </dl>
+  );
+}
+
 function StepDetail({ step, context }: { step: Step; context: RowContext }) {
   const { path } = step;
   const { openFile } = context;
+  const thought = step.kind === "think";
   return (
-    <div className="flex flex-col gap-1.5 pt-0.5 pr-2 pb-2 pl-11">
-      {step.detail === null ? null : STEP_KINDS[step.kind].detail === "code" ? (
-        <pre className="m-0 max-h-48 overflow-auto rounded-md bg-muted/60 p-2 font-mono text-2xs leading-relaxed break-all whitespace-pre-wrap text-foreground/80">
-          {step.detail}
-        </pre>
-      ) : (
-        <Prose text={step.detail} />
+    <div className="flex flex-col gap-3 pt-1.5 pr-2 pb-3">
+      <StepFacts step={step} now={context.now} />
+      {step.detail === null ? null : (
+        <DetailSection title={thought ? "Thinking" : "Input"}>
+          {STEP_KINDS[step.kind].detail === "code" ? (
+            <pre className={CODE_BLOCK}>{step.detail}</pre>
+          ) : (
+            <Prose text={step.detail} />
+          )}
+        </DetailSection>
+      )}
+      {thought || step.status === "running" ? null : (
+        <StepOutput step={step} context={context} />
       )}
       {path === null || openFile === null ? null : (
         <button
@@ -161,276 +257,131 @@ function StepDetail({ step, context }: { step: Step; context: RowContext }) {
           Open file
         </button>
       )}
-      {step.children.length === 0 ? null : (
-        <StepFlow
-          steps={step.children}
-          order="order"
-          context={context}
-          highlighted={null}
-        />
-      )}
     </div>
   );
 }
 
-/** The two lines beside a node, and how long and when on the right. */
-function Card({
-  title,
-  place,
-  length,
-  notable,
-  offset,
-  expanded,
-  highlighted,
-  onClick,
-}: {
-  title: ReactNode;
-  place: string;
-  length: number;
-  notable: boolean;
-  offset: number;
-  expanded: boolean;
-  highlighted: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-expanded={expanded}
-      onClick={onClick}
+/** A run's bar at its real place on the turn's time axis. */
+function Bars({ row, context }: { row: VisibleRun; context: RowContext }) {
+  const { node } = row;
+  const { now, turnStartedAt, turnEndedAt } = context;
+  const wall = Math.max(turnEndedAt - turnStartedAt, 1);
+  const percent = (time: number) =>
+    Math.min(Math.max(((time - turnStartedAt) / wall) * 100, 0), 100);
+  const from = percent(node.startedAt);
+  const to = percent(node.endedAt ?? now);
+  const fill = kindFill(node.kind);
+  const segment = (start: number, end: number, key?: string) => (
+    <span
+      key={key}
       className={cn(
-        PANEL_ROW,
-        "min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1",
-        expanded && "bg-accent/60",
-        highlighted && "bg-accent",
+        "absolute inset-y-0 min-w-0.5 rounded-[2px]",
+        fill.className,
+        node.status === "running" && "animate-pulse motion-reduce:animate-none",
       )}
+      style={{ ...fill.style, left: `${start}%`, width: `${end - start}%` }}
+    />
+  );
+  return (
+    <span
+      className="relative block h-full"
+      style={{
+        backgroundImage:
+          "linear-gradient(to right, color-mix(in oklab, var(--border) 45%, transparent) 1px, transparent 1px)",
+        backgroundSize: "25% 100%",
+      }}
     >
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[13px] leading-5 font-medium text-foreground">
-          {title}
-        </span>
-        <span className="truncate text-[11px] leading-4 text-muted-foreground">
-          {place}
-        </span>
-      </span>
-      <span className="flex shrink-0 flex-col items-end">
-        <span
-          className={cn(
-            "text-[11px] leading-5 tabular-nums",
-            notable ? "font-medium text-foreground" : "text-muted-foreground",
-          )}
-        >
-          {formatElapsed(length)}
-        </span>
-        <span className="text-[10px] leading-4 tabular-nums text-muted-foreground/70">
-          {formatOffset(offset)}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function StepItem({
-  step,
-  longest,
-  highlighted,
-  context,
-}: {
-  step: Step;
-  longest: number;
-  highlighted: boolean;
-  context: RowContext;
-}) {
-  const expanded = context.expanded.has(step.id);
-  const length = lengthOf(step, context.now);
-  const failed = step.status === "error";
-  return (
-    <li data-step={step.id} className={cn("list-none scroll-mt-40", RAIL)}>
-      <div className="flex items-center gap-1.5">
-        <Node
-          kind={step.kind}
-          icon={iconOf(step)}
-          running={step.status === "running"}
-          failed={failed}
-        />
-        <Card
-          title={step.kind === "think" ? step.verb : step.target || step.verb}
-          place={
-            step.kind === "think"
-              ? step.target
-              : failed
-                ? `Failed: ${stepPlace(step)}`
-                : stepPlace(step)
-          }
-          length={length}
-          notable={length >= longest / 4 && length >= 1_000}
-          offset={step.startedAt - context.turnStartedAt}
-          expanded={expanded}
-          highlighted={highlighted}
-          onClick={() => context.onToggle(step.id)}
-        />
-      </div>
-      <Collapsible open={expanded}>
-        <StepDetail step={step} context={context} />
-      </Collapsible>
-    </li>
-  );
-}
-
-function GroupItem({
-  id,
-  steps,
-  longest,
-  highlighted,
-  context,
-}: {
-  id: string;
-  steps: readonly Step[];
-  longest: number;
-  highlighted: string | null;
-  context: RowContext;
-}) {
-  const expanded = context.expanded.has(id);
-  const first = steps[0]!;
-  const length = steps.reduce((sum, step) => sum + lengthOf(step, context.now), 0);
-  const holds = highlighted !== null && steps.some((step) => step.id === highlighted);
-  return (
-    <li
-      data-step={id}
-      data-holds={steps.map((step) => step.id).join(" ")}
-      className={cn("list-none scroll-mt-40", RAIL)}
-    >
-      <div className="flex items-center gap-1.5">
-        <Node kind={first.kind} icon={iconOf(first)} count={steps.length} />
-        <Card
-          title={groupTitle(steps)}
-          place={steps.map((step) => step.target).join(", ")}
-          length={length}
-          notable={length >= longest / 4 && length >= 1_000}
-          offset={first.startedAt - context.turnStartedAt}
-          expanded={expanded}
-          highlighted={holds && !expanded}
-          onClick={() => context.onToggle(id)}
-        />
-      </div>
-      <Collapsible open={expanded}>
-        <div className="pl-5">
-          <StepFlow
-            steps={steps}
-            order="order"
-            context={context}
-            highlighted={highlighted}
-            grouped={false}
-          />
-        </div>
-      </Collapsible>
-    </li>
-  );
-}
-
-function ThoughtItem({
-  step,
-  highlighted,
-  context,
-}: {
-  step: Step;
-  highlighted: boolean;
-  context: RowContext;
-}) {
-  const expanded = context.expanded.has(step.id);
-  const length = lengthOf(step, context.now);
-  const running = step.status === "running";
-  return (
-    <li data-step={step.id} className={cn("list-none scroll-mt-40", RAIL)}>
-      <div className="flex items-center gap-1.5">
-        <span className="relative z-[1] grid w-7 shrink-0 place-items-center">
-          <span
-            aria-hidden
-            className={cn(
-              "size-2 rounded-full border border-muted-foreground/50 bg-sidebar",
-              running && "animate-pulse motion-reduce:animate-none",
+      <span className="absolute inset-x-0 top-1/2 h-2.5 -translate-y-1/2">
+        {node.count === null ? (
+          segment(from, to)
+        ) : (
+          <>
+            <span
+              className="absolute inset-y-1 rounded-[2px] bg-foreground/10"
+              style={{ left: `${from}%`, width: `${to - from}%` }}
+            />
+            {node.children.map((child) =>
+              segment(
+                percent(child.startedAt),
+                percent(child.endedAt ?? now),
+                child.id,
+              ),
             )}
-          />
-        </span>
-        <button
-          type="button"
-          aria-expanded={expanded}
-          disabled={step.detail === null}
-          onClick={() => context.onToggle(step.id)}
-          className={cn(
-            PANEL_ROW,
-            "h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground disabled:cursor-default",
-            highlighted && "bg-accent text-foreground",
-          )}
+          </>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function RunRow({ row, context }: { row: VisibleRun; context: RowContext }) {
+  const { node, depth } = row;
+  const open = context.expanded.has(node.id);
+  const length = lengthOfRun(node, context.now);
+  const offset = formatOffset(node.startedAt - context.turnStartedAt);
+  const indent = INDENT * depth;
+  return (
+    <li data-step={node.id} className="list-none">
+      <button
+        type="button"
+        aria-expanded={open}
+        title={`${node.title}\n${node.place}\nStarted at ${offset}, took ${formatElapsed(length)}`}
+        onClick={() => context.onToggle(node.id)}
+        className={cn(
+          PANEL_ROW,
+          WATERFALL_COLUMNS,
+          "h-7 items-stretch rounded-md px-2",
+          open && "bg-accent",
+        )}
+      >
+        <span
+          className="flex min-w-0 items-center gap-2 pr-2"
+          style={{ paddingLeft: indent }}
         >
-          <span className="truncate">
-            {running ? "Thinking" : `Thought for ${formatElapsed(length)}`}
+          <Node
+            kind={node.kind}
+            icon={node.icon}
+            running={node.status === "running"}
+            failed={node.status === "error"}
+          />
+          <span className="truncate text-[13px] text-foreground">{node.title}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+            {formatElapsed(length)}
           </span>
-        </button>
-      </div>
-      <Collapsible open={expanded}>
-        <StepDetail step={step} context={context} />
-      </Collapsible>
+          <span className="ml-auto shrink-0">
+            <Disclosure open={open} />
+          </span>
+        </span>
+        <Bars row={row} context={context} />
+      </button>
+      {node.step === null ? null : (
+        <Collapsible open={open}>
+          <div style={{ paddingLeft: indent + 34 }}>
+            <StepDetail step={node.step} context={context} />
+          </div>
+        </Collapsible>
+      )}
     </li>
   );
 }
 
 /**
- * Steps as a line of nodes, top to bottom. In order, long thoughts sit
- * between the cards and runs of one action fold into a card; by slowest,
- * every step is its own card.
+ * The turn as a waterfall: each step has its bar on one shared timeline, so
+ * slow and parallel steps show. Open rows show their input, output and steps.
  */
 export function StepFlow({
   steps,
-  order,
   context,
-  highlighted,
-  grouped = true,
 }: {
   steps: readonly Step[];
-  order: "order" | "slowest";
   context: RowContext;
-  highlighted: string | null;
-  grouped?: boolean;
 }) {
-  const longest = Math.max(1, ...steps.map((step) => lengthOf(step, context.now)));
-  const items: FlowItem[] =
-    order === "slowest"
-      ? [...steps]
-          .sort((a, b) => lengthOf(b, context.now) - lengthOf(a, context.now))
-          .map((step) => ({ type: "step", step }))
-      : grouped
-        ? flowOf(steps, context.now)
-        : steps.map((step) => ({ type: "step", step }));
+  const rows = visibleRuns(runsOf(steps, context.now), context.expanded);
   return (
-    <ol className="m-0 flex flex-col gap-0.5 p-0">
-      {items.map((item) =>
-        item.type === "group" ? (
-          <GroupItem
-            key={item.id}
-            id={item.id}
-            steps={item.steps}
-            longest={longest}
-            highlighted={highlighted}
-            context={context}
-          />
-        ) : item.type === "thought" ? (
-          <ThoughtItem
-            key={item.step.id}
-            step={item.step}
-            highlighted={item.step.id === highlighted}
-            context={context}
-          />
-        ) : (
-          <StepItem
-            key={item.step.id}
-            step={item.step}
-            longest={longest}
-            highlighted={item.step.id === highlighted}
-            context={context}
-          />
-        ),
-      )}
+    <ol className="m-0 flex flex-col p-0">
+      {rows.map((row) => (
+        <RunRow key={row.node.id} row={row} context={context} />
+      ))}
     </ol>
   );
 }

@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   commandFolder,
+  dayLabel,
   flowOf,
   groupTitle,
+  messageLabel,
+  runsOf,
   stepPlace,
   tildePath,
+  visibleRuns,
 } from "@/lib/step-flow";
 import type { Step } from "@/lib/steps";
 
@@ -79,5 +83,52 @@ describe("the step flow", () => {
     expect(
       stepPlace(step("s", { kind: "agent", verb: "Subagent", children: [step("x"), step("y")] })),
     ).toBe("Subagent, 2 steps");
+  });
+
+  it("nests a subagent's steps and a folded run under their rows, only while open", () => {
+    const agent = step("agent", {
+      kind: "agent",
+      verb: "Subagent",
+      target: "Find it",
+      children: [step("x"), step("y")],
+    });
+    const runs = runsOf([step("a"), step("b"), step("c"), agent], 0);
+    expect(runs.map((run) => [run.title, run.count])).toEqual([
+      ["Read 3 files", 3],
+      ["Find it", null],
+    ]);
+    const rows = (open: string[]) =>
+      visibleRuns(runs, new Set(open)).map(
+        ({ node, depth }) => `${depth}:${node.title}`,
+      );
+    expect(rows([])).toEqual(["0:Read 3 files", "0:Find it"]);
+    expect(rows(["agent"])).toEqual([
+      "0:Read 3 files",
+      "0:Find it",
+      "1:x.ts",
+      "1:y.ts",
+    ]);
+  });
+});
+
+describe("the message list", () => {
+  it("takes leading skills off a message, and leaves the rest alone", () => {
+    expect(messageLabel("/frontend-design:frontend-design yeah build it")).toEqual({
+      skills: ["frontend-design"],
+      text: "yeah build it",
+    });
+    expect(messageLabel("/a /b:c go")).toEqual({ skills: ["a", "c"], text: "go" });
+    expect(messageLabel("dude /pstack:unslop this")).toEqual({
+      skills: [],
+      text: "dude /pstack:unslop this",
+    });
+    expect(messageLabel("/Users/sam/file.ts is broken").skills).toEqual([]);
+  });
+
+  it("names the day a message was sent", () => {
+    const now = new Date(2026, 10, 8, 12).getTime();
+    expect(dayLabel(new Date(2026, 10, 8, 1).getTime(), now)).toBe("Today");
+    expect(dayLabel(new Date(2026, 10, 7, 23).getTime(), now)).toBe("Yesterday");
+    expect(dayLabel(new Date(2026, 10, 6, 9).getTime(), now)).toContain("6");
   });
 });

@@ -1,9 +1,10 @@
 import {
-  memo,
+  Fragment,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type ReactNode,
 } from "react";
 import {
@@ -15,40 +16,38 @@ import {
 } from "@get-bb/plugin-sdk/app";
 
 import { useLiveNow } from "@/lib/clock";
-import { rpcContract } from "@/lib/rpc";
+import { MAX_TURNS, rpcContract } from "@/lib/rpc";
+import { dayLabel, messageLabel } from "@/lib/step-flow";
 import {
   STEP_KINDS,
   STEP_KIND_IDS,
   extendTo,
-  spanAt,
-  type Span,
   type StepKind,
   type ThreadSteps,
   type TurnSteps,
 } from "@/lib/steps";
-import { AGE_TEXT, FOCUS_RING, PANEL_ROW } from "@/lib/styles";
-import { formatElapsed, formatOffset } from "@/lib/time";
+import { FOCUS_RING, PANEL_ROW } from "@/lib/styles";
+import { formatElapsed } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { Collapsible, Disclosure } from "./disclosure";
+import { ResizeHandle, useStoredSize } from "./resize-handle";
 import { Note } from "./section";
+import { Icon } from "./ui/icon";
 import {
   KindIcon,
   Node,
   StepFlow,
+  WATERFALL_COLUMNS,
   type OpenFile,
   type RowContext,
 } from "./step-row";
-import { MiniRibbon, Ribbon } from "./steps-ribbon";
 
-/** Turns read at first, and how many more each "Show older turns" adds. */
+/** Messages read at first, and how many more each scroll to the end adds. */
 const TURNS_PAGE = 10;
-const MAX_TURNS = 40;
 
-type Order = "order" | "slowest";
+const SIDEBAR_KEY = "armada:steps-sidebar-width";
+const SIDEBAR_WIDTH = { min: 120, max: () => 420, initial: () => 176 };
 
 const CHIP = `inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-2xs text-foreground/80 hover:bg-accent/60 aria-pressed:bg-accent aria-pressed:text-foreground ${FOCUS_RING}`;
-
-const TOGGLE = `h-5 cursor-pointer rounded-[5px] px-1.5 text-2xs text-muted-foreground hover:text-foreground aria-pressed:bg-background aria-pressed:text-foreground ${FOCUS_RING}`;
 
 const TEXT_BUTTON = `cursor-pointer rounded-md px-2 py-1 text-2xs text-muted-foreground hover:bg-accent/60 hover:text-foreground ${FOCUS_RING}`;
 
@@ -68,7 +67,7 @@ function Legend({
     <div
       role="group"
       aria-label="Show one kind"
-      className="flex flex-wrap gap-0.5"
+      className="-ml-1.5 flex flex-wrap gap-0.5"
     >
       {kinds.map((kind) => (
         <button
@@ -94,31 +93,16 @@ function Legend({
   );
 }
 
-function OrderToggle({
-  order,
-  onOrder,
-}: {
-  order: Order;
-  onOrder: (order: Order) => void;
-}) {
-  const option = (value: Order, label: string) => (
-    <button
-      type="button"
-      aria-pressed={order === value}
-      onClick={() => onOrder(value)}
-      className={TOGGLE}
-    >
-      {label}
-    </button>
-  );
+/** The times across the top of the waterfall. */
+function TimeAxis({ wall }: { wall: number }) {
   return (
-    <div
-      role="group"
-      aria-label="Order steps"
-      className="flex w-fit gap-0.5 rounded-md bg-muted/60 p-0.5"
-    >
-      {option("order", "In order")}
-      {option("slowest", "Slowest")}
+    <div className={cn(WATERFALL_COLUMNS, "h-4 text-[10px] tabular-nums text-muted-foreground")}>
+      <span />
+      <span className="flex justify-between">
+        <span>0s</span>
+        <span>{formatElapsed(wall / 2)}</span>
+        <span>{formatElapsed(wall)}</span>
+      </span>
     </div>
   );
 }
@@ -127,47 +111,17 @@ function TurnBody({
   turn,
   now,
   openFile,
+  threadId,
+  turns,
 }: {
   turn: TurnSteps;
   now: number;
   openFile: OpenFile;
+  threadId: string;
+  turns: number;
 }) {
   const [filter, setFilter] = useState<StepKind | null>(null);
-  const [order, setOrder] = useState<Order>("order");
-  const [hovered, setHovered] = useState<number | null>(null);
-  const [pinned, setPinned] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const listRef = useRef<HTMLDivElement>(null);
-
-  const byId = useMemo(
-    () => new Map(turn.steps.map((step) => [step.id, step])),
-    [turn.steps],
-  );
-  const at = hovered ?? pinned;
-  const span = at === null ? null : spanAt(turn.spans, at);
-  const highlighted = span?.stepId ?? null;
-  const owner = highlighted === null ? null : (byId.get(highlighted) ?? null);
-  const label =
-    at === null || span === null
-      ? ""
-      : `${formatOffset(at - turn.startedAt)} · ${
-          owner === null
-            ? STEP_KINDS[span.kind].label
-            : [owner.verb, owner.target].filter(Boolean).join(" ")
-        }`;
-
-  const pinnedStep =
-    pinned === null ? null : (spanAt(turn.spans, pinned)?.stepId ?? null);
-  useEffect(() => {
-    if (pinnedStep === null) return;
-    const rows = listRef.current?.querySelectorAll<HTMLElement>("[data-step]");
-    const row = Array.from(rows ?? []).find(
-      (element) =>
-        element.dataset.step === pinnedStep ||
-        element.dataset.holds?.split(" ").includes(pinnedStep),
-    );
-    row?.scrollIntoView?.({ block: "nearest" });
-  }, [pinnedStep]);
 
   const toggle = (stepId: string) =>
     setExpanded((current) => {
@@ -175,18 +129,17 @@ function TurnBody({
       if (!next.delete(stepId)) next.add(stepId);
       return next;
     });
-  const open = (picked: Span) => {
-    const { stepId } = picked;
-    if (stepId !== null)
-      setExpanded((current) => new Set(current).add(stepId));
-  };
-
   const shown =
     filter === null
       ? turn.steps
       : turn.steps.filter((step) => step.kind === filter);
+  const turnEndedAt = turn.spans.at(-1)?.to ?? now;
+  const stepCount = turn.steps.filter((step) => step.kind !== "think").length;
   const context: RowContext = {
+    threadId,
+    turns,
     turnStartedAt: turn.startedAt,
+    turnEndedAt,
     now,
     expanded,
     onToggle: toggle,
@@ -195,29 +148,24 @@ function TurnBody({
 
   return (
     <div className="flex flex-col pb-3">
-      <div className="sticky top-0 z-10 flex flex-col gap-2 bg-sidebar px-2 pt-1 pb-2">
-        <Ribbon
-          turn={turn}
-          filter={filter}
-          at={at}
-          label={label}
-          onScrub={setHovered}
-          onPin={setPinned}
-          onOpen={open}
-        />
+      <div className="sticky top-0 z-10 flex flex-col gap-2 bg-sidebar px-2 pt-3 pb-2">
+        <div className="flex items-baseline gap-3">
+          <p className="m-0 line-clamp-2 min-w-0 flex-1 text-[13px] leading-5 font-medium text-foreground">
+            {messageLabel(turn.prompt).text || turn.prompt}
+          </p>
+          <p className="m-0 shrink-0 text-xs tabular-nums text-muted-foreground">
+            {formatElapsed(Math.max(turnEndedAt - turn.startedAt, 0))}, {stepCount}{" "}
+            {stepCount === 1 ? "step" : "steps"}
+          </p>
+        </div>
         <Legend totals={turn.totals} filter={filter} onFilter={setFilter} />
-        {turn.steps.length > 1 ? (
-          <OrderToggle order={order} onOrder={setOrder} />
+        {shown.length > 0 ? (
+          <TimeAxis wall={Math.max(turnEndedAt - turn.startedAt, 0)} />
         ) : null}
       </div>
-      <div ref={listRef}>
+      <div>
         {shown.length > 0 ? (
-          <StepFlow
-            steps={shown}
-            order={order}
-            context={context}
-            highlighted={highlighted}
-          />
+          <StepFlow steps={shown} context={context} />
         ) : (
           <Note>
             {filter === "think"
@@ -230,49 +178,92 @@ function TurnBody({
   );
 }
 
-const TurnSection = memo(function TurnSection({
+const clockMinutes = (time: number): string =>
+  new Date(time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+function MessageRow({
   turn,
-  initiallyOpen,
+  selected,
   now,
-  openFile,
+  onSelect,
 }: {
   turn: TurnSteps;
-  initiallyOpen: boolean;
-  /** Moves only for a running turn. */
+  selected: boolean;
   now: number;
-  openFile: OpenFile;
+  onSelect: () => void;
 }) {
-  const [open, setOpen] = useState(initiallyOpen);
   const wall = Math.max((turn.endedAt ?? now) - turn.startedAt, 0);
+  const { skills, text } = messageLabel(turn.prompt);
   return (
     <li className="list-none">
       <button
         type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-        className={cn(PANEL_ROW, "flex-col gap-1.5 px-2 py-1.5")}
-      >
-        <span className="flex w-full items-start gap-1.5">
-          <span className="grid h-5 shrink-0 place-items-center">
-            <Disclosure open={open} />
-          </span>
-          <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-5 text-foreground">
-            {turn.prompt}
-          </span>
-          <span className={cn(AGE_TEXT, "leading-5")}>{formatElapsed(wall)}</span>
-        </span>
-        {open ? null : (
-          <span className="w-full pl-5">
-            <MiniRibbon turn={turn} />
-          </span>
+        aria-current={selected ? "true" : undefined}
+        onClick={onSelect}
+        className={cn(
+          PANEL_ROW,
+          "flex-col gap-1 px-2 py-1.5",
+          selected && "bg-accent",
         )}
+      >
+        <span
+          className={cn(
+            "line-clamp-2 text-xs leading-[18px]",
+            selected || turn.running ? "text-foreground" : "text-foreground/70",
+          )}
+        >
+          {skills.map((skill) => (
+            <span
+              key={skill}
+              className="mr-1 inline-block rounded-[4px] bg-foreground/10 px-1 text-[10.5px] leading-4 text-foreground/70"
+            >
+              {skill}
+            </span>
+          ))}
+          {text}
+        </span>
+        <span className="flex w-full items-center gap-1 text-[11px] leading-4 tabular-nums text-muted-foreground">
+          {turn.running ? (
+            <Icon
+              name="Spinner"
+              aria-hidden
+              className="size-3 animate-spin motion-reduce:animate-none"
+            />
+          ) : null}
+          <span>{clockMinutes(turn.startedAt)}</span>
+          <span className="ml-auto">{formatElapsed(wall)}</span>
+        </span>
       </button>
-      <Collapsible open={open}>
-        <TurnBody turn={turn} now={now} openFile={openFile} />
-      </Collapsible>
     </li>
   );
-});
+}
+
+/** Up and down move through the messages, opening each one. */
+function moveThroughMessages(event: KeyboardEvent<HTMLElement>): void {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  const rows = Array.from(event.currentTarget.querySelectorAll("button"));
+  const from = rows.indexOf(document.activeElement as HTMLButtonElement);
+  const next = rows[from + (event.key === "ArrowDown" ? 1 : -1)];
+  if (next === undefined) return;
+  event.preventDefault();
+  next.focus();
+  next.click();
+}
+
+/** Reads the next messages once the end of the list scrolls into view. */
+function LoadMore({ onVisible }: { onVisible: () => void }) {
+  const end = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    const element = end.current;
+    if (element === null) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) onVisible();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [onVisible]);
+  return <li ref={end} aria-hidden className="h-px list-none" />;
+}
 
 function NowLine({ steps, now }: { steps: ThreadSteps; now: number }) {
   const step = steps.now;
@@ -297,16 +288,21 @@ function NowLine({ steps, now }: { steps: ThreadSteps; now: number }) {
 }
 
 /**
- * A side panel tab with where the thread's time went: each turn as a ribbon
- * of what the agent was doing, and its steps, slowest first if asked.
+ * A side panel tab with where the thread's time went: a list of the thread's
+ * messages, and the waterfall of the one picked, the newest until one is.
  */
 export function StepsTab({ threadId }: ExperimentalThreadActionTabProps) {
   const visible = experimental_useTabVisible();
   const [turns, setTurns] = useState(TURNS_PAGE);
+  const sidebar = useStoredSize(SIDEBAR_KEY, SIDEBAR_WIDTH);
+  const [pick, setPick] = useState<{ threadId: string; turnId: string } | null>(
+    null,
+  );
+  const picked = pick?.threadId === threadId ? pick.turnId : null;
   const { data, error, refetch } = experimental_useRpcQuery({
     contract: rpcContract,
     method: "thread_steps",
-    input: { threadId, turns },
+    input: { threadId, turns, turnId: picked },
     enabled: visible,
   });
   const [kept, setKept] = useState(data);
@@ -352,34 +348,83 @@ export function StepsTab({ threadId }: ExperimentalThreadActionTabProps) {
       );
   else if (steps.turns.length === 0)
     body = <Note>No steps yet. They show here as the agent works.</Note>;
-  else
-    body = (
-      <>
-        {steps.running ? <NowLine steps={steps} now={now} /> : null}
-        <ol className="m-0 flex flex-col gap-1 p-0">
-          {steps.turns.map((turn, index) => (
-            <TurnSection
-              key={turn.id}
-              turn={extendTo(turn, now)}
-              initiallyOpen={index === 0}
-              now={turn.running ? now : 0}
-              openFile={openFile}
-            />
-          ))}
-        </ol>
-        {steps.hasOlder && turns < MAX_TURNS ? (
-          <button
-            type="button"
-            onClick={() =>
-              setTurns((current) => Math.min(current + TURNS_PAGE, MAX_TURNS))
-            }
-            className={cn(TEXT_BUTTON, "self-start")}
+  else {
+    const focused = steps.turns.find((turn) => turn.id === steps.focus);
+    const waiting = picked !== null && picked !== steps.focus;
+    const canLoadMore =
+      steps.hasOlder && steps.turnsRead === turns && turns < MAX_TURNS;
+    return (
+      <div className="flex h-full min-h-0">
+        <div
+          className="relative shrink-0"
+          style={{ width: sidebar.size, maxWidth: "70%" }}
+        >
+          <nav
+            aria-label="Messages"
+            onKeyDown={moveThroughMessages}
+            className="h-full overflow-y-auto border-r border-border px-1.5 pb-1.5"
           >
-            Show older turns
-          </button>
-        ) : null}
-      </>
+            <ol className="m-0 flex flex-col gap-0.5 p-0">
+              {steps.turns.map((turn, index) => {
+                const day = dayLabel(turn.startedAt, Date.now());
+                const previous = steps.turns[index - 1];
+                return (
+                  <Fragment key={turn.id}>
+                    {previous !== undefined &&
+                    dayLabel(previous.startedAt, Date.now()) === day ? null : (
+                      <li className="sticky top-0 z-[1] list-none bg-sidebar px-2 pt-2.5 pb-1 text-[11px] font-medium text-muted-foreground">
+                        {day}
+                      </li>
+                    )}
+                    <MessageRow
+                      turn={turn}
+                      selected={turn.id === (picked ?? steps.focus)}
+                      now={now}
+                      onSelect={() => setPick({ threadId, turnId: turn.id })}
+                    />
+                  </Fragment>
+                );
+              })}
+              {canLoadMore ? (
+                <LoadMore
+                  onVisible={() =>
+                    setTurns(Math.min(turns + TURNS_PAGE, MAX_TURNS))
+                  }
+                />
+              ) : null}
+            </ol>
+          </nav>
+          <ResizeHandle
+            axis="x"
+            label="Resize messages"
+            pane={sidebar}
+            className="absolute inset-y-0 -right-1 w-2"
+          />
+        </div>
+        <div className="min-w-0 flex-1 overflow-y-auto px-1">
+          {steps.running ? (
+            <div className="px-2 pt-3">
+              <NowLine steps={steps} now={now} />
+            </div>
+          ) : null}
+          {focused === undefined || waiting ? (
+            <div className="p-2">
+              <Note>Loading steps…</Note>
+            </div>
+          ) : (
+            <TurnBody
+              key={focused.id}
+              turn={extendTo(focused, now)}
+              now={focused.running ? now : 0}
+              openFile={openFile}
+              threadId={threadId}
+              turns={turns}
+            />
+          )}
+        </div>
+      </div>
     );
+  }
 
   return (
     <div className="flex h-full flex-col gap-2 overflow-y-auto p-3">{body}</div>
