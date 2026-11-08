@@ -208,7 +208,7 @@ export function MemorySection({
           open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
         )}
       >
-        <div className="min-h-0 overflow-hidden">{body}</div>
+        <div className="max-h-[40vh] min-h-0 overflow-y-auto">{body}</div>
       </div>
     </section>
   );

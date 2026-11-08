@@ -322,7 +322,7 @@ function CrewView({
         </>
       )}
       {projectName === null ? null : (
-        <div className="mt-auto">
+        <div className="sticky -bottom-3 -mx-3 -mb-3 mt-auto border-t border-border bg-sidebar px-3 py-2">
           <MemorySection
             project={projectName}
             hostId={captain.thread.host?.id ?? null}
