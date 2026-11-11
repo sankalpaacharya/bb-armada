@@ -54,7 +54,7 @@ handle its outbox line, not the chat text.
 | KIND | Handled once |
 | --- | --- |
 | `READY`, `FINDINGS` | the user has been told, from `report.md`, and the In flight line is in Done |
-| `CALL` | it has a line in Waiting on the user |
+| `CALL` | it has a line in Waiting on the user and, unless away, the user has been asked (`captain-calls.md`) |
 | `FAILED` | the user has been told, and the In flight line is marked `failed` |
 | `LESSON` | it is in `learnings.md` |
 

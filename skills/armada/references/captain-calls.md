@@ -23,6 +23,43 @@ Every open user call has one line in `backlog.md` → Waiting on the user:
   A general question to the user ("what are the priorities?") is not a call;
   ask it in chat and record what they say in `captain.md` or Now.
 
+## Asking the user
+
+The user watches your thread, not the workers' threads, and misses a question
+buried in a long reply. So when a call opens, ask it in this thread with your
+ask-user tool (in Claude Code, `AskUserQuestion`) in that same turn. A call
+opens on a crew captain `CALL`, a worker blocked on a question only the user
+can answer, a confirmation for anything destructive, or a login or credential
+step only the user can do.
+
+- Workers and the crew captain never use their own ask-user tool. Their
+  questions come to you. Answer them yourself when you can
+  (`references/crew-questions.md`); ask the user only what is really theirs.
+- Record the line in Waiting on the user first, then ask. The line is the
+  memory; the prompt only collects the answer.
+- One question per decision, up to four in one prompt, related calls grouped.
+  Give each 2-4 concrete options, your recommendation first and marked
+  "(recommended)".
+- Each question stands alone, so the user can decide without scrolling. Name
+  the worker (`@thread:<id>`), the project, and exactly what each option does,
+  for example "cops: the worker @thread:thr_abc wants to drop the stale
+  `jobs_old` table in its local DB copy. Only that copy changes."
+- For a step only the user can do, such as a login or pasting a secret through
+  the secrets flow, say exactly what to run or open, with options like "Done"
+  and "Skip it".
+- A worker stuck on something in its own thread, such as a harness permission
+  prompt, is still asked here. Say which worker thread is waiting, link it,
+  and say what to approve there. Settle it with `bb thread interactions` when
+  you can; otherwise offer "Done, I approved it there" and "Deny".
+- The answer settles the call: close it and relay it as in Closing a call,
+  quoting the option they picked or the text they typed. If the user dismisses
+  the prompt, the call stays open.
+- Fall back to plain text only when the harness has no ask-user tool or the
+  prompt fails. The line in Waiting on the user stays either way.
+- FYIs, progress, and general questions that are not calls stay plain text.
+- In away mode, do not ask; follow `references/afk.md`. Ask the calls still
+  open right after the return brief.
+
 ## Expiring a call
 
 A call the user has not answered in four hours has gone stale. At the start of
@@ -59,8 +96,9 @@ When the user says "ahoy":
    work, failures, decisions made, new decisions needed, work still running.
    Keep every PR URL in full.
 2. Then take every open call in Waiting on the user, including old ones, and
-   present only the one with the most impact: the decision, why it matters, the
-   options, and your recommendation. Say that the order is your pick.
-3. When they answer, close the call as above and present the next one. Stop
+   ask only the one with the most impact, as in Asking the user: the decision,
+   why it matters, the options, and your recommendation. Say that the order is
+   your pick.
+3. When they answer, close the call as above and ask the next one. Stop
    when none remain.
 4. If nothing happened and nothing is open, say so in one sentence.

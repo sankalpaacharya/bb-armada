@@ -54,7 +54,8 @@ each blocker. Main also messages you. On every wake:
    its brief, unless step 2 already did.
 4. **Worker question, approval, failure, or stall**: follow `oversight.md`.
    Answer what you can and log each answer in `tasks/<slug>/steers.md`. You never
-   ask the user anything directly.
+   ask the user anything directly and never use your ask-user tool; a `CALL`
+   reaches the user as a prompt in main's thread.
 5. **Worker says it is done**: check it before you believe it. Read the diff in
    its worktree and its verification output, and compare them with done in the
    brief. Send back anything missing. When it holds up, write

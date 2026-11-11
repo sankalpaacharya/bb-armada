@@ -65,18 +65,21 @@ question. They do not give anyone authority to widen the task.
 When you escalate, leave the worker waiting and put the call in the escalation
 form below. As the crew captain, write it to `tasks/<slug>/steers.md` and report
 it to main as `CALL`. As main with no
-crew captain, add it to `backlog.md` → Waiting on the user (see `captain-calls.md`)
-and ask the user. Once the user answers, send the worker their exact words.
+crew captain, add it to `backlog.md` → Waiting on the user and ask the user with
+your ask-user tool (`captain-calls.md`, Asking the user). Once the user answers,
+send the worker their exact words.
 
 ### Escalation form
 
 One concise message that stands alone:
 
-1. What was originally asked.
-2. What the worker wants to add or decide.
-3. The smallest option that stays inside the original ask.
-4. What happens if the user accepts, and what happens if they decline.
-5. Your recommendation and why.
+1. Which worker thread is waiting (`@thread:<id>`), and on what: its
+   question, or an approval in its own thread.
+2. What was originally asked.
+3. What the worker wants to add or decide.
+4. The smallest option that stays inside the original ask.
+5. What happens if the user accepts, and what happens if they decline.
+6. Your recommendation and why.
 
 ## Stuck workers
 

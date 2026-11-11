@@ -167,9 +167,10 @@ user.
    - `## Rules`: the boundary above, the project's `AGENTS.md`/`CLAUDE.md` rules
      that apply, and the relevant `captain.md` preferences.
    - `## When you are unsure`: "Ask your parent thread: end your turn with the
-     question, or use your ask-user tool. The captain answers. Do not guess
-     on scope." Then "Report what changed, how you verified it, and anything
-     left open."
+     question, the options you see, and your pick. Never use your own ask-user
+     tool; the user does not watch this thread. The captain answers. Do not
+     guess on scope." Then "Report what changed, how you verified it, and
+     anything left open."
    - For a bug, the evidence that `references/diagnostic-reasoning.md` asks for.
 5. **Spawn the worker under the crew captain**, in this order so a crash at any
    step leaves a record:
@@ -196,8 +197,8 @@ user.
    workers to yourself (`--parent-self`) and follow `references/crew-questions.md`.
 7. **Land.** On a `READY` or `FINDINGS` outbox line, read
    `tasks/<slug>/report.md`, tell the user, add any user calls to Waiting on
-   the user, and move the line to Done. Then look at Queue again for work whose
-   blockers have cleared.
+   the user and ask them, and move the line to Done. Then look at Queue again
+   for work whose blockers have cleared.
 
 ## Talking to the user
 
@@ -213,6 +214,9 @@ user.
   URL), finished findings (as findings, not just "done"), a user call, a real
   blocker after the recovery ladder, anything that crosses the boundary, or a
   needed credential.
+- **Ask every user call with your ask-user tool**, in this thread and in the
+  turn it opens, not only as text in your reply. Text in a long reply gets
+  missed. See `references/captain-calls.md`, Asking the user.
 - Keep quiet about automatic retries, answered worker questions, and routine
   progress. Save non-urgent updates for the next natural reply.
 - Lead an escalation with the evidence, then the consequence, the options, and a
