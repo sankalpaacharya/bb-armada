@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  expireNeedsYou,
   homeFolder,
   memoryTree,
   supervisorIdOf,
-  waitingOnUser,
   type HomeFile,
   type MemoryNode,
 } from "../lib/captain-home";
@@ -43,55 +41,6 @@ describe("a backlog's supervisor", () => {
     ).toBeNull();
     expect(supervisorIdOf("See Supervisor: thr_x in chat")).toBeNull();
     expect(supervisorIdOf("")).toBeNull();
-  });
-});
-
-describe("a backlog's decisions waiting on the user", () => {
-  const backlog = (waiting: string, heading = "Waiting on the user") =>
-    [
-      "# Backlog: cops",
-      "",
-      "Supervisor: thr_sup1",
-      "",
-      "## Now",
-      "- fix-login: in flight",
-      "",
-      `## ${heading}`,
-      waiting,
-      "",
-      "## In flight",
-      "- ship-docs: thr_w1",
-    ].join("\n");
-
-  it("lists each top-level bullet's text, without the dash", () => {
-    expect(
-      waitingOnUser(
-        backlog(
-          [
-            "- fix-login: keep the old route? — options: keep / drop — recommend drop — gates fix-login (since 2026-11-01)",
-            "  - context: the mobile app still calls it",
-            "* pricing: which tier is default?",
-          ].join("\n"),
-        ),
-      ),
-    ).toEqual([
-      "fix-login: keep the old route? — options: keep / drop — recommend drop — gates fix-login (since 2026-11-01)",
-      "pricing: which tier is default?",
-    ]);
-  });
-
-  it("reads the older Waiting on captain heading", () => {
-    expect(
-      waitingOnUser(backlog("- deploy: today or Monday?", "Waiting on captain")),
-    ).toEqual(["deploy: today or Monday?"]);
-  });
-
-  it("is empty for a placeholder, an empty section, or no section", () => {
-    expect(waitingOnUser(backlog("- (none)"))).toEqual([]);
-    expect(waitingOnUser(backlog("- (none yet)\n-"))).toEqual([]);
-    expect(waitingOnUser(backlog(""))).toEqual([]);
-    expect(waitingOnUser("# Backlog\n\n## Now\n- a: b\n")).toEqual([]);
-    expect(waitingOnUser("")).toEqual([]);
   });
 });
 
@@ -140,28 +89,5 @@ describe("a home's memory tree", () => {
 
   it("leaves out files a home does not have", () => {
     expect(shape(memoryTree([file("backlog.md")]))).toEqual(["backlog.md"]);
-  });
-});
-
-describe("how long a decision shows", () => {
-  const FOUR_HOURS = 4 * 60 * 60 * 1000;
-
-  it("starts a new decision's clock the first time it is read", () => {
-    expect(expireNeedsYou(["a"], {}, 1_000)).toEqual({
-      fresh: ["a"],
-      seen: { a: 1_000 },
-    });
-  });
-
-  it("hides a decision after four hours, and keeps its clock", () => {
-    const seen = { old: 0, young: 3 * 60 * 60 * 1000 };
-    expect(expireNeedsYou(["old", "young"], seen, FOUR_HOURS)).toEqual({
-      fresh: ["young"],
-      seen,
-    });
-  });
-
-  it("forgets a decision that left the backlog", () => {
-    expect(expireNeedsYou(["b"], { a: 0, b: 5 }, 10).seen).toEqual({ b: 5 });
   });
 });

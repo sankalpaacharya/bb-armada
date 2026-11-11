@@ -11,7 +11,6 @@ import {
   parseStoredCaptain,
   type CaptainRecord,
 } from "./lib/captains";
-import { expireNeedsYou, needsYouSeenSchema } from "./lib/captain-home";
 import { createHomeReader, supervisorIdsOf } from "./lib/home-reader";
 import { listRecords, queueByKey } from "./lib/kv-records";
 import {
@@ -104,7 +103,7 @@ export default async function plugin(bb: BbPluginApi) {
   /**
    * Every auto-settle pass, the first one at start included, reads the
    * backlogs afresh and refreshes the homes reads when they changed, so a new
-   * supervisor or decision reaches the sidebar within one schedule.
+   * supervisor reaches the sidebar within one schedule.
    */
   let backlogsSeen: string | null = null;
   const readSupervisors = async (): Promise<ReadonlySet<string>> => {
@@ -221,23 +220,7 @@ export default async function plugin(bb: BbPluginApi) {
 
     parks_evaluate: async () => ({ changed: await evaluate() }),
 
-    captain_home: async ({ project }) => {
-      const home = await homes.home(project);
-      if (home.status !== "ready") return home;
-      return queue(`needs-you:${project}`, async () => {
-        const key = `needs-you-seen:${project}`;
-        const stored = needsYouSeenSchema.safeParse(await kv.get<unknown>(key));
-        const before = stored.success ? stored.data : {};
-        const { fresh, seen } = expireNeedsYou(
-          home.needsYou,
-          before,
-          Date.now(),
-        );
-        if (JSON.stringify(seen) !== JSON.stringify(before))
-          await kv.set(key, seen);
-        return { ...home, needsYou: fresh };
-      });
-    },
+    captain_home: ({ project }) => homes.home(project),
 
     captain_supervisors: async () => supervisorIdsOf(await homes.backlogs()),
 

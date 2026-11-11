@@ -6,7 +6,6 @@ import {
   homeFilePathSchema,
   homeFolder,
   supervisorIdOf,
-  waitingOnUser,
   type CaptainHome,
   type HomeFile,
 } from "./captain-home";
@@ -21,7 +20,6 @@ const BACKLOG = /^[^/]+\/backlog\.md$/;
 export type Backlog = {
   home: string;
   supervisorId: string | null;
-  needsYou: string[];
 };
 
 export const supervisorIdsOf = (backlogs: readonly Backlog[]): string[] =>
@@ -74,7 +72,6 @@ export function createHomeReader(bb: BbPluginApi) {
         }),
     );
     const found = reads.flat();
-    const backlog = found.find(({ relative }) => relative === "backlog.md");
     return {
       status: "ready",
       folder,
@@ -86,8 +83,6 @@ export function createHomeReader(bb: BbPluginApi) {
           modifiedAt: file.modifiedAtMs ?? null,
         }),
       ),
-      needsYou:
-        backlog === undefined ? [] : waitingOnUser(textOf(backlog.file)),
     };
   };
 
@@ -108,7 +103,6 @@ export function createHomeReader(bb: BbPluginApi) {
           return {
             home: path.dirname(entry.path),
             supervisorId: supervisorIdOf(text),
-            needsYou: waitingOnUser(text),
           };
         }),
     );

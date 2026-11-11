@@ -41,7 +41,6 @@ The install includes the `armada` skill that captains run on.
 - Inactive, Snoozed and Settled shelves that fill and empty on their own
 - A **Crew** tab in the side panel with the threads a captain started and its
   memory files
-- **Needs you** at the top of Crew, with the decisions a captain is waiting on you for
 - **Add to captain** in a thread's menu, to hand the thread to a captain of its project
 
 Start a captain with the **+** next to Captains, or right-click any thread and

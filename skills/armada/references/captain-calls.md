@@ -22,8 +22,6 @@ Every open user call has one line in `backlog.md` → Waiting on the user:
 - Only a real decision gets a line: a choice between options that gates work.
   A general question to the user ("what are the priorities?") is not a call;
   ask it in chat and record what they say in `captain.md` or Now.
-- The Armada Crew tab shows lines under Waiting on the user as **Needs you**
-  for four hours, then hides them. Keep the section exact.
 
 ## Expiring a call
 

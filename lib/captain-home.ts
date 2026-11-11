@@ -14,50 +14,6 @@ export function supervisorIdOf(backlog: string): string | null {
   return SUPERVISOR_LINE.exec(backlog)?.[1] ?? null;
 }
 
-/** Older homes call the section "Waiting on captain". */
-const WAITING_HEADING = /^##\s+Waiting on (?:the user|captain)\s*$/i;
-const HEADING = /^#{1,6}\s/;
-const BULLET = /^[-*]\s+(.*\S)\s*$/;
-const PLACEHOLDER = /^\(.*\)$/;
-
-/** The decisions under a backlog's Waiting on the user, one per top-level bullet. */
-export function waitingOnUser(backlog: string): string[] {
-  const lines = backlog.split(/\r?\n/);
-  const start = lines.findIndex((line) => WAITING_HEADING.test(line));
-  if (start === -1) return [];
-  const items: string[] = [];
-  for (const line of lines.slice(start + 1)) {
-    if (HEADING.test(line)) break;
-    const text = BULLET.exec(line)?.[1];
-    if (text !== undefined && !PLACEHOLDER.test(text)) items.push(text);
-  }
-  return items;
-}
-
-/** A decision left unanswered this long stops showing as Needs you. */
-export const NEEDS_YOU_TTL_MS = 4 * 60 * 60 * 1000;
-
-export const needsYouSeenSchema = z.record(z.string(), z.number());
-
-/**
- * The decisions still within their time, and when each was first seen. A
- * backlog line carries no reliable time of its own, so the first read starts
- * its clock; a line that leaves the backlog is forgotten.
- */
-export function expireNeedsYou(
-  items: readonly string[],
-  seen: Readonly<Record<string, number>>,
-  now: number,
-): { fresh: string[]; seen: Record<string, number> } {
-  const next = Object.fromEntries(
-    items.map((item) => [item, seen[item] ?? now]),
-  );
-  return {
-    fresh: items.filter((item) => now - next[item]! < NEEDS_YOU_TTL_MS),
-    seen: next,
-  };
-}
-
 /**
  * A markdown file at most three folders deep, named relative to its home. A
  * segment cannot start with a dot, which rules out `..` and hidden files.
@@ -85,8 +41,6 @@ export const captainHomeSchema = z.discriminatedUnion("status", [
     folder: z.string(),
     root: z.string(),
     files: z.array(homeFileSchema),
-    /** The backlog's open decisions, from {@link waitingOnUser}. */
-    needsYou: z.array(z.string()),
   }),
 ]);
 

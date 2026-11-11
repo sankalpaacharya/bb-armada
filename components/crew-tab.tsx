@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ThreadChat,
   ThreadTitle,
   experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
-  experimental_useRpcQuery,
   useBbNavigate,
   type ExperimentalThreadActionTabProps,
 } from "@get-bb/plugin-sdk/app";
@@ -16,7 +15,6 @@ import { useStoredState } from "@/hooks/use-stored-state";
 import { toActionTarget } from "@/lib/action-target";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
 import type { CaptainEntry, ThreadEntry } from "@/lib/model";
-import { rpcContract } from "@/lib/rpc";
 import { parseBooleanMap } from "@/lib/storage";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -117,53 +115,6 @@ function FoldGroup({
       />
       {open ? <ul className="m-0 flex flex-col gap-px p-0">{children}</ul> : null}
     </section>
-  );
-}
-
-/** What the captain's backlog keeps waiting on the user, answered in its thread. */
-/** How often, at most, the decisions are read again while the captain keeps acting. */
-const NEEDS_YOU_REFRESH_MS = 30_000;
-
-/** Read again when the captain acts, since that is when it closes or opens a decision. */
-function NeedsYou({
-  project,
-  captainActivityAt,
-  onOpenCaptain,
-}: {
-  project: string;
-  captainActivityAt: number;
-  onOpenCaptain: () => void;
-}) {
-  const { data, refetch } = experimental_useRpcQuery({
-    contract: rpcContract,
-    method: "captain_home",
-    input: { project },
-  });
-  const activityWindow = Math.floor(captainActivityAt / NEEDS_YOU_REFRESH_MS);
-  useEffect(() => {
-    void refetch();
-  }, [activityWindow, refetch]);
-  const items = data?.status === "ready" ? data.needsYou : [];
-  return (
-    <Group title="Needs you" count={items.length}>
-      {items.map((item, index) => (
-        <li key={`${index}:${item}`} className="list-none">
-          <button
-            type="button"
-            title={item}
-            onClick={onOpenCaptain}
-            className={cn(PANEL_ROW, "items-start gap-2 px-2 py-1.5")}
-          >
-            <span className="grid h-5 w-4 shrink-0 place-items-center">
-              <StatusGlyph status="needs-you" />
-            </span>
-            <span className="line-clamp-2 min-w-0 flex-1 text-sm text-foreground/85">
-              {item}
-            </span>
-          </button>
-        </li>
-      ))}
-    </Group>
   );
 }
 
@@ -336,13 +287,6 @@ function CrewView({
           </button>
         )}
       </header>
-      {projectName === null ? null : (
-        <NeedsYou
-          project={projectName}
-          captainActivityAt={captain.thread.updatedAt}
-          onOpenCaptain={onOpenCaptain}
-        />
-      )}
       {workers === 0 ? (
         <Note className="px-2">
           No workers yet. Ask the captain for something and its workers show up

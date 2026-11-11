@@ -791,7 +791,7 @@ describe("auto-settle", () => {
     expect(await parks()).toEqual([]);
   });
 
-  it("refreshes the homes reads at start, then on the schedule only when a supervisor or a decision changed", async () => {
+  it("refreshes the homes reads at start, then on the schedule only when a supervisor changed", async () => {
     const { harness, setHomes } = await loadAuto({
       homes: { "cops/backlog.md": "Supervisor: (none yet)\n" },
     });
@@ -814,12 +814,6 @@ describe("auto-settle", () => {
     });
     await harness.runSchedule("auto-settle");
     expect(homesRefreshes()).toBe(2);
-    setHomes({
-      "cops/backlog.md":
-        "Supervisor: thr_new\n\n## Waiting on the user\n- deploy: today?\n",
-    });
-    await harness.runSchedule("auto-settle");
-    expect(homesRefreshes()).toBe(3);
   });
 
   it("holds pinned, waiting and queued cards, and skips hidden and archived threads", async () => {
@@ -968,26 +962,13 @@ describe("captain homes", () => {
           modifiedAt: 1_000,
         },
       ],
-      needsYou: [
-        "deploy: today or Monday? — recommend Monday (since 2026-11-01)",
-      ],
     });
     expect(
       await harness.callRpc("captain_home", { project: "My App" }),
     ).toMatchObject({
       status: "ready",
       folder: "~/.bb/captains/my-app",
-      needsYou: [],
     });
-  });
-
-  it("has nothing waiting on the user when a home has no backlog", async () => {
-    const { harness } = await load({
-      homes: { "cops/captain.md": "# Captain\n" },
-    });
-    expect(
-      await harness.callRpc("captain_home", { project: "cops" }),
-    ).toMatchObject({ status: "ready", needsYou: [] });
   });
 
   it("calls a home with no folder missing, not an error", async () => {
