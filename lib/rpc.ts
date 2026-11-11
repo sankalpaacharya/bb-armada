@@ -2,6 +2,7 @@ import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 import { captainHomeSchema } from "./captain-home";
+import { INSTRUCTIONS_MAX } from "./captain-instructions";
 import { avatarSchema, captainRecordSchema, idSchema } from "./captains";
 import { parkRecordSchema } from "./lifecycle";
 
@@ -19,6 +20,8 @@ const project = z.string().min(1).max(200);
  * client, so the optimistic prediction and the stored record agree.
  */
 const time = z.number().int().positive();
+/** What the user wants a captain to be; blank means none. */
+const instructions = z.string().max(INSTRUCTIONS_MAX);
 
 /**
  * A create spawns the thread first, so it can end with a thread that is
@@ -48,6 +51,8 @@ export const rpcContract = defineRpcContract({
       projectName: z.string().min(1).max(200),
       name: z.string().trim().min(1).max(80),
       avatar,
+      /** Written to the captain's home before its thread starts. */
+      instructions: instructions.optional(),
     }),
     output: createdSchema,
   },
@@ -91,6 +96,24 @@ export const rpcContract = defineRpcContract({
     input: z.strictObject({ project }),
     output: captainHomeSchema,
     tags: () => [HOMES_TAG],
+  },
+  /** The user's instructions in a project's `captain.md`, "" when none. */
+  captain_instructions: {
+    input: z.strictObject({ project }),
+    output: z.string(),
+    tags: () => [HOMES_TAG],
+  },
+  /**
+   * Replaces the instructions, or removes them when blank. With `threadId`,
+   * that captain is then told to re-read them; `told` says whether it was.
+   */
+  captain_instructions_save: {
+    input: z.strictObject({
+      project,
+      instructions,
+      threadId: threadId.optional(),
+    }),
+    output: z.object({ told: z.boolean() }),
   },
   /** Every captain home's supervisor thread. */
   captain_supervisors: {

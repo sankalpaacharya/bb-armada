@@ -48,7 +48,7 @@ colour and mark.
 | Method | Input | Output |
 | --- | --- | --- |
 | `captains_list` | none | captain records |
-| `captains_create` | `projectId`, `projectName`, `name`, `avatar` | the record, or the thread if recording it failed |
+| `captains_create` | `projectId`, `projectName`, `name`, `avatar`, optional `instructions` | the record, or the thread if recording it failed |
 | `captains_adopt` | `threadId`, `avatar`, `createdAt` | captain record |
 | `captains_update` | `threadId`, `avatar` | captain record |
 | `captains_remove` | `threadId` | none |
@@ -59,8 +59,18 @@ colour and mark.
 | `parks_keep` | `threadId`, `at` | park record |
 | `parks_evaluate` | none | the threads auto-settle just settled |
 | `captain_home` | `project` | the memory folder's file list |
+| `captain_instructions` | `project` | the user's instructions in its `captain.md`, or `""` |
+| `captain_instructions_save` | `project`, `instructions`, optional `threadId` | whether the captain was told |
 | `captain_supervisors` | none | every crew captain's thread id |
 | `project_logos` | none | a logo for each project that has one |
+
+The dialog's **Instructions** live in the home's `captain.md` under
+`## Instructions from the user`, one quoted line each, so a line of the user's
+cannot end the section. A save replaces only that section, a blank one removes
+it, and the write is refused if the captain changed the file meanwhile
+(`lib/captain-instructions.ts`, `lib/instructions-file.ts`). A create writes
+them before it starts the thread, and its first message points the captain at
+them. Saving them from **Edit captain** also tells the captain to re-read them.
 
 `captains_create` starts the thread first and records it second, retrying
 after 100 ms and 400 ms. If the record still fails, the dialog switches to

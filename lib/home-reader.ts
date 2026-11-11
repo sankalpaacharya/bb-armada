@@ -13,7 +13,7 @@ import { captainSlug } from "./captain-text";
 
 type ReadFile = Awaited<ReturnType<BbPluginApi["sdk"]["files"]["read"]>>;
 
-const HOMES_ROOT = path.join(os.homedir(), ".bb", "captains");
+export const HOMES_ROOT = path.join(os.homedir(), ".bb", "captains");
 const BACKLOG = /^[^/]+\/backlog\.md$/;
 
 /** What one home's backlog tells the sidebar. */
@@ -31,7 +31,7 @@ export const supervisorIdsOf = (backlogs: readonly Backlog[]): string[] =>
     ),
   ].sort();
 
-const textOf = (file: ReadFile): string =>
+export const textOf = (file: ReadFile): string =>
   file.contentEncoding === "base64"
     ? Buffer.from(file.content, "base64").toString("utf8")
     : file.content;

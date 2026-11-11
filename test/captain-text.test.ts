@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { captainInput, captainSlug, captainTitle } from "../lib/captain-text";
+import {
+  captainInput,
+  captainSlug,
+  captainTitle,
+  instructionsChangedInput,
+} from "../lib/captain-text";
 
 describe("captain text", () => {
   it("names the thread by its project alone", () => {
@@ -31,5 +36,27 @@ describe("captain text", () => {
         }),
       },
     ]);
+  });
+});
+
+describe("a new captain's instructions", () => {
+  it("points the captain at its instructions in captain.md only when the user gave some", () => {
+    const [plain] = captainInput("My App");
+    expect(plain.text).not.toContain("Instructions from the user");
+    const [instructed] = captainInput("My App", { hasInstructions: true });
+    expect(instructed.text).toContain(
+      'captain.md under "## Instructions from the user"',
+    );
+    expect(instructed.text).toMatch(/follow it, starting with your hello/);
+    expect(instructed.text.indexOf("Instructions from the user")).toBeLessThan(
+      instructed.text.indexOf("say hello in three lines"),
+    );
+  });
+
+  it("tells a running captain to re-read its changed instructions", () => {
+    const [part] = instructionsChangedInput();
+    expect(part.text).toContain("## Instructions from the user");
+    expect(part.text).toMatch(/Re-read captain\.md/);
+    expect(part.mentions).toEqual([]);
   });
 });

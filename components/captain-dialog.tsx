@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import {
   experimental_useRpcMutation,
+  experimental_useRpcQuery,
   useBbNavigate,
   useSdk,
   type PluginSidebarProject,
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { randomAvatar } from "@/lib/avatar";
+import { INSTRUCTIONS_MAX } from "@/lib/captain-instructions";
 import { captainTitle } from "@/lib/captain-text";
 import type { Avatar, CaptainRecord } from "@/lib/captains";
 import { rpcContract } from "@/lib/rpc";
@@ -33,6 +35,8 @@ export type CaptainDialogState =
   | { kind: "edit"; thread: PluginSidebarThread; record: CaptainRecord };
 
 const NAME_MAX = 80;
+/** The counter shows once this few characters are left. */
+const INSTRUCTIONS_WARN = 300;
 
 /** The open project unless it already has a captain, else the first project without one. */
 export function startingProject(
@@ -89,7 +93,8 @@ const COPY = {
   edit: {
     title: "Edit captain",
     action: "Save changes",
-    description: "Rename this captain or change how it looks in the sidebar.",
+    description:
+      "Rename this captain, change how it looks in the sidebar, or change how it works.",
   },
 } as const;
 
@@ -141,9 +146,14 @@ export function CaptainDialog({
         ),
       ),
   });
+  const saveInstructions = experimental_useRpcMutation({
+    contract: rpcContract,
+    method: "captain_instructions_save",
+  });
   const navigate = useBbNavigate();
   const sdk = useSdk();
   const nameId = useId();
+  const instructionsId = useId();
   const [avatar, setAvatar] = useState<Avatar>(() =>
     state.kind === "edit" ? state.record.avatar : randomAvatar(),
   );
@@ -151,6 +161,9 @@ export function CaptainDialog({
     startingProject(projects, activeProjectId, captained),
   );
   const [typedName, setTypedName] = useState<string | null>(null);
+  const [typedInstructions, setTypedInstructions] = useState<string | null>(
+    null,
+  );
   const [pending, setPending] = useState(false);
   /** The thread a create spawned but could not record; a retry records it. */
   const [spawned, setSpawned] = useState<string | null>(null);
@@ -167,15 +180,34 @@ export function CaptainDialog({
   const renamed = currentTitle !== null && trimmedName !== currentTitle;
   const avatarChanged =
     state.kind === "edit" && avatar.seed !== state.record.avatar.seed;
-  const canSubmit =
-    trimmedName !== "" &&
-    (state.kind === "create"
-      ? project !== undefined
-      : state.kind === "adopt" || renamed || avatarChanged);
   const editedProject =
     state.kind === "edit"
       ? projects.find((candidate) => candidate.id === state.thread.projectId)
       : undefined;
+  const saved = experimental_useRpcQuery({
+    contract: rpcContract,
+    method: "captain_instructions",
+    input: { project: editedProject?.name ?? "" },
+    enabled: editedProject !== undefined,
+  });
+  /** Instructions are asked for on a new captain and changed on an edit, never on an adopt or a retry. */
+  const asksInstructions =
+    state.kind === "create" ? spawned === null : editedProject !== undefined;
+  const loadingInstructions = state.kind === "edit" && saved.data === undefined;
+  const instructions = typedInstructions ?? saved.data ?? "";
+  const trimmedInstructions = instructions.trim();
+  const instructionsChanged =
+    state.kind === "edit" &&
+    saved.data !== undefined &&
+    trimmedInstructions !== saved.data.trim();
+  const canSubmit =
+    trimmedName !== "" &&
+    (state.kind === "create"
+      ? project !== undefined
+      : state.kind === "adopt" ||
+        renamed ||
+        avatarChanged ||
+        instructionsChanged);
 
   /** The recorded captain's thread, or null when it started but is not recorded yet. */
   const recordCreated = async (
@@ -194,6 +226,9 @@ export function CaptainDialog({
       projectName: project.name,
       name: trimmedName,
       avatar,
+      ...(trimmedInstructions === ""
+        ? {}
+        : { instructions: trimmedInstructions }),
     });
     if (created.outcome === "recorded") return created.record.threadId;
     setSpawned(created.threadId);
@@ -215,7 +250,7 @@ export function CaptainDialog({
         onNavigate();
       } else if (state.kind !== "create") {
         const threadId = state.thread.id;
-        await Promise.all([
+        const [, , saving] = await Promise.all([
           renamed ? sdk.threads.update({ threadId, title: trimmedName }) : null,
           state.kind === "adopt"
             ? adopt.mutate({
@@ -226,7 +261,19 @@ export function CaptainDialog({
             : avatarChanged
               ? update.mutate({ threadId, avatar })
               : null,
+          instructionsChanged && editedProject !== undefined
+            ? saveInstructions.mutate({
+                project: editedProject.name,
+                instructions: trimmedInstructions,
+                threadId,
+              })
+            : null,
         ]);
+        if (saving?.told === false)
+          toastFailure(
+            "Saved the instructions but could not tell the captain",
+            "It reads them again at the start of its next turn.",
+          );
       }
       onClose();
     } catch (cause) {
@@ -334,6 +381,37 @@ export function CaptainDialog({
                 ) : null}
               </span>
             </Dropdown>
+          </Field>
+        ) : null}
+        {asksInstructions ? (
+          <Field label="Instructions" htmlFor={instructionsId}>
+            <textarea
+              id={instructionsId}
+              value={instructions}
+              maxLength={INSTRUCTIONS_MAX}
+              rows={4}
+              disabled={loadingInstructions}
+              placeholder={
+                loadingInstructions
+                  ? saved.error === null
+                    ? "Loading…"
+                    : "Could not load the instructions"
+                  : "How should this captain work? e.g. Act as a senior engineer, keep replies short, always ask before touching prod."
+              }
+              onChange={(event) => setTypedInstructions(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  event.preventDefault();
+                  void submit();
+                }
+              }}
+              className={`max-h-48 min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground disabled:opacity-50 ${FOCUS_RING}`}
+            />
+            {instructions.length > INSTRUCTIONS_MAX - INSTRUCTIONS_WARN ? (
+              <span className="text-right text-xs text-muted-foreground tabular-nums">
+                {instructions.length} / {INSTRUCTIONS_MAX}
+              </span>
+            ) : null}
           </Field>
         ) : null}
         <DialogFooter>

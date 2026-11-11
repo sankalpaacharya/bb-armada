@@ -134,6 +134,7 @@ async function render(
         parks_list: () => options.parks ?? [],
         parks_evaluate: () => ({ changed: [] }),
         captain_supervisors: () => [],
+        captain_instructions: () => "",
         project_logos: () => ({}),
         ...options.rpc,
       } as never,
@@ -707,6 +708,53 @@ describe("creating a captain", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
+  it("sends the instructions typed under Project with the new captain, and counts down near the limit", async () => {
+    const { view } = await render({
+      rpc: {
+        captains_create: () => ({
+          outcome: "recorded",
+          record: registry("thr_new")[0],
+        }),
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    const field = dialog.getByRole("textbox", {
+      name: "Instructions",
+    }) as HTMLTextAreaElement;
+    expect(field.value).toBe("");
+    expect(field.placeholder).toMatch(/^How should this captain work\?/);
+    expect(field.maxLength).toBe(2000);
+    expect(
+      projectTrigger(dialog).compareDocumentPosition(field) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    expect(dialog.queryByText(/\/ 2000$/)).toBeNull();
+    fireEvent.change(field, { target: { value: "x".repeat(1800) } });
+    expect(dialog.getByText("1800 / 2000")).toBeTruthy();
+    fireEvent.change(field, {
+      target: { value: "  Act as a senior engineer.\nKeep replies short. " },
+    });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(
+      view.inspection.rpcCalls.some(
+        (call) => call.method === "captains_create",
+      ),
+    ).toBe(false);
+    fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find(
+          (call) => call.method === "captains_create",
+        )?.input,
+      ).toMatchObject({
+        projectName: "Beta",
+        instructions: "Act as a senior engineer.\nKeep replies short.",
+      }),
+    );
+  });
+
   it("has no avatar grid, only a button that rolls a new avatar", async () => {
     await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
@@ -786,6 +834,7 @@ describe("creating a captain", () => {
     const retry = await dialog.findByRole("button", { name: "Record captain" });
     expect(view.inspection.navigateCalls).toEqual([]);
     expect(dialog.queryByRole("button", { name: /^Project: / })).toBeNull();
+    expect(dialog.queryByRole("textbox", { name: "Instructions" })).toBeNull();
     fireEvent.click(retry);
     await waitFor(() =>
       expect(view.inspection.navigateCalls).toEqual([
@@ -852,6 +901,7 @@ describe("thread menu", () => {
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByText("Loose idea")).toBeTruthy();
     expect(dialog.queryByRole("button", { name: /^Project: / })).toBeNull();
+    expect(dialog.queryByRole("textbox", { name: "Instructions" })).toBeNull();
     fireEvent.click(dialog.getByRole("button", { name: "New avatar" }));
     const chosen = previewAvatar();
     fireEvent.click(dialog.getByRole("button", { name: "Make captain" }));
@@ -1016,6 +1066,79 @@ describe("thread menu", () => {
         (call) => call.method === "captains_update",
       ),
     ).toBe(false);
+  });
+
+  it("shows the captain's instructions on edit and saves a change, telling the captain", async () => {
+    const { view } = await render({
+      rpc: {
+        captain_instructions: (input: never) =>
+          (input as { project: string }).project === "Alpha" ? "Be brief." : "",
+        captain_instructions_save: () => ({ told: true }),
+      },
+    });
+    await waitFor(() => expect(anchorOf(view.container, "cap")).not.toBeNull());
+    rightClick(anchorOf(view.container, "cap")!);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Edit captain…" }),
+    );
+    const dialog = within(await screen.findByRole("dialog"));
+    const field = dialog.getByRole("textbox", {
+      name: "Instructions",
+    }) as HTMLTextAreaElement;
+    await waitFor(() => expect(field.value).toBe("Be brief."));
+    const save = dialog.getByRole("button", {
+      name: "Save changes",
+    }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.change(field, { target: { value: " Be brief. " } });
+    expect(save.disabled).toBe(true);
+    fireEvent.change(field, { target: { value: "" } });
+    expect(save.disabled).toBe(false);
+    fireEvent.change(field, { target: { value: "Ship daily." } });
+    fireEvent.keyDown(field, { key: "Enter", metaKey: true });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      view.inspection.rpcCalls.find(
+        (call) => call.method === "captain_instructions_save",
+      )?.input,
+    ).toEqual({
+      project: "Alpha",
+      instructions: "Ship daily.",
+      threadId: "cap",
+    });
+    expect(
+      view.inspection.rpcCalls.some(
+        (call) => call.method === "captains_update",
+      ),
+    ).toBe(false);
+    expect(view.inspection.sdkCalls).toEqual([]);
+  });
+
+  it("removes a captain's instructions when the field is cleared", async () => {
+    const { view } = await render({
+      rpc: {
+        captain_instructions: () => "Be brief.",
+        captain_instructions_save: () => ({ told: true }),
+      },
+    });
+    await waitFor(() => expect(anchorOf(view.container, "cap")).not.toBeNull());
+    rightClick(anchorOf(view.container, "cap")!);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Edit captain…" }),
+    );
+    const dialog = within(await screen.findByRole("dialog"));
+    const field = dialog.getByRole("textbox", { name: "Instructions" });
+    await waitFor(() =>
+      expect((field as HTMLTextAreaElement).value).toBe("Be brief."),
+    );
+    fireEvent.change(field, { target: { value: "  " } });
+    fireEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      view.inspection.rpcCalls.find(
+        (call) => call.method === "captain_instructions_save",
+      )?.input,
+    ).toEqual({ project: "Alpha", instructions: "", threadId: "cap" });
   });
 
   const crewThreads = [

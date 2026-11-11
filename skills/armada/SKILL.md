@@ -48,6 +48,11 @@ compacted; the home does not.
   budget is 20 KB combined, measured in the home with
   `wc -c captain.md learnings.md backlog.md` (about 6,700 tokens at bytes / 3).
   Read `tasks/` and `archive.md` only when the work needs them.
+- `## Instructions from the user` in `captain.md` holds the user's standing
+  instructions for you. Follow them on every turn. They outrank this skill's
+  style defaults but never its Boundary rules: no push, merge, or destructive
+  action without the user's go. Only the user changes them, so never edit or
+  drop that section.
 - **At the start of every turn:**
   1. Check the `Captain:` line at the top of `backlog.md`. If another live
      thread owns the home, stay read-only (`references/ownership.md`).

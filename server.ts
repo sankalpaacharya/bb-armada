@@ -2,7 +2,7 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 import { createAutoSettle } from "./lib/auto-settle";
-import { captainInput } from "./lib/captain-text";
+import { captainInput, instructionsChangedInput } from "./lib/captain-text";
 import {
   CAPTAIN_KEY_PREFIX,
   LEGACY_CAPTAINS_BACKUP_KEY,
@@ -12,6 +12,7 @@ import {
   type CaptainRecord,
 } from "./lib/captains";
 import { createHomeReader, supervisorIdsOf } from "./lib/home-reader";
+import { createInstructionsFile } from "./lib/instructions-file";
 import { listRecords, queueByKey } from "./lib/kv-records";
 import {
   PARK_KEY_PREFIX,
@@ -80,6 +81,7 @@ export default async function plugin(bb: BbPluginApi) {
   const queue = queueByKey();
   const settings = bb.settings.define(SETTINGS);
   const homes = createHomeReader(bb);
+  const instructionsFile = createInstructionsFile(bb);
   const logos = createLogoReader(bb, async () =>
     logoSkipProjects(await settings.get()),
   );
@@ -137,12 +139,19 @@ export default async function plugin(bb: BbPluginApi) {
       projectName,
       name,
       avatar,
+      instructions = "",
     }): Promise<Created> => {
+      const hasInstructions = instructions.trim() !== "";
+      // Written first, so the captain finds them on its first turn.
+      if (hasInstructions) {
+        await instructionsFile.write(projectName, instructions);
+        bb.rpc.experimental_invalidate([HOMES_TAG]);
+      }
       const thread = await bb.sdk.threads.spawn({
         projectId,
         environment: { type: "project-default" },
         title: name,
-        input: captainInput(projectName),
+        input: captainInput(projectName, { hasInstructions }),
       });
       const record: CaptainRecord = {
         threadId: thread.id,
@@ -221,6 +230,27 @@ export default async function plugin(bb: BbPluginApi) {
     parks_evaluate: async () => ({ changed: await evaluate() }),
 
     captain_home: ({ project }) => homes.home(project),
+
+    captain_instructions: ({ project }) => instructionsFile.read(project),
+
+    captain_instructions_save: async ({ project, instructions, threadId }) => {
+      await instructionsFile.write(project, instructions);
+      bb.rpc.experimental_invalidate([HOMES_TAG]);
+      if (threadId === undefined) return { told: false };
+      try {
+        await bb.sdk.threads.send({
+          threadId,
+          mode: "queue-if-active",
+          input: instructionsChangedInput(),
+        });
+        return { told: true };
+      } catch (cause) {
+        bb.log.warn(
+          `could not tell captain ${threadId} its instructions changed: ${messageOf(cause)}`,
+        );
+        return { told: false };
+      }
+    },
 
     captain_supervisors: async () => supervisorIdsOf(await homes.backlogs()),
 

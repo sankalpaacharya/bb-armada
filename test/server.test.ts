@@ -22,6 +22,12 @@ const HOMES = path.join(os.homedir(), ".bb", "captains");
 /** bb's host files over captain homes, keyed by their path under `~/.bb/captains`. */
 function homeFiles(homesNow: () => Record<string, string>) {
   const keyOf = (file: string) => path.relative(HOMES, file);
+  const made = new Set<string>();
+  const exists = (folder: string) =>
+    made.has(folder) ||
+    Object.keys(homesNow()).some((key) =>
+      path.join(HOMES, key).startsWith(`${folder}/`),
+    );
   return {
     listPaths: async ({
       path: folder,
@@ -53,7 +59,34 @@ function homeFiles(homesNow: () => Record<string, string>) {
         contentEncoding: "utf8",
         sizeBytes: content.length,
         modifiedAtMs: 1_000,
-        sha256: "sha",
+        sha256: `sha:${content}`,
+      };
+    },
+    mkdir: async ({ path: folder }: { path: string }) => {
+      made.add(folder);
+      return { path: folder };
+    },
+    /** Lands only in a folder that exists and over the version it read, as bb's host files do. */
+    write: async ({
+      path: file,
+      content,
+      expectedSha256,
+    }: {
+      path: string;
+      content: string;
+      expectedSha256?: string | null;
+    }) => {
+      if (!exists(path.dirname(file)))
+        throw new Error(`HTTP 404: Path does not exist: ${file}`);
+      const current = homesNow()[keyOf(file)];
+      const sha = current === undefined ? null : `sha:${current}`;
+      if (expectedSha256 !== undefined && expectedSha256 !== sha)
+        throw new Error(`${file} changed on disk`);
+      homesNow()[keyOf(file)] = content;
+      return {
+        path: file,
+        sizeBytes: content.length,
+        sha256: `sha:${content}`,
       };
     },
   };
@@ -63,16 +96,23 @@ async function load(
   options: {
     seed?: (kv: Kv) => Promise<void>;
     homes?: Record<string, string>;
+    send?: () => Promise<unknown>;
+    files?: (files: HomeFiles) => Partial<HomeFiles>;
   } = {},
 ) {
+  const homes = options.homes ?? {};
   const { bb, harness } = createFakePluginHost({
     pluginId: "armada",
     sdk: {
       threads: {
         spawn: async () => ({ id: "thr_new" }) as never,
         list: async () => [],
+        send: options.send ?? (async () => ({}) as never),
       },
-      files: homeFiles(() => options.homes ?? {}),
+      files: (() => {
+        const files = homeFiles(() => homes);
+        return { ...files, ...options.files?.(files) };
+      })(),
     },
   });
   await options.seed?.(bb.storage.kv);
@@ -98,6 +138,7 @@ async function load(
   return { bb, harness, list, ids, since };
 }
 
+type HomeFiles = ReturnType<typeof homeFiles>;
 type Kv = ReturnType<typeof createFakePluginHost>["bb"]["storage"]["kv"];
 
 const avatar = (seed: string) => ({ style: "micah", seed });
@@ -984,5 +1025,162 @@ describe("captain homes", () => {
       "thr_sup1",
       "thr_sup2",
     ]);
+  });
+});
+
+describe("captain instructions", () => {
+  const captainMd = "# Captain\n\n## Preferences\n- Small PRs.\n";
+
+  it("writes a new captain's instructions to its home before starting its thread, and points the thread at them", async () => {
+    const homes: Record<string, string> = {};
+    const { harness, since } = await load({ homes });
+    await harness.callRpc("captains_create", {
+      ...create,
+      projectName: "My App",
+      instructions: "  Act as a senior engineer.\nKeep replies short.  ",
+    });
+    expect(homes["my-app/captain.md"]).toBe(
+      [
+        "## Instructions from the user",
+        "",
+        "> Act as a senior engineer.",
+        "> Keep replies short.",
+        "",
+      ].join("\n"),
+    );
+    const order = since
+      .calls()
+      .map((call) => call.path)
+      .filter((callPath) =>
+        ["files.write", "threads.spawn"].includes(callPath),
+      );
+    expect(order).toEqual(["files.write", "threads.spawn"]);
+    const [spawn] = harness.sdk.callsTo("threads.spawn");
+    const [part] = (spawn![0] as { input: { text: string }[] }).input;
+    expect(part.text).toContain("## Instructions from the user");
+    expect(part.text).not.toContain("senior engineer");
+  });
+
+  it("leaves the home alone when a new captain has no instructions", async () => {
+    const homes: Record<string, string> = {};
+    const { harness, since } = await load({ homes });
+    await harness.callRpc("captains_create", { ...create, instructions: " " });
+    expect(homes).toEqual({});
+    expect(since.calls("files.write")).toEqual([]);
+    const [spawn] = harness.sdk.callsTo("threads.spawn");
+    const [part] = (spawn![0] as { input: { text: string }[] }).input;
+    expect(part.text).not.toContain("Instructions from the user");
+  });
+
+  it("starts no thread when the instructions cannot be written", async () => {
+    const { harness } = await load({
+      files: () => ({
+        write: async () => {
+          throw new Error("read-only disk");
+        },
+      }),
+    });
+    await expect(
+      harness.callRpc("captains_create", { ...create, instructions: "Hi" }),
+    ).rejects.toThrow("read-only disk");
+    expect(harness.sdk.callsTo("threads.spawn")).toEqual([]);
+  });
+
+  it("reads, replaces and removes the instructions, keeping what the captain wrote", async () => {
+    const homes = { "cops/captain.md": captainMd };
+    const { harness, since } = await load({ homes });
+    expect(
+      await harness.callRpc("captain_instructions", { project: "cops" }),
+    ).toBe("");
+
+    await harness.callRpc("captain_instructions_save", {
+      project: "cops",
+      instructions: "Be brief.",
+    });
+    expect(homes["cops/captain.md"]).toBe(
+      `${captainMd}\n## Instructions from the user\n\n> Be brief.\n`,
+    );
+    expect(
+      await harness.callRpc("captain_instructions", { project: "cops" }),
+    ).toBe("Be brief.");
+    expect(since.invalidations()).toContainEqual(["homes"]);
+
+    await harness.callRpc("captain_instructions_save", {
+      project: "cops",
+      instructions: "Ship daily.",
+    });
+    expect(homes["cops/captain.md"]).toBe(
+      `${captainMd}\n## Instructions from the user\n\n> Ship daily.\n`,
+    );
+
+    await harness.callRpc("captain_instructions_save", {
+      project: "cops",
+      instructions: "",
+    });
+    expect(homes["cops/captain.md"]).toBe(captainMd);
+    expect(harness.sdk.callsTo("threads.send")).toEqual([]);
+  });
+
+  it("does not write over a captain.md the captain changed since it was read", async () => {
+    const homes = { "cops/captain.md": captainMd };
+    const { harness } = await load({
+      homes,
+      files: ({ read }) => ({
+        read: async (args) => {
+          const file = await read(args);
+          homes["cops/captain.md"] = `${captainMd}- A new line.\n`;
+          return file;
+        },
+      }),
+    });
+    await expect(
+      harness.callRpc("captain_instructions_save", {
+        project: "cops",
+        instructions: "Be brief.",
+      }),
+    ).rejects.toThrow("changed on disk");
+    expect(homes["cops/captain.md"]).toBe(`${captainMd}- A new line.\n`);
+  });
+
+  it("tells an edited captain to re-read its instructions, and says when it could not", async () => {
+    const homes = { "cops/captain.md": captainMd };
+    const { harness } = await load({ homes });
+    expect(
+      await harness.callRpc("captain_instructions_save", {
+        project: "cops",
+        instructions: "Be brief.",
+        threadId: "thr_cap",
+      }),
+    ).toEqual({ told: true });
+    const [send] = harness.sdk.callsTo("threads.send");
+    expect(send![0]).toMatchObject({
+      threadId: "thr_cap",
+      mode: "queue-if-active",
+      input: [{ text: expect.stringMatching(/Re-read captain\.md/) }],
+    });
+
+    const failing = await load({
+      homes: { "cops/captain.md": captainMd },
+      send: async () => {
+        throw new Error("thread gone");
+      },
+    });
+    expect(
+      await failing.harness.callRpc("captain_instructions_save", {
+        project: "cops",
+        instructions: "Be brief.",
+        threadId: "thr_cap",
+      }),
+    ).toEqual({ told: false });
+  });
+
+  it("refuses instructions over 2,000 characters", async () => {
+    const { harness } = await load();
+    await expect(
+      harness.callRpc("captain_instructions_save", {
+        project: "cops",
+        instructions: "x".repeat(2001),
+      }),
+    ).rejects.toThrow();
   });
 });
