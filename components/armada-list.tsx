@@ -58,10 +58,12 @@ export function ArmadaList({
   useAutoSettleOnMount();
   useEffect(() => RETIRED_KEYS.forEach(removeStored), []);
   const pickable = useMemo(() => pickableProjects(projects), [projects]);
-  const captained = useMemo(
-    () => new Set(model.captains.map((captain) => captain.thread.projectId)),
-    [model.captains],
-  );
+  const captainCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const { thread } of model.captains)
+      counts.set(thread.projectId, (counts.get(thread.projectId) ?? 0) + 1);
+    return counts;
+  }, [model.captains]);
   const scope = resolveScope(storedScope, pickable);
   const loose = useMemo(
     () => ({
@@ -138,7 +140,7 @@ export function ArmadaList({
           state={dialog}
           projects={pickable}
           activeProjectId={activeProjectId}
-          captained={captained}
+          captainCounts={captainCounts}
           onClose={() => setDialog(null)}
           onNavigate={onNavigate}
         />

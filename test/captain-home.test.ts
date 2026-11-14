@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  captainIdOf,
+  captainSlug,
+  freshHome,
   homeFolder,
+  homeOf,
   memoryTree,
   supervisorIdOf,
   type HomeFile,
@@ -9,10 +13,40 @@ import {
 } from "../lib/captain-home";
 
 describe("a captain's home", () => {
-  it("is named by its project's slug", () => {
-    expect(homeFolder("Personal")).toBe("~/.bb/captains/personal");
-    expect(homeFolder("cops")).toBe("~/.bb/captains/cops");
-    expect(homeFolder("My App (v2)")).toBe("~/.bb/captains/my-app-v2");
+  it("is its own folder when it has one, and its project's otherwise", () => {
+    expect(homeOf({ home: "video-editing" }, "Personal")).toBe(
+      "video-editing",
+    );
+    expect(homeOf({}, "Personal")).toBe("personal");
+    expect(homeOf(null, "My App (v2)")).toBe("my-app-v2");
+    expect(homeFolder("video-editing")).toBe("~/.bb/captains/video-editing");
+  });
+
+  it("is new for a new captain, named after it and numbered past every home taken", () => {
+    expect(freshHome("Video editing", new Set(["personal"]))).toBe(
+      "video-editing",
+    );
+    expect(freshHome("Personal", new Set(["personal", "cops"]))).toBe(
+      "personal-2",
+    );
+    expect(
+      freshHome("Forms", new Set(["forms", "forms-2", "forms-3"])),
+    ).toBe("forms-4");
+  });
+
+  it("comes from a file-safe slug of the name", () => {
+    expect(captainSlug("My App (v2)")).toBe("my-app-v2");
+    expect(captainSlug("  Ünïcode  ")).toBe("n-code");
+    expect(captainSlug("!!!")).toBe("project");
+  });
+});
+
+describe("a backlog's captain", () => {
+  it("is the thread on its Captain line, never its Crew captain line", () => {
+    expect(captainIdOf("Captain: thr_cap\nCrew captain: thr_crew\n")).toBe(
+      "thr_cap",
+    );
+    expect(captainIdOf("# Backlog\nCrew captain: thr_crew\n")).toBeNull();
   });
 });
 

@@ -3,7 +3,12 @@ import { z } from "zod";
 
 import { captainHomeSchema } from "./captain-home";
 import { INSTRUCTIONS_MAX } from "./captain-instructions";
-import { avatarSchema, captainRecordSchema, idSchema } from "./captains";
+import {
+  avatarSchema,
+  captainRecordSchema,
+  homeSchema,
+  idSchema,
+} from "./captains";
 import { parkRecordSchema } from "./lifecycle";
 
 export const CAPTAINS_TAG = "captains";
@@ -13,8 +18,9 @@ export const LOGOS_TAG = "logos";
 
 const threadId = idSchema;
 const avatar = avatarSchema;
-/** A project by name, which names its captain's home. */
-const project = z.string().min(1).max(200);
+/** A captain by its thread, and its project's name for a captain without a home of its own. */
+const captain = { threadId, project: z.string().min(1).max(200) };
+const name = z.string().trim().min(1).max(80);
 /**
  * Park and adopt writes carry the time the user acted, stamped once by the
  * client, so the optimistic prediction and the stored record agree.
@@ -33,6 +39,8 @@ const createdSchema = z.discriminatedUnion("outcome", [
   z.object({
     outcome: z.literal("unrecorded"),
     threadId,
+    /** The home its first message named, for the retry to record. */
+    home: homeSchema,
     reason: z.string(),
   }),
 ]);
@@ -49,16 +57,26 @@ export const rpcContract = defineRpcContract({
     input: z.strictObject({
       projectId: idSchema,
       projectName: z.string().min(1).max(200),
-      name: z.string().trim().min(1).max(80),
+      name,
       avatar,
-      /** Written to the captain's home before its thread starts. */
+      /** Written to the captain's new home before its thread starts. */
       instructions: instructions.optional(),
     }),
     output: createdSchema,
   },
   captains_adopt: {
-    /** `createdAt` applies only when the thread is not a captain already. */
-    input: z.strictObject({ threadId, avatar, createdAt: z.iso.datetime() }),
+    /**
+     * `createdAt` and `name` apply only when the thread is not a captain
+     * already; `name` names its new home. `home` records the one a create
+     * already gave the thread, instead of making another.
+     */
+    input: z.strictObject({
+      threadId,
+      avatar,
+      createdAt: z.iso.datetime(),
+      name,
+      home: homeSchema.optional(),
+    }),
     output: captainRecordSchema,
   },
   captains_update: {
@@ -93,26 +111,22 @@ export const rpcContract = defineRpcContract({
   },
 
   captain_home: {
-    input: z.strictObject({ project }),
+    input: z.strictObject(captain),
     output: captainHomeSchema,
     tags: () => [HOMES_TAG],
   },
-  /** The user's instructions in a project's `captain.md`, "" when none. */
+  /** The user's instructions in a captain's `captain.md`, "" when none. */
   captain_instructions: {
-    input: z.strictObject({ project }),
+    input: z.strictObject(captain),
     output: z.string(),
     tags: () => [HOMES_TAG],
   },
   /**
-   * Replaces the instructions, or removes them when blank. With `threadId`,
-   * that captain is then told to re-read them; `told` says whether it was.
+   * Replaces the instructions, or removes them when blank, then tells the
+   * captain to re-read them; `told` says whether it was.
    */
   captain_instructions_save: {
-    input: z.strictObject({
-      project,
-      instructions,
-      threadId: threadId.optional(),
-    }),
+    input: z.strictObject({ ...captain, instructions }),
     output: z.object({ told: z.boolean() }),
   },
   /** Every captain home's supervisor thread. */

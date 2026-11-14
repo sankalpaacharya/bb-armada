@@ -52,6 +52,26 @@ describe("a thread's captain", () => {
     expect(captainIdOf(model, threads, "solo")).toBe("cap");
   });
 
+  it("is missing for a thread no captain launched when its project has several, so the Crew tab asks which", () => {
+    const shared = [
+      ...threads,
+      thread("cap2", { title: "Video editing", createdAt: NOW }),
+    ];
+    const several = buildArmada(
+      shared,
+      [project("proj_a", "Alpha")],
+      {},
+      [record("cap"), record("cap2")],
+      [],
+      new Set(),
+      NOW,
+      6 * 3_600_000,
+    );
+    expect(captainIdOf(several, shared, "solo")).toBeNull();
+    expect(captainIdOf(several, shared, "busy")).toBe("cap");
+    expect(captainIdOf(several, shared, "cap2")).toBe("cap2");
+  });
+
   it("is missing for a thread in a project with no captain, or one that is gone", () => {
     expect(captainIdOf(model, threads, "loose")).toBeNull();
     expect(captainIdOf(model, threads, "nope")).toBeNull();

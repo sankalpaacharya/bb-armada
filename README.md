@@ -53,10 +53,13 @@ right-click it for the snooze presets.
 
 ## Captains
 
-A captain keeps its memory in `~/.bb/captains/<project>/`. It saves how you
-like things done, what it learned, its to-do list, and a folder per task. Say
-"stow" to make it file everything from the conversation right away, or
-"bearings" for a status report. The Crew tab's Memory section shows those
+Each captain keeps its memory in a folder of its own, named after it:
+`~/.bb/captains/video-editing/` for a captain named "Video editing". A project
+can have several captains, say one per ongoing task on Personal, and each starts
+with an empty folder. Captains made before this keep their project's folder.
+A captain saves how you like things done, what it learned, its to-do list, and
+a folder per task. Say "stow" to make it file everything from the conversation
+right away, or "bearings" for a status report. The Crew tab's Memory section shows those
 files. [How captains and their memory work](docs/architecture.md).
 
 ## Settings

@@ -12,7 +12,7 @@ export type Crew = {
 
 /**
  * The captain a thread belongs to: the thread itself, the nearest captain
- * above it, or else the newest captain of the thread's project.
+ * above it, or else its project's captain when the project has just one.
  */
 export function captainIdOf(
   model: ArmadaModel,
@@ -30,10 +30,10 @@ export function captainIdOf(
     id = thread === undefined ? null : parentIdOf(thread);
   }
   const projectId = byId.get(threadId)?.projectId;
-  const ofProject = model.captains
-    .filter((entry) => entry.thread.projectId === projectId)
-    .sort((a, b) => b.record.createdAt.localeCompare(a.record.createdAt));
-  return ofProject[0]?.thread.id ?? null;
+  const ofProject = model.captains.filter(
+    (entry) => entry.thread.projectId === projectId,
+  );
+  return ofProject.length === 1 ? ofProject[0]!.thread.id : null;
 }
 
 /** A captain's workers, split the way the sidebar shelves them. */

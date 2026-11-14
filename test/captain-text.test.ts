@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adoptedInput,
   captainInput,
-  captainSlug,
   captainTitle,
   instructionsChangedInput,
 } from "../lib/captain-text";
@@ -12,17 +12,12 @@ describe("captain text", () => {
     expect(captainTitle("cops")).toBe("cops");
   });
 
-  it("makes a file-safe slug from the project name", () => {
-    expect(captainSlug("My App (v2)")).toBe("my-app-v2");
-    expect(captainSlug("  Ünïcode  ")).toBe("n-code");
-    expect(captainSlug("!!!")).toBe("project");
-  });
-
-  it("invokes the armada skill as a mention, names the thread the captain, and points it at its home folder", () => {
-    const [part] = captainInput("My App");
+  it("invokes the armada skill as a mention, names the thread the captain, and points it at its own home folder", () => {
+    const [part] = captainInput("My App", "video-editing");
     expect(part.text.startsWith("/armada ")).toBe(true);
     expect(part.text).toContain('the captain for the bb project "My App"');
-    expect(part.text).toContain("~/.bb/captains/my-app/");
+    expect(part.text).toContain("~/.bb/captains/video-editing/");
+    expect(part.text).not.toContain("~/.bb/captains/my-app");
     expect(part.text).not.toMatch(/first mate/i);
     expect(part.mentions).toEqual([
       {
@@ -39,11 +34,22 @@ describe("captain text", () => {
   });
 });
 
+describe("a thread made a captain", () => {
+  it("is told, through the armada skill, which home is now its own", () => {
+    const [part] = adoptedInput("forms-2");
+    expect(part.text.startsWith("/armada ")).toBe(true);
+    expect(part.text).toContain("~/.bb/captains/forms-2/");
+    expect(part.mentions).toHaveLength(1);
+  });
+});
+
 describe("a new captain's instructions", () => {
   it("points the captain at its instructions in captain.md only when the user gave some", () => {
-    const [plain] = captainInput("My App");
+    const [plain] = captainInput("My App", "my-app");
     expect(plain.text).not.toContain("Instructions from the user");
-    const [instructed] = captainInput("My App", { hasInstructions: true });
+    const [instructed] = captainInput("My App", "my-app", {
+      hasInstructions: true,
+    });
     expect(instructed.text).toContain(
       'captain.md under "## Instructions from the user"',
     );

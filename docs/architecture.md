@@ -2,11 +2,26 @@
 
 ## Captains and their memory
 
-A captain keeps its memory in `~/.bb/captains/<project>/`, following the
-armada skill. The folder holds `captain.md`, `learnings.md`, `backlog.md`,
+Each captain keeps its memory in a home of its own, `~/.bb/captains/<home>/`,
+following the armada skill. A project can have several captains, and they share
+nothing. The folder holds `captain.md`, `learnings.md`, `backlog.md`,
 `archive.md`, and a `tasks/<name>/` folder for each piece of work. The Memory
 section in Crew lists the `.md` files in that folder, up to two folders deep,
 and clicking one opens it in bb's file preview.
+
+A new captain's home is its name as a slug, so a captain named "Video editing"
+keeps `~/.bb/captains/video-editing/`. When that name is taken by any folder
+there, by another captain's home, or by the project folder of a captain from
+before, the server numbers it, `personal-2` and on, so a new captain always
+starts in an empty folder. It makes the folder, writes any instructions into
+it, then records the name as `home` on the captain (`claimHome` in
+`server.ts`). **Make captain** on an existing thread does the same and tells
+the thread where its home is, unless a home's `backlog.md` already names that
+thread on its `Captain:` line, as a removed captain's does; then it gets that
+home back. Renaming a captain keeps its home, and removing
+one leaves the folder on disk. A captain recorded before per-captain homes has
+no `home` and keeps its project's folder, `~/.bb/captains/<project>/`
+(`homeOf` in `lib/captain-home.ts`).
 
 A captain hands work to a crew captain thread, and the crew captain starts the
 workers. The first line of `backlog.md` names the crew captain
@@ -22,8 +37,8 @@ Armada ships the armada skill in `skills/armada/`, and bb loads every
 `skills/<name>/SKILL.md` in a plugin into agent threads. So installing Armada
 installs the skill, and nothing else is needed for a captain to work. A new
 captain's first message invokes the skill as an `/armada` skill mention, the
-same way bb's composer sends one, and points it at its home at
-`~/.bb/captains/<project>/` (`lib/captain-text.ts`). The skill is adapted from
+same way bb's composer sends one, and points it at its own home
+(`lib/captain-text.ts`). The skill is adapted from
 [kunchenguid/firstmate](https://github.com/kunchenguid/firstmate).
 
 ## Storage and RPC
@@ -48,8 +63,8 @@ colour and mark.
 | Method | Input | Output |
 | --- | --- | --- |
 | `captains_list` | none | captain records |
-| `captains_create` | `projectId`, `projectName`, `name`, `avatar`, optional `instructions` | the record, or the thread if recording it failed |
-| `captains_adopt` | `threadId`, `avatar`, `createdAt` | captain record |
+| `captains_create` | `projectId`, `projectName`, `name`, `avatar`, optional `instructions` | the record, or the thread and its home if recording it failed |
+| `captains_adopt` | `threadId`, `avatar`, `createdAt`, `name`, optional `home` | captain record |
 | `captains_update` | `threadId`, `avatar` | captain record |
 | `captains_remove` | `threadId` | none |
 | `parks_list` | none | park records |
@@ -58,9 +73,9 @@ colour and mark.
 | `parks_unpark` | `threadId` | none |
 | `parks_keep` | `threadId`, `at` | park record |
 | `parks_evaluate` | none | the threads auto-settle just settled |
-| `captain_home` | `project` | the memory folder's file list |
-| `captain_instructions` | `project` | the user's instructions in its `captain.md`, or `""` |
-| `captain_instructions_save` | `project`, `instructions`, optional `threadId` | whether the captain was told |
+| `captain_home` | `threadId`, `project` | the captain's memory folder's file list |
+| `captain_instructions` | `threadId`, `project` | the user's instructions in its `captain.md`, or `""` |
+| `captain_instructions_save` | `threadId`, `project`, `instructions` | whether the captain was told |
 | `captain_supervisors` | none | every crew captain's thread id |
 | `project_logos` | none | a logo for each project that has one |
 
@@ -74,7 +89,13 @@ them. Saving them from **Edit captain** also tells the captain to re-read them.
 
 `captains_create` starts the thread first and records it second, retrying
 after 100 ms and 400 ms. If the record still fails, the dialog switches to
-**Record captain**, which records the same thread instead of starting another.
+**Record captain**, which records the same thread and home instead of
+starting another.
+
+The home methods take the captain's `project` only for a captain without a
+home of its own. In the Crew tab, a thread no captain started belongs to its
+project's captain when the project has one, and shows the captain picker when
+it has several.
 
 Pull request numbers come from bb's GitHub PR Status plugin. Without it, rows
 show no PR numbers. The sidebar remembers the project filter and which shelves

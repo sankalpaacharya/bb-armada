@@ -114,7 +114,7 @@ describe("the crew tab's memory", () => {
     await openMemory();
     await screen.findByText("~/.bb/captains/cops");
     expect(new Set(reads.map((read) => JSON.stringify(read)))).toEqual(
-      new Set([JSON.stringify({ project: "cops" })]),
+      new Set([JSON.stringify({ threadId: "cap", project: "cops" })]),
     );
     expect(memoryRows()).toEqual([
       "captain.md",

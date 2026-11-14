@@ -45,7 +45,7 @@ At the start of every turn, and after any compaction or clear, list the lines
 past the cursor:
 
 ```sh
-awk -v n=<cursor> '$1+0 > n' ~/.bb/captains/<project>/outbox.md
+awk -v n=<cursor> '$1+0 > n' ~/.bb/captains/<home>/outbox.md
 ```
 
 Handle them oldest first. A `[crew captain]` chat message only rings the bell:

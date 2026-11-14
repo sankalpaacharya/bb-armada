@@ -3,22 +3,24 @@ import path from "node:path";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 
 import {
+  captainIdOf,
   homeFilePathSchema,
   homeFolder,
   supervisorIdOf,
   type CaptainHome,
   type HomeFile,
 } from "./captain-home";
-import { captainSlug } from "./captain-text";
 
 type ReadFile = Awaited<ReturnType<BbPluginApi["sdk"]["files"]["read"]>>;
 
 export const HOMES_ROOT = path.join(os.homedir(), ".bb", "captains");
 const BACKLOG = /^[^/]+\/backlog\.md$/;
+const TAKEN_LIMIT = 10_000;
 
 /** What one home's backlog tells the sidebar. */
 export type Backlog = {
   home: string;
+  captainId: string | null;
   supervisorId: string | null;
 };
 
@@ -41,14 +43,12 @@ export const textOf = (file: ReadFile): string =>
  * read stays inside its home. A missing folder lists as empty, not an error.
  */
 export function createHomeReader(bb: BbPluginApi) {
-  const rootOf = (project: string) =>
-    path.join(HOMES_ROOT, captainSlug(project));
   const read = (root: string, relative: string) =>
     bb.sdk.files.read({ path: path.join(root, relative), rootPath: root });
 
-  const home = async (project: string): Promise<CaptainHome> => {
-    const root = rootOf(project);
-    const folder = homeFolder(project);
+  const home = async (name: string): Promise<CaptainHome> => {
+    const root = path.join(HOMES_ROOT, name);
+    const folder = homeFolder(name);
     const { paths } = await bb.sdk.files.listPaths({
       path: root,
       includeFiles: true,
@@ -102,6 +102,7 @@ export function createHomeReader(bb: BbPluginApi) {
           const text = textOf(await read(HOMES_ROOT, entry.path));
           return {
             home: path.dirname(entry.path),
+            captainId: captainIdOf(text),
             supervisorId: supervisorIdOf(text),
           };
         }),
@@ -109,5 +110,26 @@ export function createHomeReader(bb: BbPluginApi) {
     return found.sort((a, b) => a.home.localeCompare(b.home));
   };
 
-  return { home, backlogs };
+  /**
+   * Every name taken under `~/.bb/captains`: each folder, empty ones included,
+   * and each legacy `<project>.md` that a captain of that name would split.
+   */
+  const taken = async (): Promise<Set<string>> => {
+    const { paths, truncated } = await bb.sdk.files.listPaths({
+      path: HOMES_ROOT,
+      includeFiles: true,
+      includeDirectories: true,
+      includeHidden: false,
+      excludeNames: ["tasks"],
+      limit: TAKEN_LIMIT,
+    });
+    // A partial list could miss a folder and hand its memory to a new captain.
+    if (truncated)
+      throw new Error(`More than ${TAKEN_LIMIT} entries in ${HOMES_ROOT}`);
+    return new Set(
+      paths.map((entry) => entry.path.split("/")[0]!.replace(/\.md$/, "")),
+    );
+  };
+
+  return { home, backlogs, taken };
 }

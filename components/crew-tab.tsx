@@ -218,7 +218,7 @@ function CrewView({
   onBack,
 }: {
   crew: Crew;
-  /** The captain's project, which names its memory folder. */
+  /** The captain's project, which names the memory folder of a captain without its own. */
   projectName: string | null;
   currentThreadId: string;
   onOpen: Open;
@@ -318,6 +318,7 @@ function CrewView({
       {projectName === null ? null : (
         <div className="sticky -bottom-3 -mx-3 -mb-3 mt-auto border-t border-border bg-sidebar px-3 py-2">
           <MemorySection
+            threadId={captain.thread.id}
             project={projectName}
             hostId={captain.thread.host?.id ?? null}
           />

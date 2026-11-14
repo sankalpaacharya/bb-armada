@@ -32,24 +32,37 @@ function homeFiles(homesNow: () => Record<string, string>) {
     listPaths: async ({
       path: folder,
       excludeNames = [],
+      includeDirectories = false,
     }: {
       path: string;
       excludeNames?: string[];
-    }) => ({
-      paths: Object.keys(homesNow())
-        .map((key) => path.relative(folder, path.join(HOMES, key)))
-        .filter(
-          (relative) =>
-            !relative.startsWith("..") &&
-            !relative.split("/").some((name) => excludeNames.includes(name)),
-        )
-        .map((relative) => ({
-          kind: "file",
-          name: path.basename(relative),
-          path: relative,
-        })),
-      truncated: false,
-    }),
+      includeDirectories?: boolean;
+    }) => {
+      const under = (paths: string[], kind: string) =>
+        paths
+          .map((full) => path.relative(folder, full))
+          .filter(
+            (relative) =>
+              relative !== "" &&
+              !relative.startsWith("..") &&
+              !relative.split("/").some((name) => excludeNames.includes(name)),
+          )
+          .map((relative) => ({
+            kind,
+            name: path.basename(relative),
+            path: relative,
+          }));
+      return {
+        paths: [
+          ...under(
+            Object.keys(homesNow()).map((key) => path.join(HOMES, key)),
+            "file",
+          ),
+          ...(includeDirectories ? under([...made], "directory") : []),
+        ],
+        truncated: false,
+      };
+    },
     read: async ({ path: file }: { path: string }) => {
       const content = homesNow()[keyOf(file)];
       if (content === undefined) throw new Error(`ENOENT: ${file}`);
@@ -98,16 +111,34 @@ async function load(
     homes?: Record<string, string>;
     send?: () => Promise<unknown>;
     files?: (files: HomeFiles) => Partial<HomeFiles>;
+    /** Each existing thread's project, by thread id. */
+    projectOf?: Record<string, { id: string; name: string }>;
   } = {},
 ) {
   const homes = options.homes ?? {};
+  const projectOf = options.projectOf ?? {};
+  let spawned = 0;
   const { bb, harness } = createFakePluginHost({
     pluginId: "armada",
     sdk: {
       threads: {
-        spawn: async () => ({ id: "thr_new" }) as never,
+        spawn: async () =>
+          ({ id: spawned++ === 0 ? "thr_new" : `thr_new${spawned}` }) as never,
         list: async () => [],
+        get: async ({ threadId }: { threadId: string }) => {
+          const project = projectOf[threadId];
+          if (project === undefined) throw new Error("thread_not_found");
+          return { id: threadId, projectId: project.id } as never;
+        },
         send: options.send ?? (async () => ({}) as never),
+      },
+      projects: {
+        list: async () =>
+          [
+            ...new Map(
+              Object.values(projectOf).map((project) => [project.id, project]),
+            ).values(),
+          ] as never,
       },
       files: (() => {
         const files = homeFiles(() => homes);
@@ -146,7 +177,7 @@ const adopt = (
   threadId: string,
   seed = "one",
   createdAt = "2026-01-01T00:00:00.000Z",
-) => ({ threadId, avatar: avatar(seed), createdAt });
+) => ({ threadId, avatar: avatar(seed), createdAt, name: "Fleet" });
 const create = {
   projectId: "p",
   projectName: "P",
@@ -173,7 +204,11 @@ describe("captain records", () => {
       record: { threadId: "thr_new" },
     });
     expect(await list()).toEqual([
-      expect.objectContaining({ threadId: "thr_new", avatar: avatar("new") }),
+      expect.objectContaining({
+        threadId: "thr_new",
+        avatar: avatar("new"),
+        home: "fleet",
+      }),
     ]);
     expect(since.invalidations()).toEqual([["captains"]]);
 
@@ -189,7 +224,7 @@ describe("captain records", () => {
       }
     ).input;
     expect(part.text.startsWith("/armada ")).toBe(true);
-    expect(part.text).toContain("~/.bb/captains/alpha/");
+    expect(part.text).toContain("~/.bb/captains/fleet/");
     expect(part.mentions.map((mention) => mention.resource.name)).toEqual([
       "armada",
     ]);
@@ -241,6 +276,7 @@ describe("captain records", () => {
     expect(await created).toEqual({
       outcome: "unrecorded",
       threadId: "thr_new",
+      home: "p",
       reason: "disk full",
     });
     expect(harness.sdk.callsTo("threads.spawn")).toHaveLength(1);
@@ -264,6 +300,7 @@ describe("captain records", () => {
         threadId: "thr_x",
         avatar: avatar("two"),
         createdAt: "2026-01-01T00:00:00.000Z",
+        home: "fleet",
       },
     ]);
   });
@@ -328,13 +365,14 @@ describe("captain records", () => {
     ).rejects.toThrow();
   });
 
-  it("removes only the record, and removing twice is harmless", async () => {
-    const { harness, list, since } = await load();
+  it("removes only the record, leaving its home on disk, and removing twice is harmless", async () => {
+    const { harness, list } = await load();
     await harness.callRpc("captains_adopt", adopt("thr_x"));
+    const adopted = harness.sdk.calls.length;
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
     expect(await list()).toEqual([]);
-    expect(since.calls()).toEqual([]);
+    expect(harness.sdk.calls.slice(adopted)).toEqual([]);
   });
 
   it("invalidates the captains read after every write", async () => {
@@ -352,14 +390,20 @@ describe("captain records", () => {
     ]);
   });
 
-  it("keeps every concurrent adoption", async () => {
-    const { harness, ids } = await load();
+  it("keeps every concurrent adoption, each in a home of its own", async () => {
+    const { harness, ids, list } = await load();
     await Promise.all(
       ["a", "b", "c", "d"].map((threadId) =>
         harness.callRpc("captains_adopt", adopt(threadId)),
       ),
     );
     expect(await ids()).toEqual(["a", "b", "c", "d"]);
+    expect((await list()).map((record) => record.home).sort()).toEqual([
+      "fleet",
+      "fleet-2",
+      "fleet-3",
+      "fleet-4",
+    ]);
   });
 
   it("rejects an avatar style it does not draw, the retired adventurer included", async () => {
@@ -984,9 +1028,14 @@ describe("captain homes", () => {
     "my-app/tasks/old/backlog.md": "Supervisor: thr_stale\n",
   };
 
-  it("lists the markdown in a project's home by its name, with each file's size and age", async () => {
+  it("lists the markdown in the project's home of a captain without its own, with each file's size and age", async () => {
     const { harness } = await load({ homes });
-    expect(await harness.callRpc("captain_home", { project: "cops" })).toEqual({
+    expect(
+      await harness.callRpc("captain_home", {
+        threadId: "thr_cops",
+        project: "cops",
+      }),
+    ).toEqual({
       status: "ready",
       folder: "~/.bb/captains/cops",
       root: path.join(HOMES, "cops"),
@@ -1005,7 +1054,10 @@ describe("captain homes", () => {
       ],
     });
     expect(
-      await harness.callRpc("captain_home", { project: "My App" }),
+      await harness.callRpc("captain_home", {
+        threadId: "thr_app",
+        project: "My App",
+      }),
     ).toMatchObject({
       status: "ready",
       folder: "~/.bb/captains/my-app",
@@ -1015,7 +1067,10 @@ describe("captain homes", () => {
   it("calls a home with no folder missing, not an error", async () => {
     const { harness } = await load({ homes });
     expect(
-      await harness.callRpc("captain_home", { project: "Nowhere" }),
+      await harness.callRpc("captain_home", {
+        threadId: "thr_none",
+        project: "Nowhere",
+      }),
     ).toEqual({ status: "missing", folder: "~/.bb/captains/nowhere" });
   });
 
@@ -1028,8 +1083,210 @@ describe("captain homes", () => {
   });
 });
 
+describe("a home per captain", () => {
+  const personal = { projectId: "proj_p", projectName: "Personal" };
+  const make = async (
+    harness: Awaited<ReturnType<typeof load>>["harness"],
+    name: string,
+    instructions?: string,
+  ) => {
+    const created = (await harness.callRpc("captains_create", {
+      ...create,
+      ...personal,
+      name,
+      ...(instructions === undefined ? {} : { instructions }),
+    })) as Created;
+    if (created.outcome !== "recorded") throw new Error(created.reason);
+    return created.record;
+  };
+
+  it("gives two captains on one project different homes, neither the project's", async () => {
+    const homes = { "personal/backlog.md": "Captain: thr_old\n" };
+    const { harness } = await load({ homes });
+    const video = await make(harness, "Video editing");
+    const forms = await make(harness, "Forms");
+    expect([video.home, forms.home]).toEqual(["video-editing", "forms"]);
+    for (const { threadId } of [video, forms])
+      expect(
+        await harness.callRpc("captain_home", {
+          threadId,
+          project: "Personal",
+        }),
+      ).toMatchObject({ folder: expect.not.stringMatching(/\/personal$/) });
+  });
+
+  it("numbers a new captain's home past a folder on disk, a project's home included, or another captain's", async () => {
+    const homes = { "personal/backlog.md": "", "forms/captain.md": "" };
+    const { harness } = await load({ homes });
+    expect((await make(harness, "Personal")).home).toBe("personal-2");
+    expect((await make(harness, "Personal")).home).toBe("personal-3");
+    expect((await make(harness, "Forms")).home).toBe("forms-2");
+  });
+
+  it("does not take the project home of a captain from before, even before that captain made its folder", async () => {
+    const { harness } = await load({
+      seed: (kv) =>
+        kv.set("captain:thr_old", {
+          threadId: "thr_old",
+          avatar: avatar("old"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
+      projectOf: { thr_old: { id: "proj_f", name: "Forms" } },
+    });
+    expect((await make(harness, "Forms")).home).toBe("forms-2");
+  });
+
+  it("does not take a home a removed captain left on disk", async () => {
+    const { harness } = await load();
+    const first = await make(harness, "Forms");
+    await harness.callRpc("captains_remove", { threadId: first.threadId });
+    expect((await make(harness, "Forms")).home).toBe("forms-2");
+  });
+
+  it("keeps a captain from before on its project's home", async () => {
+    const homes = { "personal/backlog.md": "# Backlog\n" };
+    const { harness } = await load({
+      homes,
+      seed: (kv) =>
+        kv.set("captain:thr_old", {
+          threadId: "thr_old",
+          avatar: avatar("old"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
+    });
+    await make(harness, "Video editing");
+    expect(
+      await harness.callRpc("captain_home", {
+        threadId: "thr_old",
+        project: "Personal",
+      }),
+    ).toMatchObject({
+      status: "ready",
+      folder: "~/.bb/captains/personal",
+      files: [expect.objectContaining({ path: "backlog.md" })],
+    });
+  });
+
+  it("keeps a captain's home when it is renamed, its avatar changes, or its project is renamed", async () => {
+    const { harness, list } = await load();
+    const { threadId } = await make(harness, "Video editing");
+    await harness.callRpc("captains_update", {
+      threadId,
+      avatar: avatar("two"),
+    });
+    await harness.callRpc("captains_adopt", {
+      ...adopt(threadId),
+      name: "Shorts",
+    });
+    expect(await list()).toEqual([
+      expect.objectContaining({ threadId, home: "video-editing" }),
+    ]);
+    expect(
+      await harness.callRpc("captain_home", {
+        threadId,
+        project: "Life admin",
+      }),
+    ).toMatchObject({ folder: "~/.bb/captains/video-editing" });
+  });
+
+  it("reads and saves each captain's own instructions and memory", async () => {
+    const homes: Record<string, string> = {};
+    const { harness } = await load({ homes });
+    const video = await make(harness, "Video editing", "Cut tight.");
+    const forms = await make(harness, "Forms", "Check every field.");
+    const of = (threadId: string) => ({ threadId, project: "Personal" });
+    expect(await harness.callRpc("captain_instructions", of(video.threadId))).toBe(
+      "Cut tight.",
+    );
+    await harness.callRpc("captain_instructions_save", {
+      ...of(forms.threadId),
+      instructions: "Ask before sending.",
+    });
+    expect(homes["forms/captain.md"]).toContain("> Ask before sending.");
+    expect(homes["video-editing/captain.md"]).toContain("> Cut tight.");
+    expect(
+      await harness.callRpc("captain_home", of(video.threadId)),
+    ).toMatchObject({
+      folder: "~/.bb/captains/video-editing",
+      files: [expect.objectContaining({ path: "captain.md" })],
+    });
+  });
+
+  it("gives a thread made a captain a fresh home and tells it where", async () => {
+    const homes = { "fleet/backlog.md": "" };
+    const { harness, list } = await load({ homes });
+    await harness.callRpc("captains_adopt", adopt("thr_x"));
+    expect(await list()).toEqual([
+      expect.objectContaining({ threadId: "thr_x", home: "fleet-2" }),
+    ]);
+    const [send] = harness.sdk.callsTo("threads.send");
+    expect(send![0]).toMatchObject({
+      threadId: "thr_x",
+      input: [{ text: expect.stringContaining("~/.bb/captains/fleet-2/") }],
+    });
+  });
+
+  it("gives a removed captain made one again the home it owns, without a new one", async () => {
+    const homes = {
+      "personal/backlog.md": "Captain: thr_old\nCrew captain: thr_crew\n",
+    };
+    const { harness, list } = await load({ homes });
+    await harness.callRpc("captains_adopt", adopt("thr_old"));
+    expect(await list()).toEqual([
+      expect.objectContaining({ threadId: "thr_old", home: "personal" }),
+    ]);
+    expect(harness.sdk.callsTo("files.mkdir")).toEqual([]);
+    expect(harness.sdk.callsTo("threads.send")).toEqual([]);
+  });
+
+  it("never names a home tasks, which the memory reader skips", async () => {
+    const { harness } = await load();
+    expect((await make(harness, "Tasks")).home).toBe("tasks-2");
+  });
+
+  it("makes no home when it cannot see every folder there", async () => {
+    const { harness } = await load({
+      files: ({ listPaths }) => ({
+        listPaths: async (args) => ({ ...(await listPaths(args)), truncated: true }),
+      }),
+    });
+    await expect(make(harness, "Forms")).rejects.toThrow("More than");
+    expect(harness.sdk.callsTo("threads.spawn")).toEqual([]);
+  });
+
+  it("records the home a failed create gave its thread, without making or announcing another", async () => {
+    const { harness, list } = await load();
+    await harness.callRpc("captains_adopt", {
+      ...adopt("thr_x"),
+      home: "video-editing",
+    });
+    expect(await list()).toEqual([
+      expect.objectContaining({ threadId: "thr_x", home: "video-editing" }),
+    ]);
+    expect(harness.sdk.callsTo("files.mkdir")).toEqual([]);
+    expect(harness.sdk.callsTo("threads.send")).toEqual([]);
+  });
+
+  it("still makes a thread a captain when it cannot be told where its home is", async () => {
+    const { harness, list } = await load({
+      send: async () => {
+        throw new Error("thread busy");
+      },
+    });
+    await harness.callRpc("captains_adopt", adopt("thr_x"));
+    expect(await list()).toEqual([
+      expect.objectContaining({ threadId: "thr_x", home: "fleet" }),
+    ]);
+    expect(harness.logEntries).toContainEqual({
+      level: "warn",
+      message: expect.stringContaining("thr_x"),
+    });
+  });
+});
+
 describe("captain instructions", () => {
   const captainMd = "# Captain\n\n## Preferences\n- Small PRs.\n";
+  const cops = { threadId: "thr_cap", project: "cops" };
 
   it("writes a new captain's instructions to its home before starting its thread, and points the thread at them", async () => {
     const homes: Record<string, string> = {};
@@ -1037,9 +1294,10 @@ describe("captain instructions", () => {
     await harness.callRpc("captains_create", {
       ...create,
       projectName: "My App",
+      name: "Reviewer",
       instructions: "  Act as a senior engineer.\nKeep replies short.  ",
     });
-    expect(homes["my-app/captain.md"]).toBe(
+    expect(homes["reviewer/captain.md"]).toBe(
       [
         "## Instructions from the user",
         "",
@@ -1061,12 +1319,17 @@ describe("captain instructions", () => {
     expect(part.text).not.toContain("senior engineer");
   });
 
-  it("leaves the home alone when a new captain has no instructions", async () => {
+  it("makes a new captain's home empty when it has no instructions", async () => {
     const homes: Record<string, string> = {};
     const { harness, since } = await load({ homes });
     await harness.callRpc("captains_create", { ...create, instructions: " " });
     expect(homes).toEqual({});
     expect(since.calls("files.write")).toEqual([]);
+    expect(since.calls("files.mkdir")).toEqual([
+      expect.objectContaining({
+        args: [expect.objectContaining({ path: path.join(HOMES, "p") })],
+      }),
+    ]);
     const [spawn] = harness.sdk.callsTo("threads.spawn");
     const [part] = (spawn![0] as { input: { text: string }[] }).input;
     expect(part.text).not.toContain("Instructions from the user");
@@ -1090,23 +1353,23 @@ describe("captain instructions", () => {
     const homes = { "cops/captain.md": captainMd };
     const { harness, since } = await load({ homes });
     expect(
-      await harness.callRpc("captain_instructions", { project: "cops" }),
+      await harness.callRpc("captain_instructions", cops),
     ).toBe("");
 
     await harness.callRpc("captain_instructions_save", {
-      project: "cops",
+      ...cops,
       instructions: "Be brief.",
     });
     expect(homes["cops/captain.md"]).toBe(
       `${captainMd}\n## Instructions from the user\n\n> Be brief.\n`,
     );
     expect(
-      await harness.callRpc("captain_instructions", { project: "cops" }),
+      await harness.callRpc("captain_instructions", cops),
     ).toBe("Be brief.");
     expect(since.invalidations()).toContainEqual(["homes"]);
 
     await harness.callRpc("captain_instructions_save", {
-      project: "cops",
+      ...cops,
       instructions: "Ship daily.",
     });
     expect(homes["cops/captain.md"]).toBe(
@@ -1114,11 +1377,10 @@ describe("captain instructions", () => {
     );
 
     await harness.callRpc("captain_instructions_save", {
-      project: "cops",
+      ...cops,
       instructions: "",
     });
     expect(homes["cops/captain.md"]).toBe(captainMd);
-    expect(harness.sdk.callsTo("threads.send")).toEqual([]);
   });
 
   it("does not write over a captain.md the captain changed since it was read", async () => {
@@ -1135,7 +1397,7 @@ describe("captain instructions", () => {
     });
     await expect(
       harness.callRpc("captain_instructions_save", {
-        project: "cops",
+        ...cops,
         instructions: "Be brief.",
       }),
     ).rejects.toThrow("changed on disk");
@@ -1147,9 +1409,8 @@ describe("captain instructions", () => {
     const { harness } = await load({ homes });
     expect(
       await harness.callRpc("captain_instructions_save", {
-        project: "cops",
+        ...cops,
         instructions: "Be brief.",
-        threadId: "thr_cap",
       }),
     ).toEqual({ told: true });
     const [send] = harness.sdk.callsTo("threads.send");
@@ -1167,9 +1428,8 @@ describe("captain instructions", () => {
     });
     expect(
       await failing.harness.callRpc("captain_instructions_save", {
-        project: "cops",
+        ...cops,
         instructions: "Be brief.",
-        threadId: "thr_cap",
       }),
     ).toEqual({ told: false });
   });
@@ -1178,7 +1438,7 @@ describe("captain instructions", () => {
     const { harness } = await load();
     await expect(
       harness.callRpc("captain_instructions_save", {
-        project: "cops",
+        ...cops,
         instructions: "x".repeat(2001),
       }),
     ).rejects.toThrow();

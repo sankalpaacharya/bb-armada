@@ -4,8 +4,9 @@ can filter by project, and quiet shelves for what you have settled or snoozed.
 
 ## What you get
 
-- **Captains.** A captain is a long-lived thread for a project, named after
-  it. It sits at the top of the sidebar with a character avatar of its own.
+- **Captains.** A captain is a long-lived thread for a project, with a
+  character avatar of its own at the top of the sidebar. A project can have
+  several, say one per ongoing task, each with its own memory folder.
 - **Threads, each once.** Every thread is a card with its project, status,
   branch, pull request and harness. A thread a captain started shows that
   captain's face and name before its project, and the captain's row says how

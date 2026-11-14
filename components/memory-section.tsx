@@ -122,9 +122,12 @@ function Nodes({
 
 /** What a captain keeps in its home folder, each file opening in bb's preview. */
 export function MemorySection({
+  threadId,
   project,
   hostId,
 }: {
+  /** The captain whose home this is. */
+  threadId: string;
   project: string;
   hostId: string | null;
 }) {
@@ -135,7 +138,7 @@ export function MemorySection({
   const { data, error, refetch } = experimental_useRpcQuery({
     contract: rpcContract,
     method: "captain_home",
-    input: { project },
+    input: { threadId, project },
   });
   const tree = useMemo(
     () => (data?.status === "ready" ? memoryTree(data.files) : []),

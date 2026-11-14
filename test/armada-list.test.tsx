@@ -671,7 +671,7 @@ describe("creating a captain", () => {
     fireEvent.click(projectTrigger(dialog));
     fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
     expect(dialog.queryByRole("listbox")).toBeNull();
-    expect(projectTrigger(dialog).textContent).toBe("Alpha · has a captain");
+    expect(projectTrigger(dialog).textContent).toBe("Alpha · 1 captain");
     expect(name.value).toBe("Alpha");
     fireEvent.change(name, { target: { value: "  Fleet " } });
     fireEvent.click(projectTrigger(dialog));
@@ -814,7 +814,26 @@ describe("creating a captain", () => {
     const names = within(dialog.getByRole("listbox", { name: "Project" }))
       .getAllByRole("option")
       .map((option) => option.textContent);
-    expect(names).toEqual(["Alpha · has a captain", "Beta", "Personal"]);
+    expect(names).toEqual(["Alpha · 1 captain", "Beta", "Personal"]);
+  });
+
+  it("offers a project that already has captains, counting them", async () => {
+    await render({
+      threads: [
+        ...threads,
+        thread("cap2", { title: "Video editing", projectId: "proj_a" }),
+      ],
+      registry: registry("cap", "cap2"),
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.click(projectTrigger(dialog));
+    fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
+    expect(projectTrigger(dialog).textContent).toBe("Alpha · 2 captains");
+    expect(
+      (dialog.getByRole("button", { name: "Create captain" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
   });
 
   it("records the thread a failed create already started instead of starting another", async () => {
@@ -823,6 +842,7 @@ describe("creating a captain", () => {
         captains_create: () => ({
           outcome: "unrecorded",
           threadId: "thr_new",
+          home: "beta",
           reason: "disk full",
         }),
         captains_adopt: () => registry("thr_new")[0],
@@ -848,7 +868,11 @@ describe("creating a captain", () => {
     expect(
       view.inspection.rpcCalls.find((call) => call.method === "captains_adopt")
         ?.input,
-    ).toMatchObject({ threadId: "thr_new", avatar: { style: "micah" } });
+    ).toMatchObject({
+      threadId: "thr_new",
+      avatar: { style: "micah" },
+      home: "beta",
+    });
     expect(onNavigate).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
@@ -1068,11 +1092,15 @@ describe("thread menu", () => {
     ).toBe(false);
   });
 
-  it("shows the captain's instructions on edit and saves a change, telling the captain", async () => {
+  it("shows the captain's own instructions and memory folder on edit and saves a change, telling the captain", async () => {
     const { view } = await render({
       rpc: {
         captain_instructions: (input: never) =>
-          (input as { project: string }).project === "Alpha" ? "Be brief." : "",
+          (input as { threadId: string }).threadId === "cap" ? "Be brief." : "",
+        captain_home: (input: never) => ({
+          status: "missing",
+          folder: `~/.bb/captains/${(input as { threadId: string }).threadId}-home`,
+        }),
         captain_instructions_save: () => ({ told: true }),
       },
     });
@@ -1086,6 +1114,7 @@ describe("thread menu", () => {
       name: "Instructions",
     }) as HTMLTextAreaElement;
     await waitFor(() => expect(field.value).toBe("Be brief."));
+    await dialog.findByText("~/.bb/captains/cap-home");
     const save = dialog.getByRole("button", {
       name: "Save changes",
     }) as HTMLButtonElement;

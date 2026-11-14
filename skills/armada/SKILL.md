@@ -27,11 +27,21 @@ Load these references when their moment comes:
 
 ## Your home
 
-Memory lives in `~/.bb/captains/<project>/`, not in this chat. Chat gets
-compacted; the home does not.
+Memory lives in your home, the folder your first message names, not in this
+chat. Chat gets compacted; the home does not. Each captain has a home of its
+own, `~/.bb/captains/<home>/`, named after the captain, so a project can have
+several captains that share nothing. Never read or write another captain's
+home.
+
+- If you no longer know your home, after a compaction or a clear, it is the
+  one whose `backlog.md` names you on its `Captain:` line:
+  `grep -l "Captain: $BB_THREAD_ID" ~/.bb/captains/*/backlog.md`.
+- Only when no message ever named a home and no backlog names you, you are a
+  captain from before per-captain homes, and your home is the project's
+  folder, `~/.bb/captains/<project>/`.
 
 ```
-~/.bb/captains/<project>/
+~/.bb/captains/<home>/
   captain.md     the user's preferences and authority limits; permanent
   learnings.md   operational facts and gotchas; dated, must re-prove themselves
   backlog.md     Now, Queue, Waiting on the user, In flight, Done
@@ -64,7 +74,7 @@ compacted; the home does not.
   5. Move any call older than four hours to `archive.md`
      (`references/captain-calls.md`, Expiring a call).
 - If the home is missing, create it. If a legacy single file
-  `~/.bb/captains/<project>.md` exists, split it into the new files, then add it
+  `~/.bb/captains/<home>.md` exists, split it into the new files, then add it
   verbatim to the end of `archive.md`.
 - An older `backlog.md` may have `## Waiting on captain`. Read it as
   `## Waiting on the user`, and rename it the next time you edit the file.
@@ -120,16 +130,16 @@ user.
 
 - `backlog.md` names it on its `Crew captain:` line. Before you spawn work, check
   that thread is live (`references/ownership.md`).
-- If there is none, or it is gone, first look for a live
-  `<project> crew captain` in `bb thread list --parent-thread "$BB_THREAD_ID"`
+- If there is none, or it is gone, first look for a live child titled
+  `... crew captain` or `... supervisor` in `bb thread list --parent-thread "$BB_THREAD_ID"`
   and record that one. Otherwise start one in your own environment:
 
   ```sh
   bb thread spawn --project "$BB_PROJECT_ID" --parent-self \
     --parent-notifications stuck --environment "$BB_ENVIRONMENT_ID" \
-    --title "<project> crew captain" --prompt-file - <<'EOF'
+    --title "<your title> crew captain" --prompt-file - <<'EOF'
   /armada You are the crew captain for bb project <project>. Home:
-  ~/.bb/captains/<project>/. Main captain thread: <your BB_THREAD_ID>.
+  ~/.bb/captains/<home>/. Main captain thread: <your BB_THREAD_ID>.
   Read references/crew-captain.md in the armada skill and follow it.
   EOF
   ```
@@ -188,7 +198,7 @@ user.
    ```sh
    bb thread spawn --json --project "$BB_PROJECT_ID" --parent-thread <crew captain> \
      --new-environment worktree --title "<slug>: <short task>" \
-     --prompt-file ~/.bb/captains/<project>/tasks/<slug>/brief.md
+     --prompt-file ~/.bb/captains/<home>/tasks/<slug>/brief.md
    bb thread tell <crew captain> --mode queue 'TASK <slug> <worker id>'
    ```
 

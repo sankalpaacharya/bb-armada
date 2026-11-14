@@ -38,19 +38,17 @@ const NAME_MAX = 80;
 /** The counter shows once this few characters are left. */
 const INSTRUCTIONS_WARN = 300;
 
-/** The open project unless it already has a captain, else the first project without one. */
+/** The open project, captained or not, since a project can have several captains. */
 export function startingProject(
   projects: readonly PluginSidebarProject[],
   activeProjectId: string | null,
-  captained: ReadonlySet<string>,
 ): string {
   const active = projects.find((project) => project.id === activeProjectId);
-  const free = (project: PluginSidebarProject | undefined) =>
-    project !== undefined && !captained.has(project.id);
-  const pick =
-    (free(active) ? active : projects.find(free)) ?? active ?? projects[0];
-  return pick?.id ?? "";
+  return (active ?? projects[0])?.id ?? "";
 }
+
+const captainsLabel = (count: number): string | undefined =>
+  count === 0 ? undefined : count === 1 ? "1 captain" : `${count} captains`;
 
 function Field({
   label,
@@ -102,15 +100,15 @@ export function CaptainDialog({
   state,
   projects,
   activeProjectId,
-  captained,
+  captainCounts,
   onClose,
   onNavigate,
 }: {
   state: CaptainDialogState;
   projects: readonly PluginSidebarProject[];
   activeProjectId: string | null;
-  /** Projects that already have a captain. */
-  captained: ReadonlySet<string>;
+  /** How many captains each project already has. */
+  captainCounts: ReadonlyMap<string, number>;
   onClose: () => void;
   onNavigate: () => void;
 }) {
@@ -158,16 +156,23 @@ export function CaptainDialog({
     state.kind === "edit" ? state.record.avatar : randomAvatar(),
   );
   const [projectId, setProjectId] = useState(() =>
-    startingProject(projects, activeProjectId, captained),
+    startingProject(projects, activeProjectId),
   );
   const [typedName, setTypedName] = useState<string | null>(null);
   const [typedInstructions, setTypedInstructions] = useState<string | null>(
     null,
   );
   const [pending, setPending] = useState(false);
-  /** The thread a create spawned but could not record; a retry records it. */
-  const [spawned, setSpawned] = useState<string | null>(null);
+  /** The thread a create spawned but could not record, and its home; a retry records them. */
+  const [spawned, setSpawned] = useState<{
+    threadId: string;
+    home: string;
+  } | null>(null);
   const project = projects.find((candidate) => candidate.id === projectId);
+  const projectCaptains =
+    project === undefined
+      ? undefined
+      : captainsLabel(captainCounts.get(project.id) ?? 0);
   const copy = COPY[spawned === null ? state.kind : "unrecorded"];
   const currentTitle =
     state.kind === "create"
@@ -184,10 +189,20 @@ export function CaptainDialog({
     state.kind === "edit"
       ? projects.find((candidate) => candidate.id === state.thread.projectId)
       : undefined;
+  const edited = {
+    threadId: state.kind === "edit" ? state.thread.id : "",
+    project: editedProject?.name ?? "",
+  };
   const saved = experimental_useRpcQuery({
     contract: rpcContract,
     method: "captain_instructions",
-    input: { project: editedProject?.name ?? "" },
+    input: edited,
+    enabled: editedProject !== undefined,
+  });
+  const home = experimental_useRpcQuery({
+    contract: rpcContract,
+    method: "captain_home",
+    input: edited,
     enabled: editedProject !== undefined,
   });
   /** Instructions are asked for on a new captain and changed on an edit, never on an adopt or a retry. */
@@ -215,11 +230,13 @@ export function CaptainDialog({
   ): Promise<string | null> => {
     if (spawned !== null) {
       await adopt.mutate({
-        threadId: spawned,
+        threadId: spawned.threadId,
         avatar,
         createdAt: new Date().toISOString(),
+        name: trimmedName,
+        home: spawned.home,
       });
-      return spawned;
+      return spawned.threadId;
     }
     const created = await create.mutate({
       projectId: project.id,
@@ -231,7 +248,7 @@ export function CaptainDialog({
         : { instructions: trimmedInstructions }),
     });
     if (created.outcome === "recorded") return created.record.threadId;
-    setSpawned(created.threadId);
+    setSpawned({ threadId: created.threadId, home: created.home });
     toastFailure("Started the captain but could not record it", created.reason);
     return null;
   };
@@ -257,6 +274,7 @@ export function CaptainDialog({
                 threadId,
                 avatar,
                 createdAt: new Date().toISOString(),
+                name: trimmedName,
               })
             : avatarChanged
               ? update.mutate({ threadId, avatar })
@@ -343,9 +361,17 @@ export function CaptainDialog({
           />
         </Field>
         {editedProject === undefined ? null : (
-          <Field label="Project">
-            <span className="text-sm">{editedProject.name}</span>
-          </Field>
+          <>
+            <Field label="Project">
+              <span className="text-sm">{editedProject.name}</span>
+            </Field>
+            <Field label="Memory">
+              <span className="truncate text-sm">
+                {home.data?.folder ??
+                  (home.error === null ? "Loading…" : "Could not load")}
+              </span>
+            </Field>
+          </>
         )}
         {state.kind === "create" && spawned !== null ? (
           <Field label="Project">
@@ -361,9 +387,7 @@ export function CaptainDialog({
               choices={projects.map((candidate) => ({
                 id: candidate.id,
                 label: candidate.name,
-                detail: captained.has(candidate.id)
-                  ? "has a captain"
-                  : undefined,
+                detail: captainsLabel(captainCounts.get(candidate.id) ?? 0),
               }))}
               isSelected={(id) => id === projectId}
               onPick={setProjectId}
@@ -373,12 +397,12 @@ export function CaptainDialog({
             >
               <span className="min-w-0 flex-1 truncate">
                 {project?.name}
-                {project !== undefined && captained.has(project.id) ? (
+                {projectCaptains === undefined ? null : (
                   <span className="text-muted-foreground">
                     {" "}
-                    · has a captain
+                    · {projectCaptains}
                   </span>
-                ) : null}
+                )}
               </span>
             </Dropdown>
           </Field>

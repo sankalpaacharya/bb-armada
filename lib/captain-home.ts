@@ -1,10 +1,35 @@
 import { z } from "zod";
 
-import { captainSlug } from "./captain-text";
+import type { CaptainRecord } from "./captains";
+
+/** A folder-safe slug of a captain's or a project's name. */
+export function captainSlug(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug === "" ? "project" : slug;
+}
 
 /** Where a captain keeps its memory, as the armada skill lays it out. */
-export const homeFolder = (projectName: string): string =>
-  `~/.bb/captains/${captainSlug(projectName)}`;
+export const homeFolder = (home: string): string => `~/.bb/captains/${home}`;
+
+/**
+ * A captain's home: its own, or for a captain made before each had one, its
+ * project's, so those keep the folder they already use.
+ */
+export const homeOf = (
+  record: Pick<CaptainRecord, "home"> | null,
+  projectName: string,
+): string => record?.home ?? captainSlug(projectName);
+
+/** A new captain's home: its name's slug, numbered past every home already taken. */
+export function freshHome(name: string, taken: ReadonlySet<string>): string {
+  const base = captainSlug(name);
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n += 1)
+    if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
+}
 
 const SUPERVISOR_LINE =
   /^[\s>*_-]*(?:Crew captain|Supervisor)[*_]*:[*_\s]*`?(thr_[A-Za-z0-9_]+)/im;
@@ -12,6 +37,13 @@ const SUPERVISOR_LINE =
 /** The crew captain a home's backlog names on its `Crew captain:` line, or an older home's `Supervisor:` line. */
 export function supervisorIdOf(backlog: string): string | null {
   return SUPERVISOR_LINE.exec(backlog)?.[1] ?? null;
+}
+
+const CAPTAIN_LINE = /^[\s>*_-]*Captain[*_]*:[*_\s]*`?(thr_[A-Za-z0-9_]+)/im;
+
+/** The captain that owns a home, from its backlog's `Captain:` line. */
+export function captainIdOf(backlog: string): string | null {
+  return CAPTAIN_LINE.exec(backlog)?.[1] ?? null;
 }
 
 /**

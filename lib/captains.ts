@@ -12,10 +12,18 @@ export const avatarSchema = z.strictObject({
 
 export type Avatar = z.infer<typeof avatarSchema>;
 
+/** A captain's own folder under `~/.bb/captains`, as a slug. */
+export const homeSchema = z
+  .string()
+  .max(100)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Not a home folder name");
+
 export const captainRecordSchema = z.object({
   threadId: idSchema,
   avatar: avatarSchema,
   createdAt: z.string(),
+  /** Absent on captains made before each had its own home; they use their project's. */
+  home: homeSchema.optional(),
 });
 
 export type CaptainRecord = z.infer<typeof captainRecordSchema>;

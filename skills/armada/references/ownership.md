@@ -6,6 +6,10 @@ for a refused session in `AGENTS.md`), re-keyed to bb thread ids.
 One captain owns a home, and one crew captain owns its ledger. Two writers on
 the same files overwrite each other.
 
+Each captain has its own home, so other captains on the same project are not
+owners of yours, and you never write theirs. Only the `Captain:` line in your
+own home decides who owns it.
+
 ## The lines
 
 `backlog.md` starts with:
@@ -32,9 +36,9 @@ Compare the `Captain:` line with your `$BB_THREAD_ID`.
 - **Missing**: write your id. The home is yours.
 - **Yours**: carry on.
 - **Another live thread**: stay read-only. Do not write the home, spawn,
-  steer, or message the crew captain. Tell the user that `@thread:<id>` is the
-  captain for this project, that you can answer from its memory, and that you
-  take over only if they say so.
+  steer, or message the crew captain. Tell the user that `@thread:<id>` owns
+  this home, that you can answer from its memory, and that you take over only
+  if they say so.
 - **Another dead thread**, or the user told you to take over: take over.
 
 To take over:
