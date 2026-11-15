@@ -370,10 +370,17 @@ export default async function plugin(bb: BbPluginApi) {
   bb.background.schedule("auto-settle", "*/5 * * * *", async () => {
     await evaluate();
   });
-  bb.background.schedule("project-logos", "*/5 * * * *", async () => {
+  const refreshLogos = async () => {
     if (await logos.refresh()) bb.rpc.experimental_invalidate([LOGOS_TAG]);
-  });
+  };
+  bb.background.schedule("project-logos", "*/5 * * * *", refreshLogos);
   settings.onChange(inBackground(reevaluate));
+  settings.onChange((next, prev) => {
+    if (next.logoSkipProjects === prev.logoSkipProjects) return;
+    refreshLogos().catch((cause: unknown) =>
+      bb.log.warn(`could not read the logos again: ${messageOf(cause)}`),
+    );
+  });
   inBackground(evaluate)();
 
   bb.log.info("loaded");

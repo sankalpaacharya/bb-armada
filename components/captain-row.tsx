@@ -55,6 +55,7 @@ export function CaptainRow({
           <>
             <CaptainTile
               avatar={entry.record.avatar}
+              projectId={entry.thread.projectId}
               className="pointer-events-none relative"
             />
             <span className="pointer-events-none relative flex min-w-0 flex-1 flex-col justify-center">

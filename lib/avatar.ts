@@ -3,8 +3,6 @@ import * as micah from "@dicebear/micah";
 
 import type { Avatar } from "./captains";
 
-const STYLES = { micah } satisfies Record<Avatar["style"], unknown>;
-
 const BACKGROUNDS = [
   "b6e3f4",
   "c0aede",
@@ -16,17 +14,19 @@ const BACKGROUNDS = [
 
 const rendered = new Map<string, string>();
 
-/** The avatar as an SVG data URI, generated locally once per style and seed. */
+/**
+ * The avatar's face as an SVG data URI, generated locally once per seed. For
+ * a logo avatar it is the stand-in while its project has no logo.
+ */
 export function avatarDataUri(avatar: Avatar): string {
-  const key = `${avatar.style}:${avatar.seed}`;
-  let uri = rendered.get(key);
+  let uri = rendered.get(avatar.seed);
   if (uri === undefined) {
-    uri = createAvatar(STYLES[avatar.style], {
+    uri = createAvatar(micah, {
       seed: avatar.seed,
       backgroundColor: BACKGROUNDS,
       backgroundType: ["solid"],
     }).toDataUri();
-    rendered.set(key, uri);
+    rendered.set(avatar.seed, uri);
   }
   return uri;
 }

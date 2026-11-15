@@ -322,6 +322,29 @@ describe("captain records", () => {
     ).rejects.toThrow("not a captain");
   });
 
+  it("switches a captain to its project's logo and back to the same face", async () => {
+    const { harness, list } = await load();
+    await harness.callRpc("captains_adopt", adopt("thr_x", "face"));
+    const [first] = await list();
+    const logo = { style: "logo", seed: "face" };
+    await harness.callRpc("captains_update", {
+      threadId: "thr_x",
+      avatar: logo,
+    });
+    expect(await list()).toEqual([{ ...first, avatar: logo }]);
+    await harness.callRpc("captains_update", {
+      threadId: "thr_x",
+      avatar: avatar("face"),
+    });
+    expect(await list()).toEqual([first]);
+    await expect(
+      harness.callRpc("captains_update", {
+        threadId: "thr_x",
+        avatar: { style: "logo" },
+      }),
+    ).rejects.toThrow();
+  });
+
   it("clears a park the thread had when it is adopted or removed, so it does not drop onto a shelf later", async () => {
     const { harness } = await load();
     const parks = () =>
@@ -434,6 +457,39 @@ describe("captain records", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
+  });
+
+  it("reads a stored logo avatar as a logo, and a stored micah record as it was", async () => {
+    const { list } = await load({
+      seed: async (kv) => {
+        await kv.set("captain:logo", {
+          threadId: "logo",
+          avatar: { style: "logo", seed: "kept" },
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+        await kv.set("captain:face", {
+          threadId: "face",
+          avatar: avatar("face"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+          home: "face",
+        });
+      },
+    });
+    expect(await list()).toEqual(
+      expect.arrayContaining([
+        {
+          threadId: "logo",
+          avatar: { style: "logo", seed: "kept" },
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          threadId: "face",
+          avatar: avatar("face"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+          home: "face",
+        },
+      ]),
+    );
   });
 
   it("reads a stored anime portrait as micah seeded by its thread", async () => {

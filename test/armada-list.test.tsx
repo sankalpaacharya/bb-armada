@@ -909,6 +909,124 @@ describe("creating a captain", () => {
   });
 });
 
+describe("project logo avatars", () => {
+  const logo = "data:image/svg+xml;base64,PHN2Zy8+";
+  const logoRegistry = (
+    ...entries: [threadId: string, style: "logo" | "micah"][]
+  ): CaptainRecord[] =>
+    entries.map(([threadId, style]) => ({
+      threadId,
+      avatar: { style, seed: threadId },
+      createdAt: "2026-01-01T00:00:00.000Z",
+    }));
+  const tileOf = (container: HTMLElement, id: string) =>
+    rowOf(container, id)?.querySelector("img")?.getAttribute("src");
+
+  it("shows a logo captain's project logo, and its face when the project has no logo", async () => {
+    const { view } = await render({
+      threads: [
+        thread("cap_a", { title: "Alpha", projectId: "proj_a" }),
+        thread("cap_b", { title: "Beta", projectId: "proj_b" }),
+        thread("cap_face", { title: "Face", projectId: "proj_a" }),
+      ],
+      registry: logoRegistry(
+        ["cap_a", "logo"],
+        ["cap_b", "logo"],
+        ["cap_face", "micah"],
+      ),
+      rpc: { project_logos: () => ({ proj_a: logo }) },
+    });
+    await waitFor(() => expect(tileOf(view.container, "cap_a")).toBe(logo));
+    expect(tileOf(view.container, "cap_b")).toBe(
+      avatarDataUri({ style: "logo", seed: "cap_b" }),
+    );
+    expect(tileOf(view.container, "cap_face")).toBe(
+      avatarDataUri({ style: "micah", seed: "cap_face" }),
+    );
+  });
+
+  it("offers Use project logo only for a project with a logo, and creates the captain with it", async () => {
+    const { view } = await render({
+      rpc: {
+        project_logos: () => ({ proj_a: logo }),
+        captains_create: () => ({
+          outcome: "recorded",
+          record: registry("thr_new")[0],
+        }),
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(projectTrigger(dialog).textContent).toBe("Beta");
+    expect(
+      dialog.queryByRole("button", { name: "Use project logo" }),
+    ).toBeNull();
+    fireEvent.click(projectTrigger(dialog));
+    fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
+    const useLogo = await dialog.findByRole("button", {
+      name: "Use project logo",
+    });
+    expect(useLogo.getAttribute("aria-pressed")).toBe("false");
+    const face = previewAvatar();
+    fireEvent.click(useLogo);
+    expect(useLogo.getAttribute("aria-pressed")).toBe("true");
+    expect(previewAvatar()).toBe(logo);
+    fireEvent.click(useLogo);
+    expect(previewAvatar()).toBe(face);
+    fireEvent.click(useLogo);
+    fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find(
+          (call) => call.method === "captains_create",
+        )?.input,
+      ).toMatchObject({
+        projectId: "proj_a",
+        avatar: {
+          style: "logo",
+          seed: expect.stringMatching(/^[a-z0-9]{10}$/),
+        },
+      }),
+    );
+  });
+
+  it("switches an existing captain to its project logo from Edit captain, and New avatar rolls back to a face", async () => {
+    const { view } = await render({
+      rpc: {
+        project_logos: () => ({ proj_a: logo }),
+        captains_update: () => logoRegistry(["cap", "logo"])[0],
+      },
+    });
+    await waitFor(() => expect(anchorOf(view.container, "cap")).not.toBeNull());
+    fireEvent.contextMenu(anchorOf(view.container, "cap")!);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Edit captain…" }),
+    );
+    const dialog = within(await screen.findByRole("dialog"));
+    const save = dialog.getByRole("button", {
+      name: "Save changes",
+    }) as HTMLButtonElement;
+    const useLogo = await dialog.findByRole("button", {
+      name: "Use project logo",
+    });
+    fireEvent.click(useLogo);
+    expect(save.disabled).toBe(false);
+    fireEvent.click(dialog.getByRole("button", { name: "New avatar" }));
+    expect(useLogo.getAttribute("aria-pressed")).toBe("false");
+    expect(previewAvatar()).not.toBe(logo);
+    fireEvent.click(useLogo);
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find(
+          (call) => call.method === "captains_update",
+        )?.input,
+      ).toMatchObject({ threadId: "cap", avatar: { style: "logo" } }),
+    );
+    await waitFor(() => expect(tileOf(view.container, "cap")).toBe(logo));
+  });
+});
+
 describe("thread menu", () => {
   const rightClick = (element: HTMLElement) => fireEvent.contextMenu(element);
 

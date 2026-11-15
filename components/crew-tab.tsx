@@ -234,7 +234,9 @@ function CrewView({
     {},
   );
   const groupOpen = (title: string) => groups[title] ?? title === "Active";
-  const projectLogo = useProjectLogos()[captain.thread.projectId] ?? null;
+  const logo = useProjectLogos()[captain.thread.projectId] ?? null;
+  /** No corner badge when the avatar is the logo already. */
+  const projectLogo = captain.record.avatar.style === "logo" ? null : logo;
   const workers = crew.active.length + crew.inactive.length + crew.parked.length;
   const rows = (entries: readonly ThreadEntry[]) =>
     entries.map((entry) => (
@@ -251,7 +253,11 @@ function CrewView({
     <div className="flex min-h-full flex-col gap-5">
       <header className="flex items-center gap-3 px-2">
         <span className="relative shrink-0">
-          <CaptainTile avatar={captain.record.avatar} size="preview" />
+          <CaptainTile
+            avatar={captain.record.avatar}
+            projectId={captain.thread.projectId}
+            size="preview"
+          />
           {projectLogo === null ? null : (
             <ProjectLogo
               src={projectLogo}
@@ -350,7 +356,10 @@ function CaptainPicker({
             onClick={() => onPick(entry.thread.id)}
             className={cn(PANEL_ROW, "h-11 items-center gap-2.5 px-2")}
           >
-            <CaptainTile avatar={entry.record.avatar} />
+            <CaptainTile
+              avatar={entry.record.avatar}
+              projectId={entry.thread.projectId}
+            />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm font-medium text-foreground">
                 {entry.thread.displayTitle}

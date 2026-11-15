@@ -1,5 +1,5 @@
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import plugin from "../server";
 
@@ -112,6 +112,19 @@ describe("project logos", () => {
     expect(read).not.toContain("Private");
   });
 
+  it("reads a project's logo as soon as the settings stop leaving it alone", async () => {
+    const { logos, harness } = await load(
+      [{ id: "cops", repo: { "favicon.svg": svg("<svg>c</svg>") } }],
+      { logoSkipProjects: "cops" },
+    );
+    expect(await logos()).toEqual({});
+    await harness.setSettings({ logoSkipProjects: "" });
+    await vi.waitFor(async () =>
+      expect(await logos()).toEqual({ cops: svgUri("<svg>c</svg>") }),
+    );
+    expect(harness.experimental_rpcInvalidations).toContainEqual(["logos"]);
+  });
+
   it("finds each project's logo in its repo, root files first and apps/web before other workspaces", async () => {
     const { logos } = await load([
       {
@@ -143,6 +156,64 @@ describe("project logos", () => {
       proj_root: "data:image/vnd.microsoft.icon;base64,AAABAAEA",
       proj_mono: svgUri("<svg>web</svg>"),
       proj_next: "data:image/vnd.microsoft.icon;base64,AAABAAEA",
+    });
+  });
+
+  it("takes the square favicon over a wide brand logo in the cops, content and goodluck layouts", async () => {
+    const goodluckIcon = binary(
+      "image/vnd.microsoft.icon",
+      "iVBORw0KGgo=",
+      721,
+    );
+    const { logos } = await load([
+      {
+        id: "goodluck",
+        repo: {
+          "apps/web/public/brand/logo.png": binary(
+            "image/png",
+            "d2lkZQ==",
+            39_182,
+          ),
+          "apps/web/public/brand/logo-white.png": binary(
+            "image/png",
+            "d2hpdGU=",
+            39_004,
+          ),
+          "apps/web/public/brand/icon.png": binary(
+            "image/png",
+            "aWNvbg==",
+            721,
+          ),
+          "apps/web/public/favicon.ico": goodluckIcon,
+          "apps/web/src/components/ui/icons.tsx": README,
+        },
+      },
+      {
+        id: "cops",
+        repo: {
+          "apps/web/app/icon.svg": svg("<svg>cops</svg>"),
+          "apps/web/app/favicon.ico": ICO,
+          "apps/web/public/brand/cops-icon-dark-512.png": PNG,
+          "apps/web/public/halo-logo.svg": svg("<svg>halo</svg>"),
+        },
+      },
+      {
+        id: "content",
+        repo: {
+          "public/logo.png": binary("image/png", "AAAA", 1_520_797),
+          "public/icons/tiktok_logo.png": PNG,
+          "src/app/favicon.ico": binary(
+            "image/vnd.microsoft.icon",
+            "AAABAAQA",
+            32_038,
+          ),
+        },
+      },
+    ]);
+    expect(await logos()).toEqual({
+      goodluck: "data:image/vnd.microsoft.icon;base64,iVBORw0KGgo=",
+      cops: svgUri("<svg>cops</svg>"),
+      content: "data:image/vnd.microsoft.icon;base64,AAABAAQA",
     });
   });
 

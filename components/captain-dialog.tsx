@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
+import { useProjectLogos } from "@/hooks/use-project-logos";
 import { randomAvatar } from "@/lib/avatar";
 import { INSTRUCTIONS_MAX } from "@/lib/captain-instructions";
 import { captainTitle } from "@/lib/captain-text";
@@ -28,6 +29,7 @@ import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
 import { Dropdown } from "./dropdown";
+import { ProjectLogo } from "./project-logo";
 
 export type CaptainDialogState =
   | { kind: "create" }
@@ -184,7 +186,13 @@ export function CaptainDialog({
   const trimmedName = name.trim();
   const renamed = currentTitle !== null && trimmedName !== currentTitle;
   const avatarChanged =
-    state.kind === "edit" && avatar.seed !== state.record.avatar.seed;
+    state.kind === "edit" &&
+    (avatar.style !== state.record.avatar.style ||
+      avatar.seed !== state.record.avatar.seed);
+  const captainProjectId =
+    state.kind === "create" ? projectId : state.thread.projectId;
+  const projectLogo = useProjectLogos()[captainProjectId];
+  const usesLogo = avatar.style === "logo";
   const editedProject =
     state.kind === "edit"
       ? projects.find((candidate) => candidate.id === state.thread.projectId)
@@ -331,7 +339,11 @@ export function CaptainDialog({
               FOCUS_RING,
             )}
           >
-            <CaptainTile avatar={avatar} size="preview" />
+            <CaptainTile
+              avatar={avatar}
+              projectId={captainProjectId}
+              size="preview"
+            />
             <span
               aria-hidden="true"
               className="absolute -right-1.5 -bottom-1.5 grid size-5 place-items-center rounded-full border border-border bg-popover text-muted-foreground shadow-sm transition-colors group-hover/avatar:text-foreground"
@@ -342,6 +354,26 @@ export function CaptainDialog({
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {name}
           </span>
+          {projectLogo === undefined ? null : (
+            <button
+              type="button"
+              aria-pressed={usesLogo}
+              onClick={() =>
+                setAvatar({
+                  style: usesLogo ? "micah" : "logo",
+                  seed: avatar.seed,
+                })
+              }
+              className={cn(
+                "flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2 text-xs text-muted-foreground hover:text-foreground aria-pressed:bg-background aria-pressed:text-foreground",
+                FOCUS_RING,
+              )}
+            >
+              <ProjectLogo src={projectLogo} />
+              Use project logo
+              {usesLogo ? <Icon name="Check" className="size-3" /> : null}
+            </button>
+          )}
         </div>
         <Field label="Name" htmlFor={nameId}>
           <input
