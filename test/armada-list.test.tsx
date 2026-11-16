@@ -19,6 +19,8 @@ import { toast } from "sonner";
 import app from "../app";
 import { avatarDataUri } from "../lib/avatar";
 import type { CaptainRecord } from "../lib/captains";
+import { moveCaptain } from "../lib/captain-order";
+import { rpcContract } from "../lib/rpc";
 import type { ParkRecord } from "../lib/lifecycle";
 import { NOW, project, settledAt, snoozedUntil, thread } from "./fixtures";
 
@@ -30,7 +32,8 @@ const menuItems = vi.hoisted(
   () => new Map<string, readonly PluginThreadActionsInlineItem[]>(),
 );
 vi.mock("@get-bb/plugin-sdk/app", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@get-bb/plugin-sdk/app")>();
+  const actual =
+    await importOriginal<typeof import("@get-bb/plugin-sdk/app")>();
   const Menu = actual.experimental_ThreadActionsContextMenu;
   return {
     ...actual,
@@ -153,6 +156,120 @@ const rowOf = (container: HTMLElement, id: string) =>
   anchorOf(container, id)?.closest("li") ?? null;
 const listOf = (container: HTMLElement, id: string) =>
   rowOf(container, id)?.closest("ul")?.getAttribute("aria-label") ?? null;
+
+describe("captain reordering", () => {
+  const fleet = [
+    thread("a", { title: "Alpha", projectId: "proj_a" }),
+    thread("b", { title: "Beta", projectId: "proj_b" }),
+    thread("c", { title: "Gamma", projectId: "proj_me" }),
+  ];
+  const order = () =>
+    within(screen.getByRole("list", { name: "Captains" }))
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("data-sidebar-thread-id"));
+  const transfer = () => ({
+    setData: vi.fn(),
+    effectAllowed: "none",
+    dropEffect: "none",
+  });
+
+  it("drags a captain ahead of another without opening its thread", async () => {
+    let records = registry("a", "b", "c");
+    const { view, onNavigate } = await render({
+      threads: fleet,
+      rpc: {
+        captains_list: () => records,
+        captains_reorder: (input) => {
+          const { threadId, beforeThreadId } =
+            rpcContract.captains_reorder.input.parse(input);
+          records = moveCaptain(records, threadId, beforeThreadId);
+          return null;
+        },
+      },
+    });
+    const handle = await screen.findByRole("button", { name: "Reorder Gamma" });
+    const dataTransfer = transfer();
+    fireEvent.dragStart(handle, { dataTransfer });
+    const target = rowOf(view.container, "a")!;
+    fireEvent.dragOver(target, { dataTransfer });
+    fireEvent.drop(target, { dataTransfer });
+    await waitFor(() => expect(order()).toEqual(["c", "a", "b"]));
+    expect(
+      view.inspection.rpcCalls.filter(
+        (call) => call.method === "captains_reorder",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        input: { threadId: "c", beforeThreadId: "a" },
+      }),
+    ]);
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("moves up and down with the keyboard and keeps the handle focused", async () => {
+    let records = registry("a", "b", "c");
+    await render({
+      threads: fleet,
+      rpc: {
+        captains_list: () => records,
+        captains_reorder: (input) => {
+          const { threadId, beforeThreadId } =
+            rpcContract.captains_reorder.input.parse(input);
+          records = moveCaptain(records, threadId, beforeThreadId);
+          return null;
+        },
+      },
+    });
+    const handle = await screen.findByRole("button", { name: "Reorder Gamma" });
+    handle.focus();
+    fireEvent.keyDown(handle, { key: "ArrowUp" });
+    await waitFor(() => expect(order()).toEqual(["a", "c", "b"]));
+    await waitFor(() =>
+      expect(handle.getAttribute("aria-disabled")).toBe("false"),
+    );
+    expect(document.activeElement).toBe(handle);
+    fireEvent.keyDown(handle, { key: "ArrowDown" });
+    await waitFor(() => expect(order()).toEqual(["a", "b", "c"]));
+    expect(document.activeElement).toBe(handle);
+  });
+
+  it("leaves the order alone when a drag is cancelled or dropped outside", async () => {
+    const { view } = await render({
+      threads: fleet,
+      registry: registry("a", "b", "c"),
+    });
+    const handle = await screen.findByRole("button", { name: "Reorder Gamma" });
+    const dataTransfer = transfer();
+    fireEvent.dragStart(handle, { dataTransfer });
+    fireEvent.dragEnd(handle, { dataTransfer });
+    fireEvent.drop(rowOf(view.container, "a")!, { dataTransfer });
+    expect(order()).toEqual(["a", "b", "c"]);
+    expect(
+      view.inspection.rpcCalls.some(
+        (call) => call.method === "captains_reorder",
+      ),
+    ).toBe(false);
+  });
+
+  it("rolls back a failed save", async () => {
+    let reject: (cause: Error) => void = () => {};
+    const saved = new Promise<null>((_resolve, fail) => {
+      reject = fail;
+    });
+    await render({
+      threads: fleet,
+      registry: registry("a", "b", "c"),
+      rpc: { captains_reorder: () => saved },
+    });
+    fireEvent.keyDown(
+      await screen.findByRole("button", { name: "Reorder Gamma" }),
+      { key: "ArrowUp" },
+    );
+    await waitFor(() => expect(order()).toEqual(["a", "c", "b"]));
+    await act(async () => reject(new Error("disk full")));
+    await waitFor(() => expect(order()).toEqual(["a", "b", "c"]));
+  });
+});
 
 describe("Armada thread list", () => {
   it("keeps a captain's threads out of the sidebar list, and counts them on the captain's row", async () => {
@@ -473,7 +590,9 @@ describe("Armada thread list", () => {
       screen.getByRole("button", { name: "Threads from Alpha +1" }),
     ).toBeTruthy();
 
-    fireEvent.click(within(list).getByRole("option", { name: /^All projects/ }));
+    fireEvent.click(
+      within(list).getByRole("option", { name: /^All projects/ }),
+    );
     await waitFor(() => expect(rowOf(view.container, "me")).not.toBeNull());
     expect(
       screen.queryByRole("listbox", { name: "Show threads from" }),
@@ -592,9 +711,9 @@ describe("Armada thread list", () => {
         true,
       );
     }
-    expect(
-      anchorOf(view.container, "cap")!.getAttribute("aria-current"),
-    ).toBe("page");
+    expect(anchorOf(view.container, "cap")!.getAttribute("aria-current")).toBe(
+      "page",
+    );
     expect(
       anchorOf(view.container, "plain")!.hasAttribute("aria-current"),
     ).toBe(false);
@@ -831,8 +950,11 @@ describe("creating a captain", () => {
     fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
     expect(projectTrigger(dialog).textContent).toBe("Alpha · 2 captains");
     expect(
-      (dialog.getByRole("button", { name: "Create captain" }) as HTMLButtonElement)
-        .disabled,
+      (
+        dialog.getByRole("button", {
+          name: "Create captain",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(false);
   });
 

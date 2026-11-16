@@ -258,7 +258,7 @@ describe("captains and their workers", () => {
     expect(threadIds(build(threads, registryOf(["cap"])))).toEqual(["w"]);
   });
 
-  it("orders captains by when they were made one", () => {
+  it("preserves the captain order supplied by the server", () => {
     const threads = [thread("late"), thread("early"), thread("middle")];
     const registry = registryOf(
       ["late", "2026-03-01T00:00:00.000Z"],
@@ -266,9 +266,9 @@ describe("captains and their workers", () => {
       ["middle", "2026-02-01T00:00:00.000Z"],
     );
     expect(build(threads, registry).captains.map((c) => c.thread.id)).toEqual([
+      "late",
       "early",
       "middle",
-      "late",
     ]);
   });
 

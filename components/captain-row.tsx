@@ -1,4 +1,5 @@
 import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
+import type { ReactNode } from "react";
 
 import type { CaptainCounts, CaptainEntry } from "@/lib/model";
 import { STATUS } from "@/lib/status";
@@ -35,41 +36,42 @@ export function CaptainRow({
   active,
   inline,
   onOpen,
+  reorderHandle,
 }: {
   entry: CaptainEntry;
   active: boolean;
   inline: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
+  reorderHandle: ReactNode;
 }) {
   return (
-    <li className="list-none">
-      <ThreadLink
-        thread={entry.thread}
-        active={active}
-        inline={inline}
-        onOpen={onOpen}
-        className="flex h-11 items-center gap-2.5 px-2.5"
-        titleClassName="font-medium"
-      >
-        {({ title, shortcut }) => (
-          <>
-            <CaptainTile
-              avatar={entry.record.avatar}
-              projectId={entry.thread.projectId}
-              className="pointer-events-none relative"
-            />
-            <span className="pointer-events-none relative flex min-w-0 flex-1 flex-col justify-center">
-              <span className="flex items-center gap-2">{title}</span>
-              <span className="flex h-4 items-center gap-1.5 text-2xs">
-                <Summary counts={entry.counts} />
-              </span>
+    <ThreadLink
+      thread={entry.thread}
+      active={active}
+      inline={inline}
+      onOpen={onOpen}
+      className="flex h-11 items-center gap-2.5 px-2.5"
+      titleClassName="font-medium"
+    >
+      {({ title, shortcut }) => (
+        <>
+          <CaptainTile
+            avatar={entry.record.avatar}
+            projectId={entry.thread.projectId}
+            className="pointer-events-none relative"
+          />
+          <span className="pointer-events-none relative flex min-w-0 flex-1 flex-col justify-center">
+            <span className="flex items-center gap-2">{title}</span>
+            <span className="flex h-4 items-center gap-1.5 text-2xs">
+              <Summary counts={entry.counts} />
             </span>
-            <span className="pointer-events-none relative flex shrink-0 items-center justify-end pr-1.5 empty:hidden">
-              {shortcut ?? <WorkingGlyph status={entry.status} />}
-            </span>
-          </>
-        )}
-      </ThreadLink>
-    </li>
+          </span>
+          <span className="pointer-events-none relative flex shrink-0 items-center justify-end pr-1.5 empty:hidden">
+            {shortcut ?? <WorkingGlyph status={entry.status} />}
+          </span>
+          {reorderHandle}
+        </>
+      )}
+    </ThreadLink>
   );
 }
