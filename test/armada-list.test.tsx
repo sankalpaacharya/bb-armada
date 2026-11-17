@@ -867,6 +867,7 @@ describe("creating a captain", () => {
     const chosen = previewAvatar();
     expect(chosen).not.toBe(before);
     await screen.findByTestId("bb-provider-model-picker");
+    await waitCreateReady();
     fireEvent.keyDown(name, { key: "Enter" });
 
     await waitFor(() =>
@@ -1070,9 +1071,11 @@ describe("creating a captain", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
     await waitCreateReady();
-    expect(
-      (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
-    ).toBe("fast");
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
+      ).toBe("fast"),
+    );
     fireEvent.change(screen.getByLabelText("Service tier"), {
       target: { value: "default" },
     });
