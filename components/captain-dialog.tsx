@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from "react";
 import {
+  experimental_ProviderModelPicker as ProviderModelPicker,
   experimental_useRpcMutation,
   experimental_useRpcQuery,
   useBbNavigate,
@@ -18,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
+import { useCaptainExecution } from "@/hooks/use-captain-execution";
 import { useProjectLogos } from "@/hooks/use-project-logos";
 import { randomAvatar } from "@/lib/avatar";
 import { INSTRUCTIONS_MAX } from "@/lib/captain-instructions";
@@ -160,6 +162,7 @@ export function CaptainDialog({
   const [projectId, setProjectId] = useState(() =>
     startingProject(projects, activeProjectId),
   );
+  const model = useCaptainExecution(state, projectId);
   const [typedName, setTypedName] = useState<string | null>(null);
   const [typedInstructions, setTypedInstructions] = useState<string | null>(
     null,
@@ -226,11 +229,14 @@ export function CaptainDialog({
   const canSubmit =
     trimmedName !== "" &&
     (state.kind === "create"
-      ? project !== undefined
+      ? project !== undefined &&
+        (spawned !== null ||
+          (model.execution !== null && model.execution.value.model !== ""))
       : state.kind === "adopt" ||
         renamed ||
         avatarChanged ||
-        instructionsChanged);
+        instructionsChanged ||
+        model.changed);
 
   /** The recorded captain's thread, or null when it started but is not recorded yet. */
   const recordCreated = async (
@@ -246,11 +252,13 @@ export function CaptainDialog({
       });
       return spawned.threadId;
     }
+    if (model.execution === null) return null;
     const created = await create.mutate({
       projectId: project.id,
       projectName: project.name,
       name: trimmedName,
       avatar,
+      execution: model.execution.value,
       ...(trimmedInstructions === ""
         ? {}
         : { instructions: trimmedInstructions }),
@@ -276,7 +284,18 @@ export function CaptainDialog({
       } else if (state.kind !== "create") {
         const threadId = state.thread.id;
         const [, , saving] = await Promise.all([
-          renamed ? sdk.threads.update({ threadId, title: trimmedName }) : null,
+          renamed || model.changed
+            ? sdk.threads.update({
+                threadId,
+                ...(renamed ? { title: trimmedName } : {}),
+                ...(model.changed && model.execution !== null
+                  ? {
+                      model: model.execution.value.model,
+                      reasoningLevel: model.execution.value.reasoningLevel,
+                    }
+                  : {}),
+              })
+            : null,
           state.kind === "adopt"
             ? adopt.mutate({
                 threadId,
@@ -437,6 +456,33 @@ export function CaptainDialog({
                 )}
               </span>
             </Dropdown>
+          </Field>
+        ) : null}
+        {state.kind !== "adopt" && spawned === null ? (
+          <Field
+            label={state.kind === "create" ? "Provider and model" : "Model"}
+          >
+            {model.execution === null ? (
+              <span className="text-sm text-muted-foreground" role="status">
+                {model.error
+                  ? "Could not load model settings. Reopen to retry."
+                  : "Loading model settings…"}
+              </span>
+            ) : (
+              <ProviderModelPicker
+                value={model.execution.value}
+                onChange={model.setValue}
+                routing={model.execution.routing}
+                allowProviderChange={state.kind === "create"}
+                disabled={pending}
+              />
+            )}
+            {state.kind === "edit" ? (
+              <span className="text-xs text-muted-foreground">
+                Model and reasoning apply to this conversation. Change service
+                tier in the thread composer.
+              </span>
+            ) : null}
           </Field>
         ) : null}
         {asksInstructions ? (

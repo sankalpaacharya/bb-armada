@@ -69,6 +69,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const execution = {
+  providerId: "claude-code",
+  model: "claude-sonnet-4-6",
+  reasoningLevel: "high",
+  serviceTier: "default",
+};
+
 const projects = [
   project("proj_a", "Alpha"),
   project("proj_b", "Beta"),
@@ -138,7 +145,25 @@ async function render(
         project_logos: () => ({}),
         ...options.rpc,
       } as never,
-      sdk: options.sdk as never,
+      sdk: {
+        system: {
+          config: async () => ({
+            primaryHostId: "host_mac",
+            generalSettings: { defaultProviderId: "codex" },
+          }),
+        },
+        projects: {
+          get: async () => ({
+            sources: [{ hostId: "host_mac", isDefault: true }],
+          }),
+          defaultExecutionOptions: async () => ({
+            ...execution,
+            permissionMode: "auto",
+          }),
+        },
+        threads: { defaultExecutionOptions: async () => execution },
+        ...options.sdk,
+      } as never,
       settings: options.settings ?? { inactiveAfterHours: 0 },
     },
   );
@@ -660,6 +685,7 @@ describe("creating a captain", () => {
       },
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
 
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.queryByRole("listbox")).toBeNull();
@@ -684,6 +710,7 @@ describe("creating a captain", () => {
     fireEvent.click(dialog.getByRole("button", { name: "New avatar" }));
     const chosen = previewAvatar();
     expect(chosen).not.toBe(before);
+    await screen.findByTestId("bb-provider-model-picker");
     fireEvent.keyDown(name, { key: "Enter" });
 
     await waitFor(() =>
@@ -698,6 +725,7 @@ describe("creating a captain", () => {
       projectId: "proj_a",
       projectName: "Alpha",
       name: "Fleet",
+      execution,
       avatar: { style: "micah", seed: expect.stringMatching(/^[a-z0-9]{10}$/) },
     });
     const sent = view.inspection.rpcCalls.find(
@@ -706,6 +734,119 @@ describe("creating a captain", () => {
     expect(avatarDataUri(sent.avatar)).toBe(chosen);
     expect(onNavigate).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("forwards one coherent provider selection and routes the catalog to the project host", async () => {
+    const { view } = await render({
+      rpc: {
+        captains_create: () => ({
+          outcome: "recorded",
+          record: registry("thr_new")[0],
+        }),
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    const picker = await screen.findByTestId("bb-provider-model-picker");
+    expect(picker.getAttribute("data-routing-kind")).toBe("host");
+    expect(picker.getAttribute("data-routing-id")).toBe("host_mac");
+    fireEvent.change(screen.getByLabelText("Provider ID"), {
+      target: { value: "codex" },
+    });
+    fireEvent.change(screen.getByLabelText("Model"), {
+      target: { value: "gpt-5.5" },
+    });
+    fireEvent.change(screen.getByLabelText("Reasoning level"), {
+      target: { value: "xhigh" },
+    });
+    fireEvent.change(screen.getByLabelText("Service tier"), {
+      target: { value: "fast" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Create captain" }));
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find(
+          (call) => call.method === "captains_create",
+        )?.input,
+      ).toMatchObject({
+        projectId: "proj_b",
+        execution: {
+          providerId: "codex",
+          model: "gpt-5.5",
+          reasoningLevel: "xhigh",
+          serviceTier: "fast",
+        },
+      }),
+    );
+  });
+
+  it("blocks creation until a project without defaults has a model selection", async () => {
+    await render({
+      sdk: {
+        projects: {
+          get: async () => ({ sources: [] }),
+          defaultExecutionOptions: async () => null,
+        },
+        system: {
+          config: async () => ({
+            generalSettings: { defaultProviderId: "codex" },
+          }),
+        },
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
+    expect(
+      (screen.getByLabelText("Provider ID") as HTMLInputElement).value,
+    ).toBe("codex");
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Create captain",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText("Model"), {
+      target: { value: "gpt-5.5" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Create captain",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+  });
+
+  it("keeps Create disabled when model settings fail to load", async () => {
+    await render({
+      sdk: {
+        projects: {
+          get: async () => {
+            throw new Error("offline");
+          },
+          defaultExecutionOptions: async () => null,
+        },
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    expect(
+      await screen.findByText(
+        "Could not load model settings. Reopen to retry.",
+      ),
+    ).toBeTruthy();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Create captain",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
   });
 
   it("sends the instructions typed under Project with the new captain, and counts down near the limit", async () => {
@@ -718,6 +859,7 @@ describe("creating a captain", () => {
       },
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     const field = dialog.getByRole("textbox", {
       name: "Instructions",
@@ -758,6 +900,7 @@ describe("creating a captain", () => {
   it("has no avatar grid, only a button that rolls a new avatar", async () => {
     await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.queryByRole("listbox", { name: "Avatar" })).toBeNull();
     expect(dialog.queryByRole("button", { name: "Shuffle" })).toBeNull();
@@ -772,6 +915,7 @@ describe("creating a captain", () => {
   it("closes the project list on Escape without closing the dialog", async () => {
     await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     const trigger = projectTrigger(dialog);
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
@@ -790,6 +934,7 @@ describe("creating a captain", () => {
   it("will not create a captain without a name", async () => {
     const { view } = await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     const name = dialog.getByRole("textbox", { name: "Name" });
     fireEvent.change(name, { target: { value: "   " } });
@@ -809,6 +954,7 @@ describe("creating a captain", () => {
   it("lists personal projects after the others", async () => {
     await render();
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     fireEvent.click(projectTrigger(dialog));
     const names = within(dialog.getByRole("listbox", { name: "Project" }))
@@ -826,10 +972,12 @@ describe("creating a captain", () => {
       registry: registry("cap", "cap2"),
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     fireEvent.click(projectTrigger(dialog));
     fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
     expect(projectTrigger(dialog).textContent).toBe("Alpha · 2 captains");
+    await screen.findByTestId("bb-provider-model-picker");
     expect(
       (dialog.getByRole("button", { name: "Create captain" }) as HTMLButtonElement)
         .disabled,
@@ -849,6 +997,7 @@ describe("creating a captain", () => {
       },
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
     const retry = await dialog.findByRole("button", { name: "Record captain" });
@@ -886,6 +1035,7 @@ describe("creating a captain", () => {
       },
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
     await waitFor(() =>
@@ -956,6 +1106,7 @@ describe("project logo avatars", () => {
       },
     });
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
     expect(projectTrigger(dialog).textContent).toBe("Beta");
     expect(
@@ -1058,7 +1209,11 @@ describe("thread menu", () => {
       (call) => call.method === "captains_adopt",
     )?.input as { avatar: { style: "micah"; seed: string } };
     expect(avatarDataUri(sent.avatar)).toBe(chosen);
-    expect(view.inspection.sdkCalls).toEqual([]);
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method !== "threads.defaultExecutionOptions",
+      ),
+    ).toEqual([]);
   });
 
   it("renames the thread it adopts when the name was changed", async () => {
@@ -1081,7 +1236,11 @@ describe("thread menu", () => {
     fireEvent.change(name, { target: { value: "Idea captain" } });
     fireEvent.click(dialog.getByRole("button", { name: "Make captain" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(view.inspection.sdkCalls).toEqual([
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method !== "threads.defaultExecutionOptions",
+      ),
+    ).toEqual([
       {
         method: "threads.update",
         args: [{ threadId: "plain", title: "Idea captain" }],
@@ -1109,6 +1268,72 @@ describe("thread menu", () => {
     ).toBeTruthy();
   });
 
+  it("changes an existing captain model in the same conversation and fixes its provider", async () => {
+    const { view } = await render({
+      sdk: {
+        threads: {
+          defaultExecutionOptions: async () => execution,
+          update: async () => ({}),
+        },
+      },
+    });
+    await waitFor(() => expect(anchorOf(view.container, "cap")).not.toBeNull());
+    rightClick(anchorOf(view.container, "cap")!);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Edit captain…" }),
+    );
+    const picker = await screen.findByTestId("bb-provider-model-picker");
+    expect(picker.getAttribute("data-provider-change-allowed")).toBe("false");
+    expect(
+      (screen.getByLabelText("Provider ID") as HTMLInputElement).disabled,
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText("Service tier"), {
+      target: { value: "fast" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Save changes",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText("Model"), {
+      target: { value: "claude-opus-4-6" },
+    });
+    fireEvent.change(screen.getByLabelText("Reasoning level"), {
+      target: { value: "max" },
+    });
+    fireEvent.change(screen.getByLabelText("Service tier"), {
+      target: { value: "fast" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    expect(
+      (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
+    ).toBe("default");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method === "threads.update",
+      ),
+    ).toEqual([
+      {
+        method: "threads.update",
+        args: [
+          { threadId: "cap", model: "claude-opus-4-6", reasoningLevel: "max" },
+        ],
+      },
+    ]);
+    expect(
+      view.inspection.sdkCalls.some((call) => call.method === "threads.spawn"),
+    ).toBe(false);
+  });
+
   it("lets a captain change only its avatar or be removed without touching the thread", async () => {
     const { view } = await render({
       rpc: { captains_update: () => registry("cap")[0] },
@@ -1126,7 +1351,11 @@ describe("thread menu", () => {
         )?.input,
       ).toEqual({ threadId: "cap" }),
     );
-    expect(view.inspection.sdkCalls).toEqual([]);
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method !== "threads.defaultExecutionOptions",
+      ),
+    ).toEqual([]);
 
     rightClick(anchorOf(view.container, "cap")!);
     fireEvent.click(
@@ -1163,7 +1392,11 @@ describe("thread menu", () => {
     expect(sent.avatar.seed).not.toBe("cap");
     expect(avatarDataUri(sent.avatar)).toBe(chosen);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(view.inspection.sdkCalls).toEqual([]);
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method !== "threads.defaultExecutionOptions",
+      ),
+    ).toEqual([]);
   });
 
   const editCaptain = async (sdk: Record<string, unknown>) => {
@@ -1197,7 +1430,11 @@ describe("thread menu", () => {
     fireEvent.change(name, { target: { value: "Flagship" } });
     fireEvent.keyDown(name, { key: "Enter" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(view.inspection.sdkCalls).toEqual([
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method !== "threads.defaultExecutionOptions",
+      ),
+    ).toEqual([
       {
         method: "threads.update",
         args: [{ threadId: "cap", title: "Flagship" }],
@@ -1258,7 +1495,11 @@ describe("thread menu", () => {
         (call) => call.method === "captains_update",
       ),
     ).toBe(false);
-    expect(view.inspection.sdkCalls).toEqual([]);
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method !== "threads.defaultExecutionOptions",
+      ),
+    ).toEqual([]);
   });
 
   it("removes a captain's instructions when the field is cleared", async () => {
@@ -1317,7 +1558,11 @@ describe("thread menu", () => {
       "Captain Two",
     ]);
     await pick("loose", "add-to-captain", "cap2");
-    expect(view.inspection.sdkCalls).toEqual([
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method !== "threads.defaultExecutionOptions",
+      ),
+    ).toEqual([
       {
         method: "threads.update",
         args: [{ threadId: "loose", parentThreadId: "cap2" }],
@@ -1357,7 +1602,11 @@ describe("thread menu", () => {
       expect(anchorOf(view.container, "loose")).not.toBeNull(),
     );
     await pick("loose", "add-to-captain", "cap");
-    expect(view.inspection.sdkCalls).toEqual([
+    expect(
+      view.inspection.sdkCalls.filter(
+        (call) => call.method !== "threads.defaultExecutionOptions",
+      ),
+    ).toEqual([
       {
         method: "threads.update",
         args: [{ threadId: "loose", parentThreadId: "cap" }],

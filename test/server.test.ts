@@ -183,6 +183,12 @@ const create = {
   projectName: "P",
   name: "P",
   avatar: avatar("new"),
+  execution: {
+    providerId: "codex",
+    model: "gpt-5.5",
+    reasoningLevel: "high",
+    serviceTier: "fast",
+  },
 };
 
 describe("captain records", () => {
@@ -217,6 +223,7 @@ describe("captain records", () => {
       projectId: "proj_a",
       environment: { type: "project-default" },
       title: "Fleet",
+      ...create.execution,
     });
     const [part] = (
       spawn![0] as {
