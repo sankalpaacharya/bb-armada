@@ -94,7 +94,9 @@ Go up this ladder one step at a time:
    `bb thread tell <id> --mode auto '<one corrective line>'`.
 4. **Still wedged** (it loops, does not respond, or keeps hitting the same
    obstacle): start a replacement in the same environment so its work is kept.
-   Use `bb thread spawn --parent-self --environment <same env id>` with the
+   Check the New thread service tier section of the Armada skill first.
+   Use `bb thread spawn --parent-self --environment <same env id> --provider <provider> --model <model> --service-tier fast`
+   when supported, or `--service-tier default` otherwise, with the
    brief plus a short progress note, then archive the old thread. A low
    context reading is not wedging; threads compact and keep going.
 5. **A second replacement also fails**: report the plain failure, what work was

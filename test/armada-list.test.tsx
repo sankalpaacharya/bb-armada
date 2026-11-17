@@ -79,6 +79,35 @@ const execution = {
   serviceTier: "default",
 };
 
+const fastCatalog = {
+  modelLoadError: null,
+  providers: [
+    {
+      id: "codex",
+      capabilities: { supportsServiceTier: true },
+      serviceTiers: [{ id: "fast" }],
+    },
+  ],
+  models: [
+    {
+      id: "gpt-5.5",
+      model: "gpt-5.5",
+      supportedServiceTiers: [{ id: "fast" }],
+    },
+  ],
+  selectedOnlyModels: [],
+};
+const waitCreateReady = () =>
+  waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Create captain",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
+
 const projects = [
   project("proj_a", "Alpha"),
   project("proj_b", "Beta"),
@@ -153,6 +182,14 @@ async function render(
           config: async () => ({
             primaryHostId: "host_mac",
             generalSettings: { defaultProviderId: "codex" },
+          }),
+        },
+        providers: {
+          models: async () => ({
+            modelLoadError: null,
+            providers: [],
+            models: [],
+            selectedOnlyModels: [],
           }),
         },
         projects: {
@@ -857,6 +894,7 @@ describe("creating a captain", () => {
 
   it("forwards one coherent provider selection and routes the catalog to the project host", async () => {
     const { view } = await render({
+      sdk: { providers: { models: async () => fastCatalog } },
       rpc: {
         captains_create: () => ({
           outcome: "recorded",
@@ -883,6 +921,7 @@ describe("creating a captain", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Apply execution selection" }),
     );
+    await waitCreateReady();
     fireEvent.click(screen.getByRole("button", { name: "Create captain" }));
     await waitFor(() =>
       expect(
@@ -899,6 +938,238 @@ describe("creating a captain", () => {
         },
       }),
     );
+  });
+
+  it.each([
+    ["supported Fast", fastCatalog, "fast"],
+    [
+      "model without Fast",
+      {
+        ...fastCatalog,
+        models: [{ ...fastCatalog.models[0], supportedServiceTiers: [] }],
+      },
+      "default",
+    ],
+    [
+      "provider without Fast",
+      {
+        ...fastCatalog,
+        providers: [{ ...fastCatalog.providers[0], serviceTiers: [] }],
+      },
+      "default",
+    ],
+    [
+      "provider fallback",
+      { ...fastCatalog, models: [{ id: "gpt-5.5", model: "gpt-5.5" }] },
+      "fast",
+    ],
+    [
+      "selected-only model",
+      { ...fastCatalog, models: [], selectedOnlyModels: fastCatalog.models },
+      "fast",
+    ],
+  ])(
+    "defaults new captains using %s without changing model or reasoning",
+    async (_label, catalog, tier) => {
+      const { view } = await render({
+        sdk: {
+          providers: { models: async () => catalog },
+          projects: {
+            get: async () => ({
+              sources: [{ hostId: "host_mac", isDefault: true }],
+            }),
+            defaultExecutionOptions: async () => ({
+              ...execution,
+              providerId: "codex",
+              model: "gpt-5.5",
+            }),
+          },
+        },
+        rpc: {
+          captains_create: () => ({
+            outcome: "recorded",
+            record: registry("thr_new")[0],
+          }),
+        },
+      });
+      fireEvent.click(
+        await screen.findByRole("button", { name: "New captain" }),
+      );
+      await waitCreateReady();
+      if (tier === "default") {
+        fireEvent.change(screen.getByLabelText("Service tier"), {
+          target: { value: "" },
+        });
+        fireEvent.click(
+          screen.getByRole("button", { name: "Apply execution selection" }),
+        );
+        expect(
+          (
+            screen.getByRole("button", {
+              name: "Create captain",
+            }) as HTMLButtonElement
+          ).disabled,
+        ).toBe(false);
+        expect(
+          view.inspection.sdkCalls.filter(
+            (call) => call.method === "providers.models",
+          ),
+        ).toHaveLength(1);
+      }
+      fireEvent.click(screen.getByRole("button", { name: "Create captain" }));
+      await waitFor(() =>
+        expect(
+          view.inspection.rpcCalls.find(
+            (call) => call.method === "captains_create",
+          )?.input,
+        ).toMatchObject({
+          execution: {
+            providerId: "codex",
+            model: "gpt-5.5",
+            reasoningLevel: "high",
+            serviceTier: tier,
+          },
+        }),
+      );
+      expect(
+        view.inspection.sdkCalls.find(
+          (call) => call.method === "providers.models",
+        )?.args,
+      ).toEqual([
+        {
+          hostId: "host_mac",
+          projectId: "proj_b",
+          providerId: "codex",
+          selectedModel: "gpt-5.5",
+        },
+      ]);
+    },
+  );
+
+  it("preserves an explicit Standard tier across provider switches", async () => {
+    const { view } = await render({
+      sdk: {
+        providers: { models: async () => fastCatalog },
+        projects: {
+          get: async () => ({
+            sources: [{ hostId: "host_mac", isDefault: true }],
+          }),
+          defaultExecutionOptions: async () => ({
+            ...execution,
+            providerId: "codex",
+            model: "gpt-5.5",
+          }),
+        },
+      },
+      rpc: {
+        captains_create: () => ({
+          outcome: "recorded",
+          record: registry("thr_new")[0],
+        }),
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await waitCreateReady();
+    expect(
+      (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
+    ).toBe("fast");
+    fireEvent.change(screen.getByLabelText("Service tier"), {
+      target: { value: "default" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    await waitCreateReady();
+    fireEvent.change(screen.getByLabelText("Provider ID"), {
+      target: { value: "claude-code" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    await waitCreateReady();
+    fireEvent.change(screen.getByLabelText("Provider ID"), {
+      target: { value: "codex" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    await waitCreateReady();
+    expect(
+      (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
+    ).toBe("default");
+    fireEvent.click(screen.getByRole("button", { name: "Create captain" }));
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find(
+          (call) => call.method === "captains_create",
+        )?.input,
+      ).toMatchObject({
+        execution: {
+          providerId: "codex",
+          model: "gpt-5.5",
+          reasoningLevel: "high",
+          serviceTier: "default",
+        },
+      }),
+    );
+  });
+
+  it("disables the picker while tier discovery is pending and keeps an explicit Standard choice", async () => {
+    let finish: ((catalog: typeof fastCatalog) => void) | undefined;
+    let calls = 0;
+    await render({
+      sdk: {
+        providers: {
+          models: async () =>
+            ++calls === 1
+              ? fastCatalog
+              : new Promise<typeof fastCatalog>((resolve) => {
+                  finish = resolve;
+                }),
+        },
+        projects: {
+          get: async () => ({
+            sources: [{ hostId: "host_mac", isDefault: true }],
+          }),
+          defaultExecutionOptions: async () => ({
+            ...execution,
+            providerId: "codex",
+            model: "gpt-5.5",
+          }),
+        },
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
+    await waitCreateReady();
+    fireEvent.change(screen.getByLabelText("Service tier"), {
+      target: { value: "default" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    await waitFor(() => expect(finish).toBeDefined());
+    expect(
+      screen
+        .getByTestId("bb-provider-model-picker")
+        .getAttribute("data-disabled"),
+    ).toBe("true");
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Create captain",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    await act(async () => finish?.(fastCatalog));
+    await waitCreateReady();
+    expect(
+      (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
+    ).toBe("default");
+    expect(
+      screen
+        .getByTestId("bb-provider-model-picker")
+        .getAttribute("data-disabled"),
+    ).toBe("false");
   });
 
   it("blocks creation until a project without defaults has a model selection", async () => {
@@ -933,13 +1204,7 @@ describe("creating a captain", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Apply execution selection" }),
     );
-    expect(
-      (
-        screen.getByRole("button", {
-          name: "Create captain",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(false);
+    await waitCreateReady();
   });
 
   it("keeps Create disabled when model settings fail to load", async () => {
@@ -1003,6 +1268,7 @@ describe("creating a captain", () => {
         (call) => call.method === "captains_create",
       ),
     ).toBe(false);
+    await waitCreateReady();
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
     await waitFor(() =>
       expect(
@@ -1121,6 +1387,7 @@ describe("creating a captain", () => {
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
     await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
+    await waitCreateReady();
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
     const retry = await dialog.findByRole("button", { name: "Record captain" });
     expect(view.inspection.navigateCalls).toEqual([]);
@@ -1159,6 +1426,7 @@ describe("creating a captain", () => {
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
     await screen.findByTestId("bb-provider-model-picker");
     const dialog = within(await screen.findByRole("dialog"));
+    await waitCreateReady();
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
     await waitFor(() =>
       expect(
@@ -1247,6 +1515,7 @@ describe("project logo avatars", () => {
     fireEvent.click(useLogo);
     expect(previewAvatar()).toBe(face);
     fireEvent.click(useLogo);
+    await waitCreateReady();
     fireEvent.click(dialog.getByRole("button", { name: "Create captain" }));
     await waitFor(() =>
       expect(
