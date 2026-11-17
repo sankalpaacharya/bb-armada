@@ -5,10 +5,14 @@ import {
   type ExperimentalProviderModelPickerValue,
 } from "@get-bb/plugin-sdk/app";
 
+import { preferredServiceTier } from "@/lib/service-tier";
+
 import type { CaptainDialogState } from "@/components/captain-dialog";
 
 type Selection = ExperimentalProviderModelPickerValue;
 type Execution = {
+  tierReady: boolean;
+  tierOverride: string | null;
   initial: Selection;
   value: Selection;
   routing?: ExperimentalProviderModelPickerRouting;
@@ -54,7 +58,13 @@ export function useCaptainExecution(
             : hostId
               ? { kind: "host", hostId }
               : undefined;
-        return { initial, value: initial, routing };
+        return {
+          initial,
+          value: initial,
+          routing,
+          tierReady: true,
+          tierOverride: null,
+        };
       }
       const [project, defaults, config] = await Promise.all([
         sdk.projects.get({ projectId }),
@@ -96,6 +106,8 @@ export function useCaptainExecution(
       return {
         initial,
         value: initial,
+        tierReady: false,
+        tierOverride: null,
         ...(source === undefined
           ? {}
           : { routing: { kind: "host", hostId: source.hostId } }),
@@ -116,11 +128,94 @@ export function useCaptainExecution(
 
   const execution =
     load.key === key && load.kind === "ready" ? load.execution : null;
+  const tierProviderId = execution?.value.providerId;
+  const tierModel = execution?.value.model;
+  const tierRouting = execution?.routing;
+  const tierReady = execution?.tierReady;
+  const tierOverride = execution?.tierOverride;
+  useEffect(() => {
+    if (
+      state.kind !== "create" ||
+      tierReady !== false ||
+      !tierProviderId ||
+      !tierModel
+    )
+      return;
+    let cancelled = false;
+    const routing =
+      tierRouting === undefined
+        ? { projectId }
+        : tierRouting.kind === "host"
+          ? { hostId: tierRouting.hostId, projectId }
+          : { environmentId: tierRouting.environmentId };
+    const resolved = (serviceTier: string) => {
+      if (cancelled) return;
+      setLoad((current) => {
+        if (
+          current.kind !== "ready" ||
+          current.key !== key ||
+          current.execution.value.providerId !== tierProviderId ||
+          current.execution.value.model !== tierModel
+        )
+          return current;
+        return {
+          ...current,
+          execution: {
+            ...current.execution,
+            tierReady: true,
+            value: { ...current.execution.value, serviceTier },
+          },
+        };
+      });
+    };
+    const request = {
+      ...routing,
+      providerId: tierProviderId,
+      selectedModel: tierModel,
+    };
+    void sdk.providers.models(request).then(
+      (catalog) =>
+        resolved(
+          preferredServiceTier(
+            catalog,
+            tierProviderId,
+            tierModel,
+            tierOverride ?? null,
+          ),
+        ),
+      () => resolved("default"),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sdk,
+    state.kind,
+    key,
+    tierProviderId,
+    tierModel,
+    tierRouting,
+    tierReady,
+    tierOverride,
+    projectId,
+  ]);
+
   const setValue = (value: Selection) => {
     setLoad((current) => {
       if (current.key !== key || current.kind !== "ready") return current;
       if (thread !== null && value.providerId !== thread.providerId)
         return current;
+      const previous = current.execution.value;
+      const sameModel =
+        previous.providerId === value.providerId &&
+        previous.model === value.model;
+      const explicitTier =
+        thread === null &&
+        sameModel &&
+        current.execution.tierReady &&
+        previous.reasoningLevel === value.reasoningLevel &&
+        (previous.serviceTier ?? "default") !==
+          (value.serviceTier ?? "default");
       const next =
         thread === null
           ? value
@@ -128,15 +223,26 @@ export function useCaptainExecution(
               ...value,
               serviceTier: current.execution.initial.serviceTier,
             };
-      const previous = current.execution.value;
       if (
         previous.providerId === next.providerId &&
         previous.model === next.model &&
         previous.reasoningLevel === next.reasoningLevel &&
-        previous.serviceTier === next.serviceTier
+        (previous.serviceTier ?? "default") === (next.serviceTier ?? "default")
       )
         return current;
-      return { ...current, execution: { ...current.execution, value: next } };
+      return {
+        ...current,
+        execution: {
+          ...current.execution,
+          value: next,
+          tierReady:
+            thread !== null ||
+            (sameModel && current.execution.tierReady && !explicitTier),
+          tierOverride: explicitTier
+            ? (value.serviceTier ?? "default")
+            : current.execution.tierOverride,
+        },
+      };
     });
   };
   const changed =

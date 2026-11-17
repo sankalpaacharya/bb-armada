@@ -231,7 +231,9 @@ export function CaptainDialog({
     (state.kind === "create"
       ? project !== undefined &&
         (spawned !== null ||
-          (model.execution !== null && model.execution.value.model !== ""))
+          (model.execution !== null &&
+            model.execution.tierReady &&
+            model.execution.value.model !== ""))
       : state.kind === "adopt" ||
         renamed ||
         avatarChanged ||
@@ -474,9 +476,27 @@ export function CaptainDialog({
                 onChange={model.setValue}
                 routing={model.execution.routing}
                 allowProviderChange={state.kind === "create"}
-                disabled={pending}
+                disabled={
+                  pending ||
+                  (state.kind === "create" &&
+                    !model.execution.tierReady &&
+                    model.execution.value.model !== "")
+                }
               />
             )}
+            {state.kind === "create" &&
+            model.execution !== null &&
+            !model.execution.tierReady ? (
+              <span className="text-xs text-muted-foreground" role="status">
+                Checking service tier…
+              </span>
+            ) : null}
+            {state.kind === "create" ? (
+              <span className="text-xs text-muted-foreground">
+                Fast by default when supported. Choose a tier in the picker to
+                override.
+              </span>
+            ) : null}
             {state.kind === "edit" ? (
               <span className="text-xs text-muted-foreground">
                 Model and reasoning apply to this conversation. Change service
