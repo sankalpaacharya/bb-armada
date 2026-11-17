@@ -252,6 +252,7 @@ export default async function plugin(bb: BbPluginApi) {
       name,
       avatar,
       instructions = "",
+      execution,
     }): Promise<Created> => {
       const hasInstructions = instructions.trim() !== "";
       const home = await claimHome(name);
@@ -262,6 +263,7 @@ export default async function plugin(bb: BbPluginApi) {
       }
       const thread = await bb.sdk.threads.spawn({
         projectId,
+        ...execution,
         environment: { type: "project-default" },
         title: name,
         input: captainInput(projectName, home, { hasInstructions }),

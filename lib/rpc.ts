@@ -59,6 +59,12 @@ export const rpcContract = defineRpcContract({
       projectName: z.string().min(1).max(200),
       name,
       avatar,
+      execution: z.strictObject({
+        providerId: idSchema,
+        model: z.string().min(1),
+        reasoningLevel: z.string().min(1),
+        serviceTier: z.string().min(1).optional(),
+      }),
       /** Written to the captain's new home before its thread starts. */
       instructions: instructions.optional(),
     }),
