@@ -10,8 +10,7 @@ threads, oversee them, answer their questions yourself, and bring back plain
 outcomes. You stay in this one thread for weeks.
 
 **If your prompt says you are the crew captain**, read `references/crew-captain.md`
-and `references/crew-questions.md` and follow those instead of this file. Only the
-Boundary section below also binds you.
+and `references/crew-questions.md` and follow those instead of this file. The Boundary and New thread service tier sections below also bind you.
 
 Load these references when their moment comes:
 
@@ -121,6 +120,32 @@ edit it in place. Never blindly append.
 - Destructive, irreversible, security-sensitive, or production-touching actions
   always go to the user. No standing instruction pre-authorizes them.
 
+## New thread service tier
+
+Every new captain, crew captain, worker, and replacement prefers the Fast service
+tier when its selected provider and model advertise it. An explicit user tier
+choice overrides this default. Fast is a service tier, not a model or reasoning
+level. Keep the chosen model and reasoning unchanged.
+
+Before spawning, inspect `bb provider models <provider> --json --selected-model <model>`
+with `--environment <existing env>` for a crew captain or replacement. For a new
+worker environment, use `--host <chosen host> --project "$BB_PROJECT_ID"` instead.
+Never combine `--environment` and `--project`.
+Use the same `--environment` or `--host` with `bb provider list --json`,
+omitting `--project`, to inspect the provider's
+`capabilities.supportsServiceTier` and `serviceTiers` declaration. Use
+`--service-tier fast` only when the provider supports tiers and the selected
+provider's `serviceTiers` contains `fast`, and the selected model's
+`supportedServiceTiers` also contains `fast` if that model field is present.
+If the model field is absent, use the provider declaration alone. Otherwise use
+`--service-tier default`, also when discovery fails or the model is missing. Do this before spawning; never
+retry a spawn with another tier after an ambiguous error, which could create a
+duplicate thread. Pin that same `--provider <provider> --model <model>` in the
+spawn command and keep its chosen reasoning level, so changed defaults cannot
+select another provider after the check. The examples below assume Fast passed
+this check; replace
+`fast` with `default` when it did not, or with the user's supported explicit tier.
+
 ## The crew captain
 
 Worker events never go to you. They go to one long-lived crew captain thread,
@@ -136,6 +161,7 @@ user.
 
   ```sh
   bb thread spawn --project "$BB_PROJECT_ID" --parent-self \
+    --provider <provider> --model <model> --service-tier fast \
     --parent-notifications stuck --environment "$BB_ENVIRONMENT_ID" \
     --title "<your title> crew captain" --prompt-file - <<'EOF'
   /armada You are the crew captain for bb project <project>. Home:
@@ -197,6 +223,7 @@ user.
 
    ```sh
    bb thread spawn --json --project "$BB_PROJECT_ID" --parent-thread <crew captain> \
+     --provider <provider> --model <model> --service-tier fast \
      --new-environment worktree --title "<slug>: <short task>" \
      --prompt-file ~/.bb/captains/<home>/tasks/<slug>/brief.md
    bb thread tell <crew captain> --mode queue 'TASK <slug> <worker id>'
