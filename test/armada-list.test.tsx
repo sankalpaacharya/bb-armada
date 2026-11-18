@@ -1365,7 +1365,7 @@ describe("creating a captain", () => {
     fireEvent.click(projectTrigger(dialog));
     fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
     expect(projectTrigger(dialog).textContent).toBe("Alpha · 2 captains");
-    await screen.findByTestId("bb-provider-model-picker");
+    await waitCreateReady();
     expect(
       (
         dialog.getByRole("button", {

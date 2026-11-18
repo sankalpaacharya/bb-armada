@@ -1,8 +1,17 @@
-import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
+import {
+  experimental_useRpcMutation,
+  type PluginSidebarProject,
+} from "@get-bb/plugin-sdk/app";
 import { useLayoutEffect, useRef, useState, type DragEvent } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import type { CaptainsRead } from "@/hooks/use-captains";
+import { useStoredState } from "@/hooks/use-stored-state";
+import {
+  ALL_CAPTAINS,
+  filterCaptains,
+  parseCaptainFilter,
+} from "@/lib/captain-filter";
 import type { CaptainEntry } from "@/lib/model";
 import { moveCaptain } from "@/lib/captain-order";
 import { rpcContract } from "@/lib/rpc";
@@ -11,6 +20,7 @@ import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { CaptainDialogState } from "./captain-dialog";
 import { CaptainRow } from "./captain-row";
+import { CaptainFilters } from "./captain-filters";
 import { captainItems } from "./menu-items";
 import { Note, SectionHeader } from "./section";
 import type { OpenThread } from "./thread-link";
@@ -18,17 +28,29 @@ import type { OpenThread } from "./thread-link";
 /** Every captain, one row each. Their workers are cards in Threads. */
 export function CaptainsSection({
   status,
-  captains,
+  captains: allCaptains,
+  projects,
   activeThreadId,
   onOpen,
   onDialog,
 }: {
   status: CaptainsRead["status"];
   captains: readonly CaptainEntry[];
+  projects: readonly PluginSidebarProject[];
   activeThreadId: string | null;
   onOpen: OpenThread;
   onDialog: (state: CaptainDialogState) => void;
 }) {
+  const [storedFilter, setFilter] = useStoredState(
+    "armada/captain-filter",
+    parseCaptainFilter,
+    ALL_CAPTAINS,
+  );
+  const filter =
+    storedFilter.kind === "project" && !allCaptains.some(
+      (entry) => entry.thread.projectId === storedFilter.projectId,
+    ) ? ALL_CAPTAINS : storedFilter;
+  const captains = filterCaptains(allCaptains, filter);
   const remove = experimental_useRpcMutation({
     contract: rpcContract,
     method: "captains_remove",
@@ -89,7 +111,17 @@ export function CaptainsSection({
   };
 
   return (
-    <section className="flex flex-col gap-1">
+    <section className="flex min-w-0 flex-col gap-1">
+      <CaptainFilters
+        captains={allCaptains}
+        projects={projects}
+        value={filter}
+        onChange={(next) => {
+          keyboardHandle.current = null;
+          setDrag(null);
+          setFilter(next);
+        }}
+      />
       <SectionHeader
         title="Captains"
         count={status === "ready" ? captains.length : undefined}
@@ -111,7 +143,11 @@ export function CaptainsSection({
         ) : status === "error" ? (
           <Note>Could not load captains</Note>
         ) : captains.length === 0 ? (
-          <Note>Start a captain to run a project from one chat.</Note>
+          <Note>
+            {allCaptains.length === 0
+              ? "Start a captain to run a project from one chat."
+              : "No captains in this project."}
+          </Note>
         ) : (
           <ul aria-label="Captains" className="m-0 flex flex-col gap-px p-0">
             {captains.map((entry, index) => (
