@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import type { ParkActions } from "@/hooks/use-park-actions";
@@ -17,12 +17,15 @@ export function ShelfHeading({
   count,
   open,
   onToggle,
+  note,
   className,
 }: {
   title: string;
   count: number;
   open: boolean;
   onToggle: () => void;
+  /** Quiet words after the count, such as how old the rows are. */
+  note?: ReactNode;
   className?: string;
 }) {
   return (
@@ -42,6 +45,7 @@ export function ShelfHeading({
       <span className="text-2xs tabular-nums text-muted-foreground/50">
         {count}
       </span>
+      {note}
       <span aria-hidden="true" className="h-px flex-1 bg-sidebar-border/70" />
       <Icon
         name="ChevronDown"

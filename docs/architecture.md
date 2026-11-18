@@ -78,7 +78,9 @@ colour and mark.
 | `captain_instructions_save` | `threadId`, `project`, `instructions` | whether the captain was told |
 | `captain_supervisors` | none | every crew captain's thread id |
 | `project_logos` | none | a logo for each project that has one |
-| `crew_pull_requests` | `projectId` | the project's GitHub repo and the user's open PRs in it |
+| `crew_pull_requests` | `projectId` | the project's GitHub repo, the user's open PRs in it, when they were read and when a failed read retries |
+| `pull_requests_refresh` | none | searches again if the shared cache allows it |
+| `open_pull_request` | `url`, a PR's page on github.com | whether the default browser opened it |
 
 The dialog's **Instructions** live in the home's `captain.md` under
 `## Instructions from the user`, one quoted line each, so a line of the user's
@@ -101,13 +103,29 @@ it has several.
 The Crew tab's **Pull requests** group lists the user's own open PRs in the
 captain's project repo, the `owner/name` of its GitHub remote
 (`lib/crew-pull-requests.ts`). A personal project, or one with no GitHub
-remote, has no repo, and the group stays hidden. The server reads them with one
-read-only `gh api graphql` search under the user's own `gh` sign-in, so no
-token passes through the plugin (`lib/pull-request-search.ts`). A repo's read
-is reused for 30 seconds, and when gh is missing, signed out or failing, the
-last good read stays the answer. The tab reads again when it comes into view
-and every 3 minutes while it stays there. A PR whose head branch is a crew
+remote, has no repo, and the group stays hidden. The PRs come from one search
+for all of the user's open PRs, shared with beautiful-bb's PRs card through
+`~/.cache/bb-prs/open-prs.json` (format v1, owned by beautiful-bb), and each
+project's repo is filtered out of it (`lib/shared-pr-cache.ts`,
+`lib/pull-request-search.ts`). The search is one read-only `gh api graphql`
+call under the user's own `gh` sign-in, so no token passes through the plugin.
+Nobody searches while the file is under 5 minutes old, while another process
+holds `open-prs.lock`, or before its `nextAllowedAt`. A rate limit waits for
+GitHub's own reset time and other failures back off exponentially, and the
+last PRs stay on screen with their age and retry time beside the heading.
+Coming into view only re-reads the file. A 5-minute timer asks for a fresh
+search while the tab and its window are visible, so both plugins together make
+at most 12 searches an hour. A PR whose head branch is a crew
 worker's environment branch names that worker, and clicking the name opens it.
+
+The group is drawn like the other Crew groups. Its list holds about five rows
+and scrolls both ways by itself, so the rest of the Crew tab stays put. Each row shows one
+state icon (`stateOf`, most pressing first), then the title over
+`#number · age · via worker`, with lines changed pinned at the right. The repo,
+branches and state are in the row's tooltip. Clicking a row asks the server to
+hand the URL to the system opener (`open` on macOS, `xdg-open` on Linux), so it
+opens in the user's default browser. The server opens only a PR's page on
+github.com. When that fails, bb opens it instead (`lib/open-pull-request.ts`).
 
 Pull request numbers come from bb's GitHub PR Status plugin. Without it, rows
 show no PR numbers. The sidebar remembers the project filter and which shelves

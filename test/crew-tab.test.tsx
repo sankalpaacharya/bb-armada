@@ -77,7 +77,12 @@ function renderCrew(
           reads.push(input);
           return home();
         },
-        crew_pull_requests: () => ({ repo: null, pullRequests: [] }),
+        crew_pull_requests: () => ({
+          repo: null,
+          pullRequests: [],
+          fetchedAt: null,
+          retryAt: null,
+        }),
         ...options.rpc,
       } as never,
       sdk: options.sdk as never,
@@ -310,13 +315,17 @@ describe("the crew tab's pull requests", () => {
       workspaceDisplayKind: null,
     },
   });
+  const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000 - 60_000).toISOString();
   const pulls = {
     repo: "productstudioinc/cops",
+    fetchedAt: Date.now() - 60_000,
+    retryAt: null,
     pullRequests: [
       pr(8357, {
         title: "Fix the sign up form",
         head: "capy/fix-sign-up-form",
         checks: "failing",
+        updatedAt: twoDaysAgo,
       }),
       pr(8360, { title: "Tidy the footer", review: "approved" }),
     ],
@@ -338,37 +347,140 @@ describe("the crew tab's pull requests", () => {
       )?.input,
     ).toEqual({ projectId: "proj_a" });
     const first = within(section()).getAllByRole("listitem")[0]!;
-    expect(first.textContent).toContain("cops#8357 Fix the sign up form");
-    expect(first.textContent).toContain(
-      "main ← capy/fix-sign-up-form+17 −35·via WEB-41",
-    );
+    expect(first.textContent).toBe("Fix the sign up form#8357·2d·via WEB-41+17−35");
     expect(within(first).getByLabelText("Checks failing")).toBeTruthy();
+    expect(
+      within(first).getByLabelText("17 lines added, 35 removed"),
+    ).toBeTruthy();
     const second = within(section()).getAllByRole("listitem")[1]!;
     expect(second.textContent).not.toContain("via");
-    expect(within(second).getByLabelText("Approved")).toBeTruthy();
+    expect(within(second).getByLabelText("Ready")).toBeTruthy();
   });
 
-  it("opens the PR in the browser, and its worker from the via", async () => {
-    const { view } = renderCrew(() => ready(), {
+  it("keeps the repo and branches out of the row, in its tooltip", async () => {
+    renderCrew(() => ready(), {
       workers: [fixer],
       rpc: { crew_pull_requests: () => pulls },
     });
-    fireEvent.click(
-      await screen.findByRole("button", { name: /cops#8360 Tidy the footer/ }),
-    );
-    expect(view.inspection.navigateCalls).toContainEqual({
-      method: "openUrl",
-      url: "https://github.com/productstudioinc/cops/pull/8360",
+    const title = await screen.findByRole("button", {
+      name: "Fix the sign up form",
     });
+    expect(section().textContent).not.toMatch(/cops#|←/);
+    expect(title.getAttribute("title")).toBe(
+      "Fix the sign up form\ncops#8357 · main ← capy/fix-sign-up-form\nChecks failing",
+    );
+  });
+
+  it("scrolls the PRs in a box of their own, under a heading that stays", async () => {
+    renderCrew(() => ready(), {
+      workers: [fixer],
+      rpc: {
+        crew_pull_requests: () => ({
+          ...pulls,
+          pullRequests: Array.from({ length: 15 }, (_, i) => pr(9000 + i)),
+        }),
+      },
+    });
+    const heading = await screen.findByRole("button", {
+      name: /^Pull requests/,
+    });
+    const list = within(section()).getByTestId("pull-request-list");
+    expect(within(list).getAllByRole("listitem")).toHaveLength(15);
+    expect(list.contains(heading)).toBe(false);
+    expect(list.className).toMatch(/\bmax-h-\[/);
+    expect(list.className).toMatch(/\boverflow-auto\b/);
+    expect(list.contains(screen.getByText("WEB-41"))).toBe(false);
+  });
+
+  it("opens the PR in the default browser, and its worker from the via", async () => {
+    const { view } = renderCrew(() => ready(), {
+      workers: [fixer],
+      rpc: {
+        crew_pull_requests: () => pulls,
+        open_pull_request: () => true,
+      },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tidy the footer" }),
+    );
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.find(
+          (call) => call.method === "open_pull_request",
+        )?.input,
+      ).toEqual({ url: "https://github.com/productstudioinc/cops/pull/8360" }),
+    );
+    expect(view.inspection.navigateCalls).not.toContainEqual(
+      expect.objectContaining({ method: "openUrl" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "via WEB-41" }));
     expect(
       await screen.findByRole("button", { name: /Crew/ }),
     ).toBeTruthy();
-    expect(view.inspection.navigateCalls).not.toContainEqual(
-      expect.objectContaining({
-        url: "https://github.com/productstudioinc/cops/pull/8357",
+    expect(
+      view.inspection.rpcCalls.filter(
+        (call) => call.method === "open_pull_request",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("falls back to bb's browser when the default one could not open it", async () => {
+    const { view } = renderCrew(() => ready(), {
+      rpc: {
+        crew_pull_requests: () => pulls,
+        open_pull_request: () => false,
+      },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tidy the footer" }),
+    );
+    await waitFor(() =>
+      expect(view.inspection.navigateCalls).toContainEqual({
+        method: "openUrl",
+        url: "https://github.com/productstudioinc/cops/pull/8360",
       }),
     );
+  });
+
+  it("keeps the PRs when a read fails, saying how old they are and when it retries", async () => {
+    const retryAt = Date.now() + 7 * 60_000;
+    renderCrew(() => ready(), {
+      rpc: {
+        crew_pull_requests: () => ({
+          ...pulls,
+          fetchedAt: Date.now() - 12 * 60_000 - 1000,
+          retryAt,
+        }),
+      },
+    });
+    const heading = await screen.findByRole("button", { name: /^Pull requests/ });
+    expect(heading.textContent).toBe("Pull requests212m");
+    expect(within(heading).getByLabelText(/^Updated 12m ago\. GitHub is not answering; retrying at /)).toBeTruthy();
+    expect(within(section()).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("only asks for a fresh search on its five-minute timer", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { view } = renderCrew(() => ready(), {
+        rpc: {
+          crew_pull_requests: () => pulls,
+          pull_requests_refresh: () => null,
+        },
+      });
+      await screen.findByRole("button", { name: /^Pull requests/ });
+      const refreshes = () =>
+        view.inspection.rpcCalls.filter(
+          (call) => call.method === "pull_requests_refresh",
+        ).length;
+      fireEvent.click(screen.getByRole("button", { name: /^Pull requests/ }));
+      fireEvent.click(screen.getByRole("button", { name: /^Pull requests/ }));
+      expect(refreshes()).toBe(0);
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(refreshes()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("hides the section when the project has no repo", async () => {

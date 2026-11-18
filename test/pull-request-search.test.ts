@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  FRESH_MS,
-  SEARCH_QUERY,
   createPullRequestReader,
+  inRepo,
   parseSearch,
-  type RunGh,
 } from "../lib/pull-request-search";
+import { EMPTY_CACHE, type SharedCache } from "../lib/shared-pr-cache";
+import { pr } from "./fixtures";
 
 /** One search node in the shape `gh api graphql` returns for SEARCH_QUERY. */
 const node = (number: number, overrides: Record<string, unknown> = {}) => ({
@@ -16,6 +16,7 @@ const node = (number: number, overrides: Record<string, unknown> = {}) => ({
   isDraft: false,
   additions: 2334,
   deletions: 135,
+  updatedAt: "2026-11-17T09:30:00Z",
   baseRefName: "main",
   headRefName: `feat/${number}`,
   mergeable: "MERGEABLE",
@@ -27,8 +28,7 @@ const node = (number: number, overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const response = (...nodes: unknown[]) =>
-  JSON.stringify({ data: { search: { nodes } } });
+const data = (...nodes: unknown[]) => ({ search: { nodes } });
 
 const rollup = (state: string | null) => ({
   commits: {
@@ -47,8 +47,17 @@ const PROJECTS: Record<string, { kind: "standard" | "personal"; gitRemoteUrl: st
   proj_me: { kind: "personal", gitRemoteUrl: null },
 };
 
-function reader(run: RunGh) {
-  let now = 1_000_000;
+const NOW = 1_800_000_000_000;
+
+function reader(start: Partial<SharedCache>) {
+  let shared: SharedCache = { ...EMPTY_CACHE, ...start };
+  const cache = {
+    read: vi.fn(async () => shared),
+    refresh: vi.fn(async () => {
+      shared = { ...shared, fetchedAt: NOW, data: data(node(1)) };
+      return shared;
+    }),
+  };
   const warn = vi.fn();
   const read = createPullRequestReader(
     {
@@ -60,15 +69,15 @@ function reader(run: RunGh) {
         },
       } as never,
     },
-    { run, now: () => now },
-  ).read;
-  return { read, warn, later: (ms: number) => void (now += ms) };
+    { cache, now: () => NOW },
+  );
+  return { ...read, cache, warn };
 }
 
 describe("parsing the search", () => {
   it("maps checks, review, conflicts, draft, branches and size", () => {
     const [failing, running, passing, none] = parseSearch(
-      response(
+      data(
         node(1, { ...rollup("FAILURE"), reviewDecision: "CHANGES_REQUESTED" }),
         node(2, { ...rollup("PENDING"), isDraft: true }),
         node(3, { reviewDecision: "APPROVED", mergeable: "CONFLICTING" }),
@@ -93,89 +102,78 @@ describe("parsing the search", () => {
       additions: 2334,
       deletions: 135,
       checks: "none",
-      review: "none",
+      review: "required",
       conflicts: false,
+      updatedAt: "2026-11-17T09:30:00Z",
     });
   });
 
   it("skips a node that is not a pull request", () => {
-    expect(parseSearch(response({}, node(7))).map((p) => p.number)).toEqual([7]);
+    expect(parseSearch(data({}, node(7))).map((p) => p.number)).toEqual([7]);
+    expect(parseSearch(null)).toEqual([]);
   });
 });
 
 describe("the pull request reader", () => {
-  it("searches the project's repo for the user's open PRs, read-only", async () => {
-    const calls: (readonly string[])[] = [];
-    const { read } = reader(async (args) => {
-      calls.push(args);
-      return response(node(1972));
+  it("serves the project's repo out of the one shared search, never searching again", async () => {
+    const { read, cache } = reader({
+      fetchedAt: NOW - 60_000,
+      data: data(
+        node(1972),
+        node(5, { repository: { nameWithOwner: "acme/app" } }),
+        node(1973, { repository: { nameWithOwner: "ProductStudioInc/COPS" } }),
+      ),
     });
     const result = await read("proj_cops");
-    expect(result.repo).toBe("productstudioinc/cops");
-    expect(result.pullRequests.map((p) => p.number)).toEqual([1972]);
-    expect(calls).toEqual([
-      [
-        "api",
-        "graphql",
-        "-f",
-        `query=${SEARCH_QUERY}`,
-        "-f",
-        "q=is:pr is:open author:@me archived:false repo:productstudioinc/cops sort:updated-desc",
-      ],
-    ]);
-    expect(SEARCH_QUERY).not.toMatch(/mutation/i);
-  });
-
-  it("has no repo and never runs gh for a personal or remote-less project", async () => {
-    const run = vi.fn<RunGh>();
-    const { read } = reader(run);
-    expect(await read("proj_me")).toEqual({ repo: null, pullRequests: [] });
-    expect(await read("proj_gym")).toEqual({ repo: null, pullRequests: [] });
-    expect(run).not.toHaveBeenCalled();
-  });
-
-  it("reuses a fresh read and shares one in flight", async () => {
-    const run = vi.fn<RunGh>(async () => response(node(1)));
-    const { read, later } = reader(run);
-    await Promise.all([read("proj_cops"), read("proj_cops")]);
-    await read("proj_cops");
-    expect(run).toHaveBeenCalledTimes(1);
-    later(FRESH_MS);
-    await read("proj_cops");
-    expect(run).toHaveBeenCalledTimes(2);
-  });
-
-  it("keeps the last good read when gh fails, and says why once", async () => {
-    let fail = false;
-    const { read, warn, later } = reader(async () => {
-      if (fail)
-        throw Object.assign(new Error("Command failed: gh"), {
-          code: 4,
-          stderr: "To get started with GitHub CLI, please run:  gh auth login\n",
-        });
-      return response(node(1), node(2));
-    });
-    expect((await read("proj_cops")).pullRequests).toHaveLength(2);
-    fail = true;
-    later(FRESH_MS);
-    expect((await read("proj_cops")).pullRequests).toHaveLength(2);
-    later(FRESH_MS);
-    await read("proj_cops");
-    expect(warn.mock.calls).toEqual([
-      ["could not read pull requests in productstudioinc/cops: gh is not signed in"],
-    ]);
-  });
-
-  it("reads as none, quietly, when gh is missing", async () => {
-    const { read, warn } = reader(async () => {
-      throw Object.assign(new Error("spawn gh ENOENT"), { code: "ENOENT" });
-    });
-    expect(await read("proj_cops")).toEqual({
+    expect(result).toMatchObject({
       repo: "productstudioinc/cops",
-      pullRequests: [],
+      fetchedAt: NOW - 60_000,
+      retryAt: null,
     });
+    expect(result.pullRequests.map((p) => p.number)).toEqual([1972, 1973]);
+    expect(cache.refresh).not.toHaveBeenCalled();
+  });
+
+  it("searches on a read only when nothing was ever read", async () => {
+    const { read, cache } = reader({});
+    expect((await read("proj_cops")).pullRequests.map((p) => p.number)).toEqual([1]);
+    expect(cache.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no repo and reads nothing for a personal or remote-less project", async () => {
+    const { read, cache } = reader({});
+    const none = { repo: null, pullRequests: [], fetchedAt: null, retryAt: null };
+    expect(await read("proj_me")).toEqual(none);
+    expect(await read("proj_gym")).toEqual(none);
+    expect(cache.read).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last PRs while a failed read backs off, says until when, and logs it once", async () => {
+    const { read, warn } = reader({
+      fetchedAt: NOW - 20 * 60_000,
+      nextAllowedAt: NOW + 7 * 60_000,
+      failures: 1,
+      lastError: { at: NOW - 60_000, kind: "rate-limited", message: "API rate limit exceeded" },
+      data: data(node(1)),
+    });
+    const result = await read("proj_cops");
+    expect(result.pullRequests).toHaveLength(1);
+    expect(result.retryAt).toBe(NOW + 7 * 60_000);
+    await read("proj_cops");
     expect(warn.mock.calls).toEqual([
-      ["could not read pull requests in productstudioinc/cops: gh is not installed"],
+      ["could not read pull requests: rate-limited: API rate limit exceeded"],
     ]);
+  });
+});
+
+describe("a repo's pull requests", () => {
+  it("are the ones in that repo, in any case", () => {
+    const all = [
+      pr(1),
+      pr(2, { repo: "acme/app" }),
+      pr(3, { repo: "ProductStudioInc/Cops" }),
+    ];
+    expect(inRepo("productstudioinc/cops", all).map((p) => p.number)).toEqual([1, 3]);
+    expect(inRepo("acme/other", all)).toEqual([]);
   });
 });

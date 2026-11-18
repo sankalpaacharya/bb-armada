@@ -27,7 +27,7 @@ import { MemorySection } from "./memory-section";
 import { parkItems, removeFromCrewItems } from "./menu-items";
 import { PlaceLine } from "./place-line";
 import { ProjectLogo } from "./project-logo";
-import { PullRequestRow } from "./pull-request-row";
+import { PullRequestSection } from "./pull-request-section";
 import { RowActions } from "./row-actions";
 import { Note } from "./section";
 import { ShelfHeading } from "./shelf-section";
@@ -249,7 +249,7 @@ function CrewView({
   const pullRequests = useCrewPullRequests(captain.thread.projectId);
   const prRows = useMemo(
     () =>
-      pullRequestRows(pullRequests, [
+      pullRequestRows(pullRequests.pullRequests, [
         ...crew.active,
         ...crew.inactive,
         ...crew.parked,
@@ -337,16 +337,14 @@ function CrewView({
           ))}
         </>
       )}
-      <FoldGroup
-        title="Pull requests"
-        count={prRows.length}
+      <PullRequestSection
+        rows={prRows}
+        fetchedAt={pullRequests.fetchedAt}
+        retryAt={pullRequests.retryAt}
         open={groupOpen("Pull requests")}
         onToggle={() => toggleGroup("Pull requests")}
-      >
-        {prRows.map((row) => (
-          <PullRequestRow key={row.key} row={row} onOpenWorker={onOpen} />
-        ))}
-      </FoldGroup>
+        onOpenWorker={onOpen}
+      />
       {projectName === null ? null : (
         <div className="sticky -bottom-3 -mx-3 -mb-3 mt-auto border-t border-border bg-sidebar px-3 py-2">
           <MemorySection

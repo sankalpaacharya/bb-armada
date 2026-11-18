@@ -30,6 +30,7 @@ import {
   parseStoredPark,
   type ParkRecord,
 } from "./lib/lifecycle";
+import { openPullRequest } from "./lib/open-pull-request";
 import { createLogoReader } from "./lib/project-logos";
 import { createPullRequestReader } from "./lib/pull-request-search";
 import {
@@ -371,6 +372,11 @@ export default async function plugin(bb: BbPluginApi) {
     project_logos: () => logos.logos(),
 
     crew_pull_requests: ({ projectId }) => pullRequests.read(projectId),
+    pull_requests_refresh: async () => {
+      await pullRequests.refresh();
+      return null;
+    },
+    open_pull_request: ({ url }) => openPullRequest(url),
   });
 
   bb.background.schedule("auto-settle", "*/5 * * * *", async () => {

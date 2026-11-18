@@ -26,7 +26,12 @@ export function projectRepo(project: {
 }
 
 export const CHECKS = ["failing", "running", "passing", "none"] as const;
-export const REVIEWS = ["approved", "changes_requested", "none"] as const;
+export const REVIEWS = [
+  "approved",
+  "changes_requested",
+  "required",
+  "none",
+] as const;
 
 export const crewPullRequestSchema = z.object({
   repo: z.string().regex(REPO),
@@ -41,6 +46,7 @@ export const crewPullRequestSchema = z.object({
   checks: z.enum(CHECKS),
   review: z.enum(REVIEWS),
   conflicts: z.boolean(),
+  updatedAt: z.iso.datetime(),
 });
 
 export type CrewPullRequest = z.infer<typeof crewPullRequestSchema>;
@@ -49,48 +55,88 @@ export type CrewPullRequest = z.infer<typeof crewPullRequestSchema>;
 export const crewPullRequestsSchema = z.object({
   repo: z.string().regex(REPO).nullable(),
   pullRequests: z.array(crewPullRequestSchema),
+  /** When GitHub was last read, by any plugin; null before the first read. */
+  fetchedAt: z.number().nullable(),
+  /** Set while a failed read backs off: when the next one may run. */
+  retryAt: z.number().nullable(),
 });
 
 export type CrewPullRequests = z.infer<typeof crewPullRequestsSchema>;
 
+/** The row's one icon: the most pressing thing about the PR, first match wins. */
+export const PULL_REQUEST_STATES = [
+  "failing",
+  "conflicts",
+  "changes",
+  "draft",
+  "running",
+  "ready",
+  "open",
+] as const;
+
+export type PullRequestState = (typeof PULL_REQUEST_STATES)[number];
+
+export function stateOf(pr: CrewPullRequest): PullRequestState {
+  if (pr.checks === "failing") return "failing";
+  if (pr.conflicts) return "conflicts";
+  if (pr.review === "changes_requested") return "changes";
+  if (pr.draft) return "draft";
+  if (pr.checks === "running") return "running";
+  if (pr.review === "approved") return "ready";
+  if (pr.checks === "passing" && pr.review !== "required") return "ready";
+  return "open";
+}
+
 type Mark = { icon: string; word: string; tone: string };
 
-/** CI as one small icon: failing reads red, running amber, passing a quiet gray. */
-const CHECK_MARK: Record<CrewPullRequest["checks"], Mark | null> = {
+/** Red for failing CI, amber for what else needs the user, the theme's success colour for ready. */
+const STATE_MARK: Record<PullRequestState, Mark> = {
   failing: {
-    icon: "CircleX",
+    icon: "GitPullRequest",
     word: "Checks failing",
     tone: "text-destructive-text",
   },
+  conflicts: {
+    icon: "GitPullRequest",
+    word: "Conflicts",
+    tone: "text-warning-text",
+  },
+  changes: {
+    icon: "GitPullRequest",
+    word: "Changes requested",
+    tone: "text-warning-text",
+  },
+  draft: {
+    icon: "GitPullRequestDraft",
+    word: "Draft",
+    tone: "text-muted-foreground/60",
+  },
   running: {
-    icon: "Clock",
+    icon: "GitPullRequest",
     word: "Checks running",
     tone: "text-warning-text",
   },
-  passing: {
-    icon: "CircleCheck",
-    word: "Checks passing",
-    tone: "text-muted-foreground/70",
+  ready: { icon: "Check", word: "Ready", tone: "text-success" },
+  open: {
+    icon: "GitPullRequest",
+    word: "Open",
+    tone: "text-muted-foreground",
   },
-  none: null,
 };
-
-const QUIET = "text-muted-foreground/70";
 
 export type PullRequestRow = {
   key: string;
   url: string;
-  /** `repo#number`, the repo without its owner. */
-  label: string;
+  number: number;
   title: string;
   draft: boolean;
-  base: string;
-  head: string;
+  state: Mark;
   additions: number;
   deletions: number;
-  checks: Mark | null;
-  /** Review and merge markers, kept quiet: conflicts, then the review. */
-  markers: Mark[];
+  /** When the PR last changed, in ms. */
+  updatedAt: number;
+  /** What the row leaves out: the title in full, `repo#number`, its branches and state. */
+  details: string;
   /** The crew worker whose branch this is. */
   via: { threadId: string; title: string } | null;
 };
@@ -115,27 +161,22 @@ export function pullRequestRows(
   }
   return pullRequests.map((pr) => {
     const worker = byBranch.get(pr.head);
+    const state = STATE_MARK[stateOf(pr)];
     return {
       key: `${pr.repo}#${pr.number}`,
       url: pr.url,
-      label: `${pr.repo.split("/")[1]}#${pr.number}`,
+      number: pr.number,
       title: pr.title,
       draft: pr.draft,
-      base: pr.base,
-      head: pr.head,
+      state,
       additions: pr.additions,
       deletions: pr.deletions,
-      checks: CHECK_MARK[pr.checks],
-      markers: [
-        ...(pr.conflicts
-          ? [{ icon: "DiffConflict", word: "Conflicts", tone: QUIET }]
-          : []),
-        ...(pr.review === "approved"
-          ? [{ icon: "Check", word: "Approved", tone: QUIET }]
-          : pr.review === "changes_requested"
-            ? [{ icon: "FileDiff", word: "Changes requested", tone: QUIET }]
-            : []),
-      ],
+      updatedAt: Date.parse(pr.updatedAt),
+      details: [
+        pr.title,
+        `${pr.repo.split("/")[1]}#${pr.number} · ${pr.base} ← ${pr.head}`,
+        state.word,
+      ].join("\n"),
       via:
         worker === undefined
           ? null
@@ -143,3 +184,7 @@ export function pullRequestRows(
     };
   });
 }
+
+/** A pull request's page on GitHub, the only URL the server opens. */
+export const PULL_REQUEST_URL =
+  /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;

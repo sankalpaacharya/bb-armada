@@ -9,7 +9,10 @@ import {
   homeSchema,
   idSchema,
 } from "./captains";
-import { crewPullRequestsSchema } from "./crew-pull-requests";
+import {
+  crewPullRequestsSchema,
+  PULL_REQUEST_URL,
+} from "./crew-pull-requests";
 import { parkRecordSchema } from "./lifecycle";
 
 export const CAPTAINS_TAG = "captains";
@@ -149,11 +152,18 @@ export const rpcContract = defineRpcContract({
     tags: () => [LOGOS_TAG],
   },
   /**
-   * The user's open pull requests in the project's GitHub repo, read through
-   * their `gh` sign-in. No repo, or no gh, reads as none.
+   * The user's open pull requests in the project's GitHub repo, from the
+   * search cache shared with other plugins. No repo reads as none.
    */
   crew_pull_requests: {
     input: z.strictObject({ projectId: idSchema }),
     output: crewPullRequestsSchema,
+  },
+  /** Reads GitHub again if the shared cache is stale and nothing is backing off; the tab's timer calls it. */
+  pull_requests_refresh: { input: z.null(), output: z.null() },
+  /** Opens a PR in the default browser; false when it could not, for bb's own to open it. */
+  open_pull_request: {
+    input: z.strictObject({ url: z.string().regex(PULL_REQUEST_URL) }),
+    output: z.boolean(),
   },
 });

@@ -100,5 +100,6 @@ export const pr = (
   checks: "passing",
   review: "none",
   conflicts: false,
+  updatedAt: "2026-09-29T15:00:00Z",
   ...overrides,
 });

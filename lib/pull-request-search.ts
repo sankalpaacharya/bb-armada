@@ -3,27 +3,15 @@ import { experimental_execHostFile } from "@get-bb/plugin-sdk/process";
 import { z } from "zod";
 
 import {
+  createSharedPrCache,
+  type Gh,
+  type SharedCache,
+} from "./shared-pr-cache";
+import {
   projectRepo,
   type CrewPullRequest,
   type CrewPullRequests,
 } from "./crew-pull-requests";
-
-/** Read-only: one search, never a mutation. `author:@me` is whoever gh is signed in as. */
-export const SEARCH_QUERY = `query($q: String!) {
-  search(query: $q, type: ISSUE, first: 50) {
-    nodes {
-      ... on PullRequest {
-        number title url isDraft additions deletions
-        baseRefName headRefName mergeable reviewDecision
-        repository { nameWithOwner }
-        commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-      }
-    }
-  }
-}`;
-
-export const searchOf = (repo: string): string =>
-  `is:pr is:open author:@me archived:false repo:${repo} sort:updated-desc`;
 
 const nodeSchema = z.object({
   number: z.number(),
@@ -32,6 +20,7 @@ const nodeSchema = z.object({
   isDraft: z.boolean(),
   additions: z.number(),
   deletions: z.number(),
+  updatedAt: z.iso.datetime(),
   baseRefName: z.string(),
   headRefName: z.string(),
   mergeable: z.string(),
@@ -48,12 +37,10 @@ const nodeSchema = z.object({
   }),
 });
 
-const responseSchema = z.object({
-  data: z.object({
-    search: z.object({
-      // `is:pr` makes every node a pull request; anything else is skipped.
-      nodes: z.array(z.unknown()),
-    }),
+const dataSchema = z.object({
+  search: z.object({
+    // `is:pr` makes every node a pull request; anything else is skipped.
+    nodes: z.array(z.unknown()),
   }),
 });
 
@@ -68,11 +55,14 @@ const CHECKS: Record<string, CrewPullRequest["checks"]> = {
 const REVIEWS: Record<string, CrewPullRequest["review"]> = {
   APPROVED: "approved",
   CHANGES_REQUESTED: "changes_requested",
+  REVIEW_REQUIRED: "required",
 };
 
-/** Every pull request in a `gh api graphql` search response, in its order. */
-export function parseSearch(stdout: string): CrewPullRequest[] {
-  const { nodes } = responseSchema.parse(JSON.parse(stdout)).data.search;
+/** Every pull request in the shared search's `data`, in its order; none when it has none. */
+export function parseSearch(data: unknown): CrewPullRequest[] {
+  const parsed = dataSchema.safeParse(data);
+  if (!parsed.success) return [];
+  const { nodes } = parsed.data.search;
   return nodes.flatMap((candidate) => {
     const parsed = nodeSchema.safeParse(candidate);
     if (!parsed.success) return [];
@@ -95,15 +85,13 @@ export function parseSearch(stdout: string): CrewPullRequest[] {
             ? undefined
             : REVIEWS[node.reviewDecision]) ?? "none",
         conflicts: node.mergeable === "CONFLICTING",
+        updatedAt: node.updatedAt,
       },
     ];
   });
 }
 
-/** Runs `gh` with these arguments and resolves with its stdout. */
-export type RunGh = (args: readonly string[]) => Promise<string>;
-
-const runGh: RunGh = async (args) =>
+const runGh: Gh = async (args) =>
   (
     await experimental_execHostFile("gh", args, {
       encoding: "utf8",
@@ -113,83 +101,63 @@ const runGh: RunGh = async (args) =>
     })
   ).stdout;
 
-/** Why gh failed, in words safe to log: never its output beyond one short line. */
-function failureOf(cause: unknown): string {
-  const error = cause as { code?: unknown; stderr?: unknown };
-  if (error.code === "ENOENT") return "gh is not installed";
-  const stderr = typeof error.stderr === "string" ? error.stderr : "";
-  if (error.code === 4 || /gh auth login/.test(stderr))
-    return "gh is not signed in";
-  const line = stderr.split("\n").find((text) => text.trim() !== "");
-  return (line ?? (cause instanceof Error ? cause.message : String(cause)))
-    .trim()
-    .slice(0, 160);
-}
+/** A repo's pull requests out of everything the search found. */
+export const inRepo = (
+  repo: string,
+  pullRequests: readonly CrewPullRequest[],
+): CrewPullRequest[] =>
+  pullRequests.filter((pr) => pr.repo.toLowerCase() === repo.toLowerCase());
 
-/** A repo's read is reused this long; the tab's own refreshes are minutes apart. */
-export const FRESH_MS = 30_000;
-
-type Entry = { at: number; pullRequests: CrewPullRequest[] };
+type SharedPrCache = Pick<
+  ReturnType<typeof createSharedPrCache>,
+  "read" | "refresh"
+>;
 
 /**
- * Reads the user's open pull requests in a project's repo through their own
- * `gh` sign-in, so no token passes through the plugin. Each repo's last good
- * read is kept, and stays the answer when gh fails, so the tab never blanks.
+ * The Crew tab's view of the shared pull request cache: one search for all of
+ * the user's open PRs, filtered to a project's repo here. A read never calls
+ * GitHub unless nothing was ever read; the tab's five-minute timer refreshes.
+ * A failed search keeps the last PRs, with when the next try is allowed.
  */
 export function createPullRequestReader(
   bb: Pick<BbPluginApi, "log"> & {
     sdk: Pick<BbPluginApi["sdk"], "projects">;
   },
-  options: { run?: RunGh; now?: () => number } = {},
+  options: { cache?: SharedPrCache; now?: () => number } = {},
 ) {
-  const run = options.run ?? runGh;
+  const cache = options.cache ?? createSharedPrCache({ gh: runGh });
   const now = options.now ?? Date.now;
-  const cache = new Map<string, Entry>();
-  const reading = new Map<string, Promise<CrewPullRequest[]>>();
-  const failures = new Map<string, string>();
+  let logged: string | null = null;
 
-  const fetchRepo = async (repo: string): Promise<CrewPullRequest[]> => {
-    const previous = cache.get(repo);
-    try {
-      const stdout = await run([
-        "api",
-        "graphql",
-        "-f",
-        `query=${SEARCH_QUERY}`,
-        "-f",
-        `q=${searchOf(repo)}`,
-      ]);
-      const pullRequests = parseSearch(stdout);
-      cache.set(repo, { at: now(), pullRequests });
-      failures.delete(repo);
-      return pullRequests;
-    } catch (cause) {
-      const reason = failureOf(cause);
-      if (failures.get(repo) !== reason)
-        bb.log.warn(`could not read pull requests in ${repo}: ${reason}`);
-      failures.set(repo, reason);
-      const pullRequests = previous?.pullRequests ?? [];
-      cache.set(repo, { at: now(), pullRequests });
-      return pullRequests;
-    }
-  };
-
-  const readRepo = (repo: string): Promise<CrewPullRequest[]> => {
-    const entry = cache.get(repo);
-    if (entry !== undefined && now() - entry.at < FRESH_MS)
-      return Promise.resolve(entry.pullRequests);
-    const current = reading.get(repo);
-    if (current !== undefined) return current;
-    const next = fetchRepo(repo).finally(() => reading.delete(repo));
-    reading.set(repo, next);
-    return next;
+  const note = (shared: SharedCache): SharedCache => {
+    const error = shared.lastError;
+    const reason = error === null ? null : `${error.kind}: ${error.message}`;
+    if (reason !== null && reason !== logged)
+      bb.log.warn(`could not read pull requests: ${reason}`);
+    logged = reason;
+    return shared;
   };
 
   return {
     read: async (projectId: string): Promise<CrewPullRequests> => {
       const repo = projectRepo(await bb.sdk.projects.get({ projectId }));
-      if (repo === null) return { repo: null, pullRequests: [] };
-      return { repo, pullRequests: await readRepo(repo) };
+      if (repo === null)
+        return { repo: null, pullRequests: [], fetchedAt: null, retryAt: null };
+      let shared = await cache.read();
+      if (shared.data === null) shared = await cache.refresh();
+      note(shared);
+      return {
+        repo,
+        pullRequests: inRepo(repo, parseSearch(shared.data)),
+        fetchedAt: shared.fetchedAt,
+        retryAt:
+          shared.lastError !== null && shared.nextAllowedAt > now()
+            ? shared.nextAllowedAt
+            : null,
+      };
+    },
+    refresh: async (): Promise<void> => {
+      note(await cache.refresh());
     },
   };
 }
