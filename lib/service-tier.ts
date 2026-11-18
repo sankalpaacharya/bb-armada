@@ -24,6 +24,6 @@ export function preferredServiceTier(
       model.supportedServiceTiers === undefined ||
       model.supportedServiceTiers.some((supported) => supported.id === tier.id),
   );
-  const preferred = override ?? "fast";
+  const preferred = override ?? "default";
   return tiers.some((tier) => tier.id === preferred) ? preferred : "default";
 }

@@ -493,8 +493,8 @@ export function CaptainDialog({
             ) : null}
             {state.kind === "create" ? (
               <span className="text-xs text-muted-foreground">
-                Fast by default when supported. Choose a tier in the picker to
-                override.
+                Standard tier by default. Choose Fast in the picker if you want
+                it and the model supports it.
               </span>
             ) : null}
             {state.kind === "edit" ? (

@@ -30,7 +30,8 @@ const menuItems = vi.hoisted(
   () => new Map<string, readonly PluginThreadActionsInlineItem[]>(),
 );
 vi.mock("@get-bb/plugin-sdk/app", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@get-bb/plugin-sdk/app")>();
+  const actual =
+    await importOriginal<typeof import("@get-bb/plugin-sdk/app")>();
   const Menu = actual.experimental_ThreadActionsContextMenu;
   return {
     ...actual,
@@ -535,7 +536,9 @@ describe("Armada thread list", () => {
       screen.getByRole("button", { name: "Threads from Alpha +1" }),
     ).toBeTruthy();
 
-    fireEvent.click(within(list).getByRole("option", { name: /^All projects/ }));
+    fireEvent.click(
+      within(list).getByRole("option", { name: /^All projects/ }),
+    );
     await waitFor(() => expect(rowOf(view.container, "me")).not.toBeNull());
     expect(
       screen.queryByRole("listbox", { name: "Show threads from" }),
@@ -654,9 +657,9 @@ describe("Armada thread list", () => {
         true,
       );
     }
-    expect(
-      anchorOf(view.container, "cap")!.getAttribute("aria-current"),
-    ).toBe("page");
+    expect(anchorOf(view.container, "cap")!.getAttribute("aria-current")).toBe(
+      "page",
+    );
     expect(
       anchorOf(view.container, "plain")!.hasAttribute("aria-current"),
     ).toBe(false);
@@ -797,6 +800,10 @@ describe("creating a captain", () => {
     fireEvent.change(screen.getByLabelText("Reasoning level"), {
       target: { value: "xhigh" },
     });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply execution selection" }),
+    );
+    await waitCreateReady();
     fireEvent.change(screen.getByLabelText("Service tier"), {
       target: { value: "fast" },
     });
@@ -822,7 +829,7 @@ describe("creating a captain", () => {
     );
   });
 
-  it.each([
+  const catalogs = [
     ["supported Fast", fastCatalog, "fast"],
     [
       "model without Fast",
@@ -850,9 +857,20 @@ describe("creating a captain", () => {
       { ...fastCatalog, models: [], selectedOnlyModels: fastCatalog.models },
       "fast",
     ],
+  ] as const;
+
+  it.each([
+    ...catalogs.map(
+      ([label, catalog]) =>
+        [`${label} with no choice`, catalog, null, "default"] as const,
+    ),
+    ...catalogs.map(
+      ([label, catalog, explicitFast]) =>
+        [`${label} with Fast chosen`, catalog, "fast", explicitFast] as const,
+    ),
   ])(
-    "defaults new captains using %s without changing model or reasoning",
-    async (_label, catalog, tier) => {
+    "gives new captains using %s the right tier, even when the project remembers Fast, without changing model or reasoning",
+    async (_label, catalog, choice, tier) => {
       const { view } = await render({
         sdk: {
           providers: { models: async () => catalog },
@@ -864,6 +882,7 @@ describe("creating a captain", () => {
               ...execution,
               providerId: "codex",
               model: "gpt-5.5",
+              serviceTier: "fast",
             }),
           },
         },
@@ -878,25 +897,14 @@ describe("creating a captain", () => {
         await screen.findByRole("button", { name: "New captain" }),
       );
       await waitCreateReady();
-      if (tier === "default") {
+      if (choice !== null) {
         fireEvent.change(screen.getByLabelText("Service tier"), {
-          target: { value: "" },
+          target: { value: choice },
         });
         fireEvent.click(
           screen.getByRole("button", { name: "Apply execution selection" }),
         );
-        expect(
-          (
-            screen.getByRole("button", {
-              name: "Create captain",
-            }) as HTMLButtonElement
-          ).disabled,
-        ).toBe(false);
-        expect(
-          view.inspection.sdkCalls.filter(
-            (call) => call.method === "providers.models",
-          ),
-        ).toHaveLength(1);
+        await waitCreateReady();
       }
       fireEvent.click(screen.getByRole("button", { name: "Create captain" }));
       await waitFor(() =>
@@ -928,7 +936,7 @@ describe("creating a captain", () => {
     },
   );
 
-  it("preserves an explicit Standard tier across provider switches", async () => {
+  it("preserves an explicit Fast tier across provider switches", async () => {
     const { view } = await render({
       sdk: {
         providers: { models: async () => fastCatalog },
@@ -955,10 +963,10 @@ describe("creating a captain", () => {
     await waitFor(() =>
       expect(
         (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
-      ).toBe("fast"),
+      ).toBe("default"),
     );
     fireEvent.change(screen.getByLabelText("Service tier"), {
-      target: { value: "default" },
+      target: { value: "fast" },
     });
     fireEvent.click(
       screen.getByRole("button", { name: "Apply execution selection" }),
@@ -978,9 +986,11 @@ describe("creating a captain", () => {
       screen.getByRole("button", { name: "Apply execution selection" }),
     );
     await waitCreateReady();
-    expect(
-      (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
-    ).toBe("default");
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
+      ).toBe("fast"),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Create captain" }));
     await waitFor(() =>
       expect(
@@ -992,13 +1002,13 @@ describe("creating a captain", () => {
           providerId: "codex",
           model: "gpt-5.5",
           reasoningLevel: "high",
-          serviceTier: "default",
+          serviceTier: "fast",
         },
       }),
     );
   });
 
-  it("disables the picker while tier discovery is pending and keeps an explicit Standard choice", async () => {
+  it("disables the picker while tier discovery is pending and keeps an explicit Fast choice", async () => {
     let finish: ((catalog: typeof fastCatalog) => void) | undefined;
     let calls = 0;
     await render({
@@ -1026,7 +1036,7 @@ describe("creating a captain", () => {
     fireEvent.click(await screen.findByRole("button", { name: "New captain" }));
     await waitCreateReady();
     fireEvent.change(screen.getByLabelText("Service tier"), {
-      target: { value: "default" },
+      target: { value: "fast" },
     });
     fireEvent.click(
       screen.getByRole("button", { name: "Apply execution selection" }),
@@ -1046,9 +1056,11 @@ describe("creating a captain", () => {
     ).toBe(true);
     await act(async () => finish?.(fastCatalog));
     await waitCreateReady();
-    expect(
-      (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
-    ).toBe("default");
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Service tier") as HTMLSelectElement).value,
+      ).toBe("fast"),
+    );
     expect(
       screen
         .getByTestId("bb-provider-model-picker")
@@ -1248,8 +1260,11 @@ describe("creating a captain", () => {
     expect(projectTrigger(dialog).textContent).toBe("Alpha · 2 captains");
     await screen.findByTestId("bb-provider-model-picker");
     expect(
-      (dialog.getByRole("button", { name: "Create captain" }) as HTMLButtonElement)
-        .disabled,
+      (
+        dialog.getByRole("button", {
+          name: "Create captain",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(false);
   });
 

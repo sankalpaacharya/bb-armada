@@ -55,7 +55,7 @@ export function captainInput(
             `The user's instructions for you are in captain.md under "${INSTRUCTIONS_HEADING}"; keep that section as it is and follow it, starting with your hello.`,
           ]
         : []),
-      "For every new crew captain, worker, or replacement, follow the armada skill service-tier preflight: prefer Fast only when supported, preserve an explicit user tier choice, and keep the chosen model and reasoning unchanged.",
+      "For every new crew captain, worker, or replacement, follow the armada skill service-tier preflight: use the default service tier, use Fast only when the user explicitly asks for it (a preference recorded in captain.md counts) and the model supports it, and keep the chosen model and reasoning unchanged.",
       "Then say hello in three lines: what you think the project is, and that the user can tell you what to work on.",
     ].join(" "),
   );

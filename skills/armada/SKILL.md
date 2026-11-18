@@ -122,13 +122,16 @@ edit it in place. Never blindly append.
 
 ## New thread service tier
 
-Every new captain, crew captain, worker, and replacement prefers the Fast service
-tier when its selected provider and model advertise it. An explicit user tier
-choice overrides this default. Fast is a service tier, not a model or reasoning
-level. Keep the chosen model and reasoning unchanged.
+Every new captain, crew captain, worker, and replacement uses the default
+service tier. Fast costs more and is used only when the user explicitly asks
+for it, either for this thread or as a preference recorded in `captain.md`.
+Always pass `--service-tier` explicitly: an omitted flag falls back to the
+project's remembered default, which can be Fast. Fast is a service tier, not a
+model or reasoning level. Keep the chosen model and reasoning unchanged.
 
-Before spawning, inspect `bb provider models <provider> --json --selected-model <model>`
-with `--environment <existing env>` for a crew captain or replacement. For a new
+When the user has asked for Fast, check support before spawning. Inspect
+`bb provider models <provider> --json --selected-model <model>` with
+`--environment <existing env>` for a crew captain or replacement. For a new
 worker environment, use `--host <chosen host> --project "$BB_PROJECT_ID"` instead.
 Never combine `--environment` and `--project`.
 Use the same `--environment` or `--host` with `bb provider list --json`,
@@ -142,9 +145,9 @@ If the model field is absent, use the provider declaration alone. Otherwise use
 retry a spawn with another tier after an ambiguous error, which could create a
 duplicate thread. Pin that same `--provider <provider> --model <model>` in the
 spawn command and keep its chosen reasoning level, so changed defaults cannot
-select another provider after the check. The examples below assume Fast passed
-this check; replace
-`fast` with `default` when it did not, or with the user's supported explicit tier.
+select another provider after the check. The examples below use the default
+tier; replace `default` with `fast` only when the user asked for Fast and it
+passed this check.
 
 ## The crew captain
 
@@ -161,7 +164,7 @@ user.
 
   ```sh
   bb thread spawn --project "$BB_PROJECT_ID" --parent-self \
-    --provider <provider> --model <model> --service-tier fast \
+    --provider <provider> --model <model> --service-tier default \
     --parent-notifications stuck --environment "$BB_ENVIRONMENT_ID" \
     --title "<your title> crew captain" --prompt-file - <<'EOF'
   /armada You are the crew captain for bb project <project>. Home:
@@ -223,7 +226,7 @@ user.
 
    ```sh
    bb thread spawn --json --project "$BB_PROJECT_ID" --parent-thread <crew captain> \
-     --provider <provider> --model <model> --service-tier fast \
+     --provider <provider> --model <model> --service-tier default \
      --new-environment worktree --title "<slug>: <short task>" \
      --prompt-file ~/.bb/captains/<home>/tasks/<slug>/brief.md
    bb thread tell <crew captain> --mode queue 'TASK <slug> <worker id>'

@@ -102,9 +102,10 @@ never cover anything on the escalate list in `oversight.md`.
 
 - You start new threads only as replacements for stuck workers (step 4 of the
   recovery ladder), parented to yourself and titled `<slug>: ...` like the
-  original. Follow the Armada skill’s New thread service tier preflight and
-  prefer `--service-tier fast` only when supported, preserving any explicit user
-  tier choice. Update the ledger line to the new id right after the spawn.
+  original. Follow the Armada skill’s New thread service tier preflight: use
+  `--service-tier default`, and `--service-tier fast` only when the user
+  explicitly asked for Fast and it is supported. Update the ledger line to the
+  new id right after the spawn.
 - Never commit, push, open, or merge a PR, and never let a worker do so, unless
   main passes on the user's explicit go for that change.
 

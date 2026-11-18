@@ -32,6 +32,15 @@ describe("captain text", () => {
       },
     ]);
   });
+
+  it("tells the captain to spawn on the default tier and use Fast only on an explicit request", () => {
+    const [part] = captainInput("My App", "video-editing");
+    expect(part.text).toContain("use the default service tier");
+    expect(part.text).toContain(
+      "use Fast only when the user explicitly asks for it",
+    );
+    expect(part.text).not.toMatch(/prefer Fast/i);
+  });
 });
 
 describe("a thread made a captain", () => {
