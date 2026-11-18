@@ -9,11 +9,13 @@ import {
 
 import { useArmadaModel } from "@/hooks/use-armada-model";
 import { useCrewActions } from "@/hooks/use-crew-actions";
+import { useCrewPullRequests } from "@/hooks/use-crew-pull-requests";
 import { useParkActions, type ParkActions } from "@/hooks/use-park-actions";
 import { useProjectLogos } from "@/hooks/use-project-logos";
 import { useStoredState } from "@/hooks/use-stored-state";
 import { toActionTarget } from "@/lib/action-target";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
+import { pullRequestRows } from "@/lib/crew-pull-requests";
 import type { CaptainEntry, ThreadEntry } from "@/lib/model";
 import { parseBooleanMap } from "@/lib/storage";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
@@ -25,6 +27,7 @@ import { MemorySection } from "./memory-section";
 import { parkItems, removeFromCrewItems } from "./menu-items";
 import { PlaceLine } from "./place-line";
 import { ProjectLogo } from "./project-logo";
+import { PullRequestRow } from "./pull-request-row";
 import { RowActions } from "./row-actions";
 import { Note } from "./section";
 import { ShelfHeading } from "./shelf-section";
@@ -88,6 +91,9 @@ function Group({
 }
 
 const CREW_GROUPS_KEY = "armada:crew-groups";
+
+/** The groups that start open, until the user folds them. */
+const OPEN_GROUPS = new Set(["Active", "Pull requests"]);
 
 /** A group of workers that folds away, drawn like the sidebar's shelves. */
 function FoldGroup({
@@ -233,11 +239,23 @@ function CrewView({
     parseBooleanMap,
     {},
   );
-  const groupOpen = (title: string) => groups[title] ?? title === "Active";
+  const groupOpen = (title: string) => groups[title] ?? OPEN_GROUPS.has(title);
+  const toggleGroup = (title: string) =>
+    setGroups({ ...groups, [title]: !groupOpen(title) });
   const logo = useProjectLogos()[captain.thread.projectId] ?? null;
   /** No corner badge when the avatar is the logo already. */
   const projectLogo = captain.record.avatar.style === "logo" ? null : logo;
   const workers = crew.active.length + crew.inactive.length + crew.parked.length;
+  const pullRequests = useCrewPullRequests(captain.thread.projectId);
+  const prRows = useMemo(
+    () =>
+      pullRequestRows(pullRequests, [
+        ...crew.active,
+        ...crew.inactive,
+        ...crew.parked,
+      ]),
+    [pullRequests, crew],
+  );
   const rows = (entries: readonly ThreadEntry[]) =>
     entries.map((entry) => (
       <WorkerRow
@@ -312,15 +330,23 @@ function CrewView({
               title={title}
               count={entries.length}
               open={groupOpen(title)}
-              onToggle={() =>
-                setGroups({ ...groups, [title]: !groupOpen(title) })
-              }
+              onToggle={() => toggleGroup(title)}
             >
               {rows(entries)}
             </FoldGroup>
           ))}
         </>
       )}
+      <FoldGroup
+        title="Pull requests"
+        count={prRows.length}
+        open={groupOpen("Pull requests")}
+        onToggle={() => toggleGroup("Pull requests")}
+      >
+        {prRows.map((row) => (
+          <PullRequestRow key={row.key} row={row} onOpenWorker={onOpen} />
+        ))}
+      </FoldGroup>
       {projectName === null ? null : (
         <div className="sticky -bottom-3 -mx-3 -mb-3 mt-auto border-t border-border bg-sidebar px-3 py-2">
           <MemorySection

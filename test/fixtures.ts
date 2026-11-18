@@ -3,6 +3,7 @@ import type {
   PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
 
+import type { CrewPullRequest } from "../lib/crew-pull-requests";
 import type { ParkRecord } from "../lib/lifecycle";
 
 export const NOW = new Date(2026, 9, 1, 15, 0).getTime();
@@ -81,3 +82,23 @@ export const snoozedUntil = (
   until: number,
   at = until - 3_600_000,
 ): ParkRecord => ({ threadId, kind: "snoozed", at, until });
+
+/** One of the user's open pull requests in cops. */
+export const pr = (
+  number: number,
+  overrides: Partial<CrewPullRequest> = {},
+): CrewPullRequest => ({
+  repo: "productstudioinc/cops",
+  number,
+  title: `PR ${number}`,
+  url: `https://github.com/productstudioinc/cops/pull/${number}`,
+  draft: false,
+  base: "main",
+  head: `feat/${number}`,
+  additions: 17,
+  deletions: 35,
+  checks: "passing",
+  review: "none",
+  conflicts: false,
+  ...overrides,
+});

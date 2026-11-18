@@ -12,7 +12,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 
 import { CrewTab } from "../components/crew-tab";
 import type { CaptainHome } from "../lib/captain-home";
-import { project, thread } from "./fixtures";
+import { pr, project, thread } from "./fixtures";
 
 afterEach(cleanup);
 
@@ -77,6 +77,7 @@ function renderCrew(
           reads.push(input);
           return home();
         },
+        crew_pull_requests: () => ({ repo: null, pullRequests: [] }),
         ...options.rpc,
       } as never,
       sdk: options.sdk as never,
@@ -292,5 +293,118 @@ describe("the crew tab's workers", () => {
     expect(
       screen.queryByRole("menuitem", { name: "Remove from crew" }),
     ).toBeNull();
+  });
+});
+
+describe("the crew tab's pull requests", () => {
+  const fixer = thread("w_fix", {
+    title: "WEB-41",
+    parentThreadId: "cap",
+    environment: {
+      id: "env_fix",
+      name: "fix",
+      branchName: "capy/fix-sign-up-form",
+      path: null,
+      isWorktree: true,
+      providerId: null,
+      workspaceDisplayKind: null,
+    },
+  });
+  const pulls = {
+    repo: "productstudioinc/cops",
+    pullRequests: [
+      pr(8357, {
+        title: "Fix the sign up form",
+        head: "capy/fix-sign-up-form",
+        checks: "failing",
+      }),
+      pr(8360, { title: "Tidy the footer", review: "approved" }),
+    ],
+  };
+  const section = () => screen.getByRole("region", { name: "Pull requests" });
+
+  it("lists the user's open PRs in the captain's repo, asking by project", async () => {
+    const { view } = renderCrew(() => ready(), {
+      workers: [fixer],
+      rpc: { crew_pull_requests: () => pulls },
+    });
+    const heading = await screen.findByRole("button", {
+      name: /^Pull requests/,
+    });
+    expect(heading.textContent).toBe("Pull requests2");
+    expect(
+      view.inspection.rpcCalls.find(
+        (call) => call.method === "crew_pull_requests",
+      )?.input,
+    ).toEqual({ projectId: "proj_a" });
+    const first = within(section()).getAllByRole("listitem")[0]!;
+    expect(first.textContent).toContain("cops#8357 Fix the sign up form");
+    expect(first.textContent).toContain(
+      "main ← capy/fix-sign-up-form+17 −35·via WEB-41",
+    );
+    expect(within(first).getByLabelText("Checks failing")).toBeTruthy();
+    const second = within(section()).getAllByRole("listitem")[1]!;
+    expect(second.textContent).not.toContain("via");
+    expect(within(second).getByLabelText("Approved")).toBeTruthy();
+  });
+
+  it("opens the PR in the browser, and its worker from the via", async () => {
+    const { view } = renderCrew(() => ready(), {
+      workers: [fixer],
+      rpc: { crew_pull_requests: () => pulls },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /cops#8360 Tidy the footer/ }),
+    );
+    expect(view.inspection.navigateCalls).toContainEqual({
+      method: "openUrl",
+      url: "https://github.com/productstudioinc/cops/pull/8360",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "via WEB-41" }));
+    expect(
+      await screen.findByRole("button", { name: /Crew/ }),
+    ).toBeTruthy();
+    expect(view.inspection.navigateCalls).not.toContainEqual(
+      expect.objectContaining({
+        url: "https://github.com/productstudioinc/cops/pull/8357",
+      }),
+    );
+  });
+
+  it("hides the section when the project has no repo", async () => {
+    const { view } = renderCrew(() => ready(), { workers: [fixer] });
+    await screen.findByText("WEB-41");
+    await waitFor(() =>
+      expect(
+        view.inspection.rpcCalls.some(
+          (call) => call.method === "crew_pull_requests",
+        ),
+      ).toBe(true),
+    );
+    expect(screen.queryByRole("button", { name: /^Pull requests/ })).toBeNull();
+  });
+
+  it("starts open, and remembers being folded", async () => {
+    renderCrew(() => ready(), {
+      rpc: { crew_pull_requests: () => pulls },
+    });
+    const heading = await screen.findByRole("button", {
+      name: /^Pull requests/,
+    });
+    expect(heading.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(heading);
+    expect(screen.queryByText(/Tidy the footer/)).toBeNull();
+    expect(JSON.parse(stored.get("armada:crew-groups")!)).toMatchObject({
+      "Pull requests": false,
+    });
+    cleanup();
+    renderCrew(() => ready(), {
+      rpc: { crew_pull_requests: () => pulls },
+    });
+    expect(
+      (
+        await screen.findByRole("button", { name: /^Pull requests/ })
+      ).getAttribute("aria-expanded"),
+    ).toBe("false");
   });
 });

@@ -9,6 +9,7 @@ import {
   homeSchema,
   idSchema,
 } from "./captains";
+import { crewPullRequestsSchema } from "./crew-pull-requests";
 import { parkRecordSchema } from "./lifecycle";
 
 export const CAPTAINS_TAG = "captains";
@@ -146,5 +147,13 @@ export const rpcContract = defineRpcContract({
     input: z.null(),
     output: z.record(idSchema, z.string().startsWith("data:image/")),
     tags: () => [LOGOS_TAG],
+  },
+  /**
+   * The user's open pull requests in the project's GitHub repo, read through
+   * their `gh` sign-in. No repo, or no gh, reads as none.
+   */
+  crew_pull_requests: {
+    input: z.strictObject({ projectId: idSchema }),
+    output: crewPullRequestsSchema,
   },
 });

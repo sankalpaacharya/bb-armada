@@ -78,6 +78,7 @@ colour and mark.
 | `captain_instructions_save` | `threadId`, `project`, `instructions` | whether the captain was told |
 | `captain_supervisors` | none | every crew captain's thread id |
 | `project_logos` | none | a logo for each project that has one |
+| `crew_pull_requests` | `projectId` | the project's GitHub repo and the user's open PRs in it |
 
 The dialog's **Instructions** live in the home's `captain.md` under
 `## Instructions from the user`, one quoted line each, so a line of the user's
@@ -96,6 +97,17 @@ The home methods take the captain's `project` only for a captain without a
 home of its own. In the Crew tab, a thread no captain started belongs to its
 project's captain when the project has one, and shows the captain picker when
 it has several.
+
+The Crew tab's **Pull requests** group lists the user's own open PRs in the
+captain's project repo, the `owner/name` of its GitHub remote
+(`lib/crew-pull-requests.ts`). A personal project, or one with no GitHub
+remote, has no repo, and the group stays hidden. The server reads them with one
+read-only `gh api graphql` search under the user's own `gh` sign-in, so no
+token passes through the plugin (`lib/pull-request-search.ts`). A repo's read
+is reused for 30 seconds, and when gh is missing, signed out or failing, the
+last good read stays the answer. The tab reads again when it comes into view
+and every 3 minutes while it stays there. A PR whose head branch is a crew
+worker's environment branch names that worker, and clicking the name opens it.
 
 Pull request numbers come from bb's GitHub PR Status plugin. Without it, rows
 show no PR numbers. The sidebar remembers the project filter and which shelves

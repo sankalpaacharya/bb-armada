@@ -31,6 +31,7 @@ import {
   type ParkRecord,
 } from "./lib/lifecycle";
 import { createLogoReader } from "./lib/project-logos";
+import { createPullRequestReader } from "./lib/pull-request-search";
 import {
   CAPTAINS_TAG,
   HOMES_TAG,
@@ -98,6 +99,7 @@ export default async function plugin(bb: BbPluginApi) {
   const logos = createLogoReader(bb, async () =>
     logoSkipProjects(await settings.get()),
   );
+  const pullRequests = createPullRequestReader(bb);
 
   const findCaptain = async (threadId: string): Promise<CaptainRecord | null> =>
     parseStoredCaptain(await kv.get<unknown>(captainKey(threadId)));
@@ -367,6 +369,8 @@ export default async function plugin(bb: BbPluginApi) {
     captain_supervisors: async () => supervisorIdsOf(await homes.backlogs()),
 
     project_logos: () => logos.logos(),
+
+    crew_pull_requests: ({ projectId }) => pullRequests.read(projectId),
   });
 
   bb.background.schedule("auto-settle", "*/5 * * * *", async () => {
