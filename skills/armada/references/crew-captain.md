@@ -111,6 +111,10 @@ never cover anything on the escalate list in `oversight.md`.
 
 ## Recovery
 
+A message starting "[armada] Context checkpoint." means run stow now, change
+nothing else, and end the turn; Armada compacts the chat next and Recovery
+applies after.
+
 After a compaction or a clear, find your home again if you lost it: it is the
 one whose `backlog.md` names you on its `Crew captain:` line
 (`grep -l "Crew captain: $BB_THREAD_ID" ~/.bb/captains/*/backlog.md`). Check

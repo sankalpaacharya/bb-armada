@@ -284,6 +284,10 @@ one is still the user's. When unsure, treat it as the user's.
 
 Adapted from firstmate's `stow` and its startup-memory budget.
 
+A message starting "[armada] Context checkpoint." means run stow now, change
+nothing else, and end the turn; Armada compacts the chat next and Recovery
+applies after.
+
 Before ending any turn where something changed, and whenever the user says
 "stow":
 
