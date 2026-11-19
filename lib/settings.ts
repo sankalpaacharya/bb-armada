@@ -45,6 +45,30 @@ export const SETTINGS = {
     experimental_multiline: true,
     default: "",
   },
+  autoCompactProjects: {
+    type: "string",
+    label: "Auto-compact projects",
+    description:
+      "Project ids whose captains, crew captains and workers Armada compacts when idle past the thresholds below. Turn a project on from its captain's Edit dialog.",
+    experimental_multiline: true,
+    default: "proj_try5hy6jg4",
+  },
+  autoCompactCoordinatorK: {
+    type: "number",
+    label: "Compact captains past, K tokens (0 = never)",
+    description:
+      "A captain or crew captain this far into its context is compacted when it next goes idle.",
+    experimental_schema: z.number().int().min(0).max(1000),
+    default: 200,
+  },
+  autoCompactWorkerK: {
+    type: "number",
+    label: "Compact workers past, K tokens (0 = never)",
+    description:
+      "A worker this far into its context is compacted when it next goes idle.",
+    experimental_schema: z.number().int().min(0).max(1000),
+    default: 300,
+  },
 } as const satisfies PluginSettingDescriptors;
 
 /** The project names whose files the logo scan must not read, lowercased. */
@@ -59,6 +83,54 @@ export function logoSkipProjects(
       .map((name) => name.trim().toLowerCase())
       .filter((name) => name !== ""),
   );
+}
+
+export type AutoCompactSettings = {
+  projects: ReadonlySet<string>;
+  /** Thresholds in K tokens; 0 never compacts that role. */
+  coordinatorK: number;
+  workerK: number;
+};
+
+const projectIds = (raw: unknown): string[] =>
+  typeof raw !== "string"
+    ? []
+    : raw
+        .split(/[,\n]/)
+        .map((id) => id.trim())
+        .filter((id) => id !== "");
+
+export function parseAutoCompact(
+  values: Readonly<Record<string, unknown>> | undefined,
+): AutoCompactSettings {
+  const source = values ?? {};
+  return {
+    projects: new Set(
+      projectIds(
+        source.autoCompactProjects ?? SETTINGS.autoCompactProjects.default,
+      ),
+    ),
+    coordinatorK: count(
+      source.autoCompactCoordinatorK,
+      SETTINGS.autoCompactCoordinatorK.default,
+    ),
+    workerK: count(
+      source.autoCompactWorkerK,
+      SETTINGS.autoCompactWorkerK.default,
+    ),
+  };
+}
+
+/** The stored project list with `projectId` added or removed, one id per line. */
+export function withAutoCompactProject(
+  values: Readonly<Record<string, unknown>> | undefined,
+  projectId: string,
+  on: boolean,
+): string {
+  const kept = [...parseAutoCompact(values).projects].filter(
+    (id) => id !== projectId,
+  );
+  return (on ? [...kept, projectId] : kept).join("\n");
 }
 
 export type ShelfSettings = {

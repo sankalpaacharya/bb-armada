@@ -149,6 +149,11 @@ export const rpcContract = defineRpcContract({
     output: z.array(threadId),
     tags: () => [HOMES_TAG],
   },
+  /** Adds a project to the auto-compact list, or removes it. */
+  auto_compact_set: {
+    input: z.strictObject({ projectId: idSchema, on: z.boolean() }),
+    output: z.null(),
+  },
   /** Each project's logo as an image data URI; a project without one is absent. */
   project_logos: {
     input: z.null(),

@@ -2,6 +2,7 @@ import path from "node:path";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
+import { COMPACTION_LOG, createAutoCompact } from "./lib/auto-compact";
 import { createAutoSettle } from "./lib/auto-settle";
 import {
   CAPTAIN_ORDER_KEY,
@@ -48,10 +49,19 @@ import {
   type Created,
 } from "./lib/rpc";
 import { assertArmadaSkillAssets } from "./lib/skill-assets";
-import { SETTINGS, logoSkipProjects, parseSettings } from "./lib/settings";
+import {
+  SETTINGS,
+  logoSkipProjects,
+  parseAutoCompact,
+  parseSettings,
+  withAutoCompactProject,
+} from "./lib/settings";
 
 /** The queue key that makes new homes one at a time; no thread id looks like it. */
 const HOME_CLAIM = "home claim";
+
+/** The queue key for edits to the auto-compact project list. */
+const AUTO_COMPACT_PROJECTS = "auto-compact projects";
 
 /** A failed record write is retried after each wait, longer each time. */
 const RECORD_BACKOFF_MS = [100, 400] as const;
@@ -401,6 +411,18 @@ export default async function plugin(bb: BbPluginApi) {
       }
     },
 
+    auto_compact_set: ({ projectId, on }) =>
+      queue(AUTO_COMPACT_PROJECTS, async () => {
+        await settings.experimental_set({
+          autoCompactProjects: withAutoCompactProject(
+            await settings.get(),
+            projectId,
+            on,
+          ),
+        });
+        return null;
+      }),
+
     captain_supervisors: async () => supervisorIdsOf(await homes.backlogs()),
 
     project_logos: () => logos.logos(),
@@ -420,6 +442,14 @@ export default async function plugin(bb: BbPluginApi) {
     if (await logos.refresh()) bb.rpc.experimental_invalidate([LOGOS_TAG]);
   };
   bb.background.schedule("project-logos", "*/5 * * * *", refreshLogos);
+  const autoCompact = createAutoCompact(bb, {
+    readSettings: async () => parseAutoCompact(await settings.get()),
+    isCaptain: async (threadId) => (await findCaptain(threadId)) !== null,
+    readSupervisors: async () =>
+      new Set(supervisorIdsOf(await homes.backlogs())),
+    logFile: path.join(HOMES_ROOT, COMPACTION_LOG),
+  });
+  bb.events.on("thread.idle", ({ thread }) => autoCompact(thread));
   settings.onChange(inBackground(reevaluate));
   settings.onChange((next, prev) => {
     if (next.logoSkipProjects === prev.logoSkipProjects) return;
