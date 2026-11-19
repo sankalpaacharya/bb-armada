@@ -6,7 +6,7 @@ import {
   isRunning,
   runStartOf,
   runTitle,
-  workerTimes,
+  workerTime,
 } from "../lib/run-start";
 import type { Status } from "../lib/status";
 import { NOW, thread } from "./fixtures";
@@ -82,7 +82,7 @@ describe("runTitle", () => {
   });
 });
 
-describe("workerTimes", () => {
+describe("workerTime", () => {
   const worker = (
     createdAgo: number,
     activeAgo: number,
@@ -90,52 +90,50 @@ describe("workerTimes", () => {
   ) => ({
     status,
     lastActivityAt: NOW - activeAgo,
-    thread: { createdAt: NOW - createdAgo },
+    thread: { createdAt: NOW - createdAgo, updatedAt: NOW - activeAgo },
   });
   const CLOCK = "\\d{1,2}:\\d{2}";
 
-  it("gives a run's time and the thread's age", () => {
-    const times = workerTimes(
-      worker(3 * 60 * MINUTE, MINUTE),
+  it("shows how long a run has gone, with its start and creation in the tooltip", () => {
+    const time = workerTime(
+      worker(3 * 60 * MINUTE, MINUTE, "working"),
       { at: NOW - 12 * MINUTE, source: "turn" },
       NOW,
     );
-    expect(times.state).toEqual({ kind: "running", time: "12m" });
-    expect(times.created).toBe("3h ago");
-    expect(times.title).toMatch(
+    expect(time.text).toBe("12m");
+    expect(time.title).toMatch(
       new RegExp(
         `^Running for 12m · started ${CLOCK}.* · created ${CLOCK}.* \\(3h ago\\)$`,
       ),
     );
   });
 
-  it("gives how long an idle worker has been quiet, and its age", () => {
-    const times = workerTimes(worker(3 * 60 * MINUTE, 4 * MINUTE), null, NOW);
-    expect(times.state).toEqual({ kind: "idle", time: "4m" });
-    expect(times.created).toBe("3h ago");
-    expect(times.title).toMatch(
+  it("counts background work from the worker's last change", () => {
+    const time = workerTime(
+      worker(40 * MINUTE, 7 * MINUTE, "working"),
+      null,
+      NOW,
+    );
+    expect(time.text).toBe("7m");
+    expect(time.title).toMatch(
+      /^Working in the background for 7m · since .+, by its last status change · created .+ \(40m ago\)$/,
+    );
+  });
+
+  it("shows an idle worker's age, with its idle time in the tooltip", () => {
+    const time = workerTime(worker(38 * MINUTE, 4 * MINUTE), null, NOW);
+    expect(time.text).toBe("38m ago");
+    expect(time.title).toMatch(
       new RegExp(
-        `^Idle for 4m · last active ${CLOCK}.* · created ${CLOCK}.* \\(3h ago\\)$`,
+        `^Created ${CLOCK}.* \\(38m ago\\) · idle for 4m · last active ${CLOCK}`,
       ),
     );
   });
 
-  it("leaves out the idle time while background work keeps a worker working", () => {
-    const times = workerTimes(
-      worker(40 * MINUTE, 20_000, "working"),
-      null,
-      NOW,
-    );
-    expect(times.state).toBeNull();
-    expect(times.created).toBe("40m ago");
-    expect(times.title).toMatch(/^Working in the background · last active /);
-  });
-
   it("reads cleanly in a thread's first minute", () => {
-    const times = workerTimes(worker(20_000, 20_000), null, NOW);
-    expect(times.state).toEqual({ kind: "idle", time: "<1m" });
-    expect(times.created).toBe("just now");
-    expect(times.title).toMatch(/\(just now\)$/);
+    const time = workerTime(worker(20_000, 20_000, "done"), null, NOW);
+    expect(time.text).toBe("just now");
+    expect(time.title).toMatch(/idle for <1m/);
   });
 });
 

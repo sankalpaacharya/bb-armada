@@ -1,7 +1,7 @@
 import { useNow } from "@/lib/clock";
 import { wakeLabel } from "@/lib/lifecycle";
 import type { ThreadEntry } from "@/lib/model";
-import { workerTimes, type RunStart } from "@/lib/run-start";
+import { workerTime, type RunStart } from "@/lib/run-start";
 import { AGE_TEXT } from "@/lib/styles";
 import { formatAge } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -22,12 +22,11 @@ export function WakesIn({ until }: { until: number }) {
 }
 
 /**
- * A worker's run state, at the end of its title line: how long its run has
- * gone after the working glyph, or "idle 4m", which drops the number when
- * the row is too narrow to spare it. No icon: bb has no timer, and its clock
- * is the glyph for a queued message.
+ * A worker's one time, at the end of its title line: how long it has run,
+ * after its working glyph, or how long ago it was created. No icon: bb has
+ * no timer, and its clock is the glyph for a queued message.
  */
-export function RunState({
+export function WorkerTime({
   entry,
   start,
 }: {
@@ -35,34 +34,10 @@ export function RunState({
   start: RunStart | null;
 }) {
   const now = useNow();
-  const { state, title } = workerTimes(entry, start, now);
-  if (state === null) return null;
+  const { text, title } = workerTime(entry, start, now);
   return (
     <span title={title} className={cn(AGE_TEXT, "whitespace-nowrap")}>
-      {state.kind === "running" ? (
-        state.time
-      ) : (
-        <>
-          idle<span className="hidden @min-[18rem]:inline"> {state.time}</span>
-        </>
-      )}
-    </span>
-  );
-}
-
-/** How long ago a worker was created, at the end of its branch line. */
-export function CreatedAge({
-  entry,
-  start,
-}: {
-  entry: ThreadEntry;
-  start: RunStart | null;
-}) {
-  const now = useNow();
-  const { created, title } = workerTimes(entry, start, now);
-  return (
-    <span title={title} className={cn(AGE_TEXT, "whitespace-nowrap")}>
-      {created}
+      {text}
     </span>
   );
 }

@@ -107,15 +107,12 @@ home of its own. In the Crew tab, a thread no captain started belongs to its
 project's captain when the project has one, and shows the captain picker when
 it has several.
 
-A Crew row shows two times, in every group (`lib/run-start.ts`,
-`hooks/use-run-starts.ts`), each at the right end of its own line. The title
-line ends with the run state: how long a running worker has been running,
-after its working glyph, or `idle 4m` since a worker's last activity, which
-drops the number when the row is too narrow. A worker that shows working only
-for background work, with its own turn over, shows just the glyph. The branch
-line ends with how long ago the thread was created, from its `createdAt`. The
-title and branch truncate before either time does, and the tooltip spells out
-both with clock times. The start is the worker's latest `turn/started`
+A Crew row shows one time, at the right end of its title line
+(`lib/run-start.ts`, `hooks/use-run-starts.ts`). A working row shows how long
+it has been running, after its working glyph. An idle row shows how long ago
+the thread was created, from its `createdAt`. The tooltip adds the start,
+creation, and last activity times. A worker that shows working only for
+background work, with its own turn over, counts from its `updatedAt`. The start is the worker's latest `turn/started`
 event, read once each time the thread's `updatedAt` changes, which every new
 turn does. Until that read lands, or when it fails, the row counts from
 `updatedAt`, which the switch to working sets. A pin or rename also moves

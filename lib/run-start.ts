@@ -50,46 +50,37 @@ function createdAgo(createdAt: number, now: number): string {
 }
 
 /**
- * A Crew row's two times. `state` goes on the title line: how long the
- * current run has gone, or how long the worker has been idle since its last
- * activity. A worker that shows working only for background work has none:
- * its own turn is over, and "idle" beside the working glyph would contradict
- * it. `created` goes on the branch line: how long ago the thread was created.
+ * A Crew row's one time. A working row shows how long it has run: since its
+ * turn started, or, for a worker that works only in the background, since
+ * its last change, which the switch to working sets. An idle row shows how
+ * long ago it was created. The tooltip carries the rest.
  */
-export type WorkerTimes = {
-  state: { kind: "running" | "idle"; time: string } | null;
-  created: string;
-  title: string;
-};
-
-export function workerTimes(
+export function workerTime(
   entry: Pick<ThreadEntry, "lastActivityAt" | "status"> & {
-    thread: Pick<PluginSidebarThread, "createdAt">;
+    thread: Pick<PluginSidebarThread, "createdAt" | "updatedAt">;
   },
   start: RunStart | null,
   now: number,
-): WorkerTimes {
+): { text: string; title: string } {
   const created = createdAgo(entry.thread.createdAt, now);
-  const createdTitle = `created ${formatClockTime(entry.thread.createdAt, now)} (${created})`;
+  const createdAt = `${formatClockTime(entry.thread.createdAt, now)} (${created})`;
   if (start !== null)
     return {
-      state: { kind: "running", time: formatRunTime(now - start.at) },
-      created,
-      title: `${runTitle(start, now)} · ${createdTitle}`,
+      text: formatRunTime(now - start.at),
+      title: `${runTitle(start, now)} · created ${createdAt}`,
     };
+  if (entry.status === "working") {
+    const since = entry.thread.updatedAt;
+    return {
+      text: formatRunTime(now - since),
+      title: `Working in the background for ${formatRunTime(now - since)} · since ${formatClockTime(since, now)}, by its last status change · created ${createdAt}`,
+    };
+  }
   const quiet = now - entry.lastActivityAt;
   const idle = quiet < 60_000 ? "<1m" : formatDuration(quiet);
-  const lastActive = `last active ${formatClockTime(entry.lastActivityAt, now)}`;
-  if (entry.status === "working")
-    return {
-      state: null,
-      created,
-      title: `Working in the background · ${lastActive} · ${createdTitle}`,
-    };
   return {
-    state: { kind: "idle", time: idle },
-    created,
-    title: `Idle for ${idle} · ${lastActive} · ${createdTitle}`,
+    text: created,
+    title: `Created ${createdAt} · idle for ${idle} · last active ${formatClockTime(entry.lastActivityAt, now)}`,
   };
 }
 

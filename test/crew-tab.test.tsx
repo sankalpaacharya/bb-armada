@@ -312,16 +312,8 @@ describe("the crew tab's running workers", () => {
       createdAt: Date.now() - 3 * 60 * MINUTE,
       updatedAt: Date.now() - updatedAgo,
     });
-  /** The title line's time and the branch line's, by the row's title. */
-  const timesOf = (name: string) => {
-    const [titleLine, branchLine] = screen.getByText(name).closest("button")!
-      .children as unknown as [HTMLElement, HTMLElement];
-    return {
-      state: titleLine.querySelector("[title]"),
-      created: branchLine.querySelector("[title]"),
-    };
-  };
-  const timeOf = (name: string) => timesOf(name).state;
+  const timeOf = (name: string) =>
+    screen.getByText(name).closest("button")!.querySelector("[title]");
 
   it("shows how long a worker has run since its turn started, not since its last change", async () => {
     const turnStartedAt = Date.now() - 64 * MINUTE;
@@ -345,7 +337,6 @@ describe("the crew tab's running workers", () => {
     await waitFor(() =>
       expect(timeOf("Long run")?.textContent).toBe("1h 4m"),
     );
-    expect(timesOf("Long run").created?.textContent).toBe("3h ago");
     expect(timeOf("Long run")?.getAttribute("title")).toMatch(
       /^Running for 1h 4m · started .+ · created .+ \(3h ago\)$/,
     );
@@ -362,10 +353,13 @@ describe("the crew tab's running workers", () => {
         ],
       },
     ]);
-    const idle = timesOf("Resting");
-    expect(idle.state?.textContent).toBe("idle 1h");
-    expect(idle.state?.getAttribute("title")).toMatch(/^Idle for 1h · /);
-    expect(idle.created?.textContent).toBe("1h ago");
+    expect(timeOf("Resting")?.textContent).toBe("1h ago");
+    expect(timeOf("Resting")?.getAttribute("title")).toMatch(
+      /^Created .+ \(1h ago\) · idle for 1h · /,
+    );
+    expect(
+      screen.getByText("Resting").closest("button")!.querySelectorAll("[title]"),
+    ).toHaveLength(1);
   });
 
   it("counts from the thread's last change when the turn cannot be read, and says so", async () => {
@@ -383,7 +377,6 @@ describe("the crew tab's running workers", () => {
     });
     await screen.findByText("New run");
     expect(timeOf("New run")?.textContent).toBe("5m");
-    expect(timesOf("New run").created?.textContent).toBe("3h ago");
     await waitFor(() =>
       expect(timeOf("New run")?.getAttribute("title")).toMatch(
         /by its last status change · created /,

@@ -23,7 +23,7 @@ import { crewRunTitle, type RunStart } from "@/lib/run-start";
 import { parseBooleanMap } from "@/lib/storage";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { CreatedAge, RunState } from "./age";
+import { WorkerTime } from "./age";
 import { Summary } from "./captain-row";
 import { CaptainTile } from "./captain-tile";
 import { MemorySection } from "./memory-section";
@@ -136,7 +136,7 @@ function WorkerRow({
   parkActions,
 }: {
   entry: ThreadEntry;
-  /** Set while the worker runs, which shows how long instead of how long idle. */
+  /** Set while the worker runs, which shows how long instead of its age. */
   runStart: RunStart | null;
   current: boolean;
   onOpen: Open;
@@ -164,7 +164,7 @@ function WorkerRow({
             current && "bg-accent",
           )}
         >
-          <span className="@container flex h-7 w-full items-center gap-2">
+          <span className="flex h-7 w-full items-center gap-2">
             <span className="grid size-4 shrink-0 place-items-center">
               {entry.projectLogo === null ? (
                 <span
@@ -190,7 +190,7 @@ function WorkerRow({
                   <StatusGlyph status={entry.status} />
                 </span>
               )}
-              <RunState entry={entry} start={runStart} />
+              <WorkerTime entry={entry} start={runStart} />
             </span>
           </span>
           <span className="w-full">
@@ -198,7 +198,6 @@ function WorkerRow({
               thread={entry.thread}
               project={null}
               className="pr-0"
-              trailing={<CreatedAge entry={entry} start={runStart} />}
             />
           </span>
         </button>
