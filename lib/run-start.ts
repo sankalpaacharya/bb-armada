@@ -50,13 +50,14 @@ function createdAgo(createdAt: number, now: number): string {
 }
 
 /**
- * A Crew row's two times. `lead` is how long the current run has gone, or
- * "idle 4m" since the last activity, and `created` is the thread's age. A
- * worker that shows working only for background work has no lead: its own
- * turn is over, and "idle" beside the working glyph would contradict it.
+ * A Crew row's two times. `state` goes on the title line: how long the
+ * current run has gone, or how long the worker has been idle since its last
+ * activity. A worker that shows working only for background work has none:
+ * its own turn is over, and "idle" beside the working glyph would contradict
+ * it. `created` goes on the branch line: how long ago the thread was created.
  */
 export type WorkerTimes = {
-  lead: string | null;
+  state: { kind: "running" | "idle"; time: string } | null;
   created: string;
   title: string;
 };
@@ -72,7 +73,7 @@ export function workerTimes(
   const createdTitle = `created ${formatClockTime(entry.thread.createdAt, now)} (${created})`;
   if (start !== null)
     return {
-      lead: formatRunTime(now - start.at),
+      state: { kind: "running", time: formatRunTime(now - start.at) },
       created,
       title: `${runTitle(start, now)} · ${createdTitle}`,
     };
@@ -81,12 +82,12 @@ export function workerTimes(
   const lastActive = `last active ${formatClockTime(entry.lastActivityAt, now)}`;
   if (entry.status === "working")
     return {
-      lead: null,
+      state: null,
       created,
       title: `Working in the background · ${lastActive} · ${createdTitle}`,
     };
   return {
-    lead: `idle ${idle}`,
+    state: { kind: "idle", time: idle },
     created,
     title: `Idle for ${idle} · ${lastActive} · ${createdTitle}`,
   };

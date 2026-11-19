@@ -23,7 +23,7 @@ import { crewRunTitle, type RunStart } from "@/lib/run-start";
 import { parseBooleanMap } from "@/lib/storage";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { WorkerTime } from "./age";
+import { CreatedAge, RunState } from "./age";
 import { Summary } from "./captain-row";
 import { CaptainTile } from "./captain-tile";
 import { MemorySection } from "./memory-section";
@@ -164,7 +164,7 @@ function WorkerRow({
             current && "bg-accent",
           )}
         >
-          <span className="flex h-7 w-full items-center gap-2">
+          <span className="@container flex h-7 w-full items-center gap-2">
             <span className="grid size-4 shrink-0 place-items-center">
               {entry.projectLogo === null ? (
                 <span
@@ -175,14 +175,22 @@ function WorkerRow({
                 <ProjectLogo src={entry.projectLogo} />
               )}
             </span>
+            <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+              <ThreadTitle threadId={threadId} />
+            </span>
             <span
               className={cn(
-                "min-w-0 flex-1 truncate text-sm text-foreground",
+                "flex shrink-0 items-center justify-end gap-1.5",
                 entry.parkable &&
-                  "group-focus-within/row:pr-6 group-hover/row:pr-6",
+                  "min-w-6 transition-opacity duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-focus-within/row:opacity-0 group-hover/row:opacity-0 motion-reduce:transition-none",
               )}
             >
-              <ThreadTitle threadId={threadId} />
+              {entry.status === null ? null : (
+                <span className="grid h-4 min-w-4 place-items-center">
+                  <StatusGlyph status={entry.status} />
+                </span>
+              )}
+              <RunState entry={entry} start={runStart} />
             </span>
           </span>
           <span className="w-full">
@@ -190,16 +198,7 @@ function WorkerRow({
               thread={entry.thread}
               project={null}
               className="pr-0"
-              trailing={
-                <>
-                  {entry.status === null ? null : (
-                    <span className="grid h-4 min-w-4 shrink-0 place-items-center">
-                      <StatusGlyph status={entry.status} />
-                    </span>
-                  )}
-                  <WorkerTime entry={entry} start={runStart} />
-                </>
-              }
+              trailing={<CreatedAge entry={entry} start={runStart} />}
             />
           </span>
         </button>

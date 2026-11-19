@@ -94,13 +94,14 @@ describe("workerTimes", () => {
   });
   const CLOCK = "\\d{1,2}:\\d{2}";
 
-  it("puts a run's time first and the thread's age after it", () => {
+  it("gives a run's time and the thread's age", () => {
     const times = workerTimes(
       worker(3 * 60 * MINUTE, MINUTE),
       { at: NOW - 12 * MINUTE, source: "turn" },
       NOW,
     );
-    expect(`${times.lead} · ${times.created}`).toBe("12m · 3h ago");
+    expect(times.state).toEqual({ kind: "running", time: "12m" });
+    expect(times.created).toBe("3h ago");
     expect(times.title).toMatch(
       new RegExp(
         `^Running for 12m · started ${CLOCK}.* · created ${CLOCK}.* \\(3h ago\\)$`,
@@ -108,9 +109,10 @@ describe("workerTimes", () => {
     );
   });
 
-  it("says how long an idle worker has been quiet, then its age", () => {
+  it("gives how long an idle worker has been quiet, and its age", () => {
     const times = workerTimes(worker(3 * 60 * MINUTE, 4 * MINUTE), null, NOW);
-    expect(`${times.lead} · ${times.created}`).toBe("idle 4m · 3h ago");
+    expect(times.state).toEqual({ kind: "idle", time: "4m" });
+    expect(times.created).toBe("3h ago");
     expect(times.title).toMatch(
       new RegExp(
         `^Idle for 4m · last active ${CLOCK}.* · created ${CLOCK}.* \\(3h ago\\)$`,
@@ -124,14 +126,15 @@ describe("workerTimes", () => {
       null,
       NOW,
     );
-    expect(times.lead).toBeNull();
+    expect(times.state).toBeNull();
     expect(times.created).toBe("40m ago");
     expect(times.title).toMatch(/^Working in the background · last active /);
   });
 
   it("reads cleanly in a thread's first minute", () => {
     const times = workerTimes(worker(20_000, 20_000), null, NOW);
-    expect(`${times.lead} · ${times.created}`).toBe("idle <1m · just now");
+    expect(times.state).toEqual({ kind: "idle", time: "<1m" });
+    expect(times.created).toBe("just now");
     expect(times.title).toMatch(/\(just now\)$/);
   });
 });
