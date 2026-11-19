@@ -56,6 +56,8 @@ export function createAutoCompact(bb: BbPluginApi, deps: AutoCompactDeps) {
   const now = deps.now ?? Date.now;
   /** Threads asked to checkpoint and not yet compacted. A restart forgets them, so they are asked again. */
   const pending = new Set<string>();
+  /** Threads Armada just compacted. The idle that ends the compaction can still report the old size, so it is skipped. */
+  const compacted = new Set<string>();
   const handling = new Set<string>();
 
   const roleOf = async (threadId: string): Promise<CompactRole | null> => {
@@ -85,6 +87,7 @@ export function createAutoCompact(bb: BbPluginApi, deps: AutoCompactDeps) {
 
   const handle = async (thread: IdleThread, startedAt: number) => {
     if (thread.providerId !== CLAUDE_CODE) return;
+    if (compacted.delete(thread.id)) return;
     const settings = await deps.readSettings();
     if (
       !settings.projects.has(thread.projectId) ||
@@ -119,6 +122,7 @@ export function createAutoCompact(bb: BbPluginApi, deps: AutoCompactDeps) {
     } else {
       await bb.sdk.threads.compact({ threadId: thread.id });
       pending.delete(thread.id);
+      compacted.add(thread.id);
     }
     await record({
       at: new Date(startedAt).toISOString(),

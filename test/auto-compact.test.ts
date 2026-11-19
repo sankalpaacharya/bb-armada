@@ -199,6 +199,22 @@ describe("the idle handler", () => {
     expect(typeof lines[0].ms).toBe("number");
   });
 
+  it("skips the idle right after a compaction, whose usage can still be the old size", async () => {
+    const { sdk, idle } = await setup({
+      ancestors: { thr_worker: ["thr_crew"] },
+    });
+    await idle({});
+    await idle({});
+    expect(sdk.compact).toHaveBeenCalledTimes(1);
+
+    await idle({});
+    expect(sdk.send).toHaveBeenCalledTimes(1);
+    expect(sdk.compact).toHaveBeenCalledTimes(1);
+
+    await idle({});
+    expect(sdk.send).toHaveBeenCalledTimes(2);
+  });
+
   it("asks a captain to stow, and a crew captain too", async () => {
     for (const id of ["thr_captain", "thr_crew"]) {
       const { sdk, idle } = await setup();
