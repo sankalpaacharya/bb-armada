@@ -13,7 +13,10 @@
       "icon": "./assets/icons/compass.svg"
     },
     "server": "./server.ts",
-    "app": "./app.tsx"
+    "app": "./app.tsx",
+    "skills": [
+      "skills"
+    ]
   },
   "dependencies": {
     "@dicebear/core": "^9.4.3",
@@ -47,7 +50,22 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "bb plugin build",
-    "check": "npm run typecheck && npm test && npm run check:skills && npm run build",
-    "check:skills": "node scripts/check-skills.mjs"
-  }
+    "check": "npm run typecheck && npm test && npm run check:skills && npm run build && npm run check:package",
+    "check:skills": "node scripts/check-skills.mjs",
+    "prepack": "npm run check:skills && npm run build",
+    "check:package": "node scripts/check-package.mjs"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "skills",
+    "server.ts",
+    "app.tsx",
+    "components",
+    "hooks",
+    "lib",
+    "scripts",
+    "tsconfig.json",
+    "THIRD_PARTY_NOTICES.md"
+  ]
 }

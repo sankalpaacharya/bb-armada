@@ -101,13 +101,14 @@ function checkLinks(file, skillDir, text) {
 }
 
 if (!existsSync(SKILLS)) {
-  console.log(`No ${relative(ROOT, SKILLS)}/ folder, nothing to check.`);
-  process.exit(0);
+  console.error(`Missing required skills directory: ${SKILLS}`);
+  process.exit(1);
 }
 
 const folders = readdirSync(SKILLS).filter((entry) =>
   statSync(join(SKILLS, entry)).isDirectory(),
 );
+if (folders.length === 0) fail(SKILLS, "has no skill folders");
 for (const folder of folders) {
   const skillDir = join(SKILLS, folder);
   const file = join(skillDir, "SKILL.md");

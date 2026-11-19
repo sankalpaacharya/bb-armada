@@ -1258,9 +1258,9 @@ describe("a home per captain", () => {
     const video = await make(harness, "Video editing", "Cut tight.");
     const forms = await make(harness, "Forms", "Check every field.");
     const of = (threadId: string) => ({ threadId, project: "Personal" });
-    expect(await harness.callRpc("captain_instructions", of(video.threadId))).toBe(
-      "Cut tight.",
-    );
+    expect(
+      await harness.callRpc("captain_instructions", of(video.threadId)),
+    ).toBe("Cut tight.");
     await harness.callRpc("captain_instructions_save", {
       ...of(forms.threadId),
       instructions: "Ask before sending.",
@@ -1310,7 +1310,10 @@ describe("a home per captain", () => {
   it("makes no home when it cannot see every folder there", async () => {
     const { harness } = await load({
       files: ({ listPaths }) => ({
-        listPaths: async (args) => ({ ...(await listPaths(args)), truncated: true }),
+        listPaths: async (args) => ({
+          ...(await listPaths(args)),
+          truncated: true,
+        }),
       }),
     });
     await expect(make(harness, "Forms")).rejects.toThrow("More than");
@@ -1415,9 +1418,7 @@ describe("captain instructions", () => {
   it("reads, replaces and removes the instructions, keeping what the captain wrote", async () => {
     const homes = { "cops/captain.md": captainMd };
     const { harness, since } = await load({ homes });
-    expect(
-      await harness.callRpc("captain_instructions", cops),
-    ).toBe("");
+    expect(await harness.callRpc("captain_instructions", cops)).toBe("");
 
     await harness.callRpc("captain_instructions_save", {
       ...cops,
@@ -1426,9 +1427,9 @@ describe("captain instructions", () => {
     expect(homes["cops/captain.md"]).toBe(
       `${captainMd}\n## Instructions from the user\n\n> Be brief.\n`,
     );
-    expect(
-      await harness.callRpc("captain_instructions", cops),
-    ).toBe("Be brief.");
+    expect(await harness.callRpc("captain_instructions", cops)).toBe(
+      "Be brief.",
+    );
     expect(since.invalidations()).toContainEqual(["homes"]);
 
     await harness.callRpc("captain_instructions_save", {

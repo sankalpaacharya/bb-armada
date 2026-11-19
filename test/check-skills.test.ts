@@ -42,6 +42,16 @@ describe("the skill checker", () => {
     expect(check(join(__dirname, "..", "skills")).ok).toBe(true);
   });
 
+  it("fails when the skill directory is missing or empty", () => {
+    const empty = skills({});
+    const missing = check(join(empty, "missing"));
+    expect(missing.ok).toBe(false);
+    expect(missing.output).toContain("Missing required skills directory");
+    const noSkills = check(empty);
+    expect(noSkills.ok).toBe(false);
+    expect(noSkills.output).toContain("has no skill folders");
+  });
+
   it("passes a minimal valid skill with optional fields", () => {
     const root = skills({
       "pdf-tools/SKILL.md": skill(

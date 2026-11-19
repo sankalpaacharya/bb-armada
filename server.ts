@@ -41,6 +41,7 @@ import {
   rpcContract,
   type Created,
 } from "./lib/rpc";
+import { assertArmadaSkillAssets } from "./lib/skill-assets";
 import { SETTINGS, logoSkipProjects, parseSettings } from "./lib/settings";
 
 /** The queue key that makes new homes one at a time; no thread id looks like it. */
@@ -85,6 +86,7 @@ async function migrateLegacyCaptains(bb: BbPluginApi): Promise<void> {
 }
 
 export default async function plugin(bb: BbPluginApi) {
+  await assertArmadaSkillAssets();
   const { kv } = bb.storage;
   try {
     await migrateLegacyCaptains(bb);
@@ -260,7 +262,9 @@ export default async function plugin(bb: BbPluginApi) {
             continue;
           }
           const reason = messageOf(cause);
-          bb.log.error(`could not record captain thread ${thread.id}: ${reason}`);
+          bb.log.error(
+            `could not record captain thread ${thread.id}: ${reason}`,
+          );
           return { outcome: "unrecorded", threadId: thread.id, home, reason };
         }
       }
