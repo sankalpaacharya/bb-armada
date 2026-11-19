@@ -5,6 +5,7 @@ import {
   experimental_useRpcQuery,
   useBbNavigate,
   useSdk,
+  useSettings,
   type PluginSidebarProject,
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
@@ -19,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
+import { Switch } from "@/components/ui/switch";
 import { useCaptainExecution } from "@/hooks/use-captain-execution";
 import { useProjectLogos } from "@/hooks/use-project-logos";
 import { randomAvatar } from "@/lib/avatar";
@@ -26,6 +28,7 @@ import { INSTRUCTIONS_MAX } from "@/lib/captain-instructions";
 import { captainTitle } from "@/lib/captain-text";
 import type { Avatar, CaptainRecord } from "@/lib/captains";
 import { rpcContract } from "@/lib/rpc";
+import { parseAutoCompact } from "@/lib/settings";
 import { FOCUS_RING } from "@/lib/styles";
 import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -152,9 +155,15 @@ export function CaptainDialog({
     contract: rpcContract,
     method: "captain_instructions_save",
   });
+  const setAutoCompact = experimental_useRpcMutation({
+    contract: rpcContract,
+    method: "auto_compact_set",
+  });
+  const autoCompactSettings = parseAutoCompact(useSettings().values);
   const navigate = useBbNavigate();
   const sdk = useSdk();
   const nameId = useId();
+  const autoCompactId = useId();
   const instructionsId = useId();
   const [avatar, setAvatar] = useState<Avatar>(() =>
     state.kind === "edit" ? state.record.avatar : randomAvatar(),
@@ -165,6 +174,9 @@ export function CaptainDialog({
   const model = useCaptainExecution(state, projectId);
   const [typedName, setTypedName] = useState<string | null>(null);
   const [typedInstructions, setTypedInstructions] = useState<string | null>(
+    null,
+  );
+  const [typedAutoCompact, setTypedAutoCompact] = useState<boolean | null>(
     null,
   );
   const [pending, setPending] = useState(false);
@@ -226,6 +238,12 @@ export function CaptainDialog({
     state.kind === "edit" &&
     saved.data !== undefined &&
     trimmedInstructions !== saved.data.trim();
+  const autoCompactSaved =
+    state.kind === "edit" &&
+    autoCompactSettings.projects.has(state.thread.projectId);
+  const autoCompact = typedAutoCompact ?? autoCompactSaved;
+  const autoCompactChanged =
+    state.kind === "edit" && autoCompact !== autoCompactSaved;
   const canSubmit =
     trimmedName !== "" &&
     (state.kind === "create"
@@ -238,6 +256,7 @@ export function CaptainDialog({
         renamed ||
         avatarChanged ||
         instructionsChanged ||
+        autoCompactChanged ||
         model.changed);
 
   /** The recorded captain's thread, or null when it started but is not recorded yet. */
@@ -313,6 +332,12 @@ export function CaptainDialog({
                 project: editedProject.name,
                 instructions: trimmedInstructions,
                 threadId,
+              })
+            : null,
+          autoCompactChanged
+            ? setAutoCompact.mutate({
+                projectId: state.thread.projectId,
+                on: autoCompact,
               })
             : null,
         ]);
@@ -536,6 +561,29 @@ export function CaptainDialog({
               </span>
             ) : null}
           </Field>
+        ) : null}
+        {state.kind === "edit" ? (
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <span
+                id={autoCompactId}
+                className="text-sm text-muted-foreground"
+              >
+                Auto-compact
+              </span>
+              <Switch
+                checked={autoCompact}
+                onCheckedChange={setTypedAutoCompact}
+                disabled={pending}
+                aria-labelledby={autoCompactId}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Compact this captain and its workers when idle past{" "}
+              {autoCompactSettings.coordinatorK}K /{" "}
+              {autoCompactSettings.workerK}K to save tokens.
+            </span>
+          </div>
         ) : null}
         <DialogFooter>
           <Button
