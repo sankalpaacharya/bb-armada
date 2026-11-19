@@ -25,6 +25,22 @@ export function projectRepo(project: {
   return project.kind === "personal" ? null : githubRepoOf(project.gitRemoteUrl);
 }
 
+/**
+ * The folder whose own `origin` names a project's repo when bb has no remote
+ * on record: its default local source, else its first. A personal project has
+ * none.
+ */
+export function projectCheckout(project: {
+  kind: "personal" | "standard";
+  sources?: readonly { type: string; path: string; isDefault: boolean }[];
+}): string | null {
+  if (project.kind === "personal") return null;
+  const local = (project.sources ?? []).filter(
+    (source) => source.type === "local_path",
+  );
+  return (local.find((source) => source.isDefault) ?? local[0])?.path ?? null;
+}
+
 export const CHECKS = ["failing", "running", "passing", "none"] as const;
 export const REVIEWS = [
   "approved",

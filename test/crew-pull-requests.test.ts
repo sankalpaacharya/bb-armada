@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   githubRepoOf,
+  projectCheckout,
   projectRepo,
   PULL_REQUEST_URL,
   pullRequestRows,
@@ -49,6 +50,34 @@ describe("a project's repo", () => {
         gitRemoteUrl: "https://github.com/acme/app.git",
       }),
     ).toBeNull();
+  });
+});
+
+describe("a project's checkout", () => {
+  const source = (path: string, isDefault: boolean) => ({
+    type: "local_path",
+    path,
+    isDefault,
+  });
+
+  it("is the default local folder, else the first", () => {
+    expect(
+      projectCheckout({
+        kind: "standard",
+        sources: [source("/work/old", false), source("/work/fig", true)],
+      }),
+    ).toBe("/work/fig");
+    expect(
+      projectCheckout({ kind: "standard", sources: [source("/work/fig", false)] }),
+    ).toBe("/work/fig");
+  });
+
+  it("is none for a personal project or one without a folder", () => {
+    expect(
+      projectCheckout({ kind: "personal", sources: [source("/work/me", true)] }),
+    ).toBeNull();
+    expect(projectCheckout({ kind: "standard", sources: [] })).toBeNull();
+    expect(projectCheckout({ kind: "standard" })).toBeNull();
   });
 });
 

@@ -118,8 +118,11 @@ header summary's tooltip names the longest run.
 
 The Crew tab's **Pull requests** group lists the user's own open PRs in the
 captain's project repo, the `owner/name` of its GitHub remote
-(`lib/crew-pull-requests.ts`). A personal project, or one with no GitHub
-remote, has no repo, and the group stays hidden. The PRs come from one search
+(`lib/crew-pull-requests.ts`). That is bb's `gitRemoteUrl` for the project
+when it has one. Without one, the server runs `git remote get-url origin` in
+the project's default local folder and keeps the answer for 10 minutes. A
+personal project, or one with no GitHub remote either way, has no repo, and
+the group stays hidden. The PRs come from one search
 for all of the user's open PRs, shared with beautiful-bb's PRs card through
 `~/.cache/bb-prs/open-prs.json` (format v1, owned by beautiful-bb), and each
 project's repo is filtered out of it (`lib/shared-pr-cache.ts`,

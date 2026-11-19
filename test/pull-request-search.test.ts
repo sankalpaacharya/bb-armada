@@ -38,18 +38,40 @@ const rollup = (state: string | null) => ({
   },
 });
 
-const PROJECTS: Record<string, { kind: "standard" | "personal"; gitRemoteUrl: string | null }> = {
+type Project = {
+  kind: "standard" | "personal";
+  gitRemoteUrl: string | null;
+  sources?: { type: "local_path"; path: string; isDefault: boolean }[];
+};
+
+const checkout = (path: string) => [{ type: "local_path" as const, path, isDefault: true }];
+
+const PROJECTS: Record<string, Project> = {
   proj_cops: {
     kind: "standard",
     gitRemoteUrl: "https://github.com/productstudioinc/cops.git",
   },
   proj_gym: { kind: "standard", gitRemoteUrl: null },
   proj_me: { kind: "personal", gitRemoteUrl: null },
+  proj_fig: { kind: "standard", gitRemoteUrl: null, sources: checkout("/work/fig") },
+  proj_lab: { kind: "standard", gitRemoteUrl: null, sources: checkout("/work/lab") },
+  proj_bare: { kind: "standard", gitRemoteUrl: null, sources: checkout("/work/bare") },
+  proj_gitlab: {
+    kind: "standard",
+    gitRemoteUrl: "https://gitlab.com/acme/app.git",
+    sources: checkout("/work/fig"),
+  },
+};
+
+/** What `git remote get-url origin` says in each checkout. */
+const ORIGINS: Record<string, string> = {
+  "/work/fig": "git@github.com:sankalpaacharya/gymside.git",
+  "/work/lab": "https://gitlab.com/acme/lab.git",
 };
 
 const NOW = 1_800_000_000_000;
 
-function reader(start: Partial<SharedCache>) {
+function reader(start: Partial<SharedCache>, clock = { now: NOW }) {
   let shared: SharedCache = { ...EMPTY_CACHE, ...start };
   const cache = {
     read: vi.fn(async () => shared),
@@ -59,6 +81,11 @@ function reader(start: Partial<SharedCache>) {
     }),
   };
   const warn = vi.fn();
+  const gitRemote = vi.fn(async (path: string) => {
+    const origin = ORIGINS[path];
+    if (origin === undefined) throw new Error("fatal: No such remote 'origin'");
+    return origin;
+  });
   const read = createPullRequestReader(
     {
       log: { warn } as never,
@@ -69,9 +96,9 @@ function reader(start: Partial<SharedCache>) {
         },
       } as never,
     },
-    { cache, now: () => NOW },
+    { cache, now: () => clock.now, gitRemote },
   );
-  return { ...read, cache, warn };
+  return { ...read, cache, warn, gitRemote };
 }
 
 describe("parsing the search", () => {
@@ -146,6 +173,44 @@ describe("the pull request reader", () => {
     expect(await read("proj_me")).toEqual(none);
     expect(await read("proj_gym")).toEqual(none);
     expect(cache.read).not.toHaveBeenCalled();
+  });
+
+  it("reads the repo from the project's own checkout when bb has no remote on record", async () => {
+    const { read, gitRemote } = reader({
+      fetchedAt: NOW - 60_000,
+      data: data(
+        node(108, { repository: { nameWithOwner: "sankalpaacharya/gymside" } }),
+        node(1),
+      ),
+    });
+    const result = await read("proj_fig");
+    expect(result.repo).toBe("sankalpaacharya/gymside");
+    expect(result.pullRequests.map((p) => p.number)).toEqual([108]);
+    expect(gitRemote).toHaveBeenCalledWith("/work/fig");
+  });
+
+  it("asks git once per checkout, and again after ten minutes", async () => {
+    const clock = { now: NOW };
+    const { read, gitRemote } = reader({ fetchedAt: NOW, data: data() }, clock);
+    await read("proj_fig");
+    await read("proj_fig");
+    expect(gitRemote).toHaveBeenCalledTimes(1);
+    clock.now += 10 * 60_000;
+    await read("proj_fig");
+    expect(gitRemote).toHaveBeenCalledTimes(2);
+  });
+
+  it("hides the group for a checkout off GitHub or without an origin", async () => {
+    const { read, cache } = reader({});
+    expect((await read("proj_lab")).repo).toBeNull();
+    expect((await read("proj_bare")).repo).toBeNull();
+    expect(cache.read).not.toHaveBeenCalled();
+  });
+
+  it("trusts bb's remote on record over the checkout", async () => {
+    const { read, gitRemote } = reader({});
+    expect((await read("proj_gitlab")).repo).toBeNull();
+    expect(gitRemote).not.toHaveBeenCalled();
   });
 
   it("keeps the last PRs while a failed read backs off, says until when, and logs it once", async () => {

@@ -8,6 +8,8 @@ import {
   type SharedCache,
 } from "./shared-pr-cache";
 import {
+  githubRepoOf,
+  projectCheckout,
   projectRepo,
   type CrewPullRequest,
   type CrewPullRequests,
@@ -101,6 +103,21 @@ const runGh: Gh = async (args) =>
     })
   ).stdout;
 
+/** A checkout's `origin` URL, or null when it has none or git cannot read it. */
+export type GitRemote = (path: string) => Promise<string | null>;
+
+const readOrigin: GitRemote = async (path) =>
+  (
+    await experimental_execHostFile(
+      "git",
+      ["-C", path, "remote", "get-url", "origin"],
+      { encoding: "utf8", timeout: 5_000 },
+    )
+  ).stdout.trim() || null;
+
+/** How long a checkout's remote is trusted before git is asked again. */
+const REMOTE_TTL_MS = 10 * 60_000;
+
 /** A repo's pull requests out of everything the search found. */
 export const inRepo = (
   repo: string,
@@ -123,11 +140,36 @@ export function createPullRequestReader(
   bb: Pick<BbPluginApi, "log"> & {
     sdk: Pick<BbPluginApi["sdk"], "projects">;
   },
-  options: { cache?: SharedPrCache; now?: () => number } = {},
+  options: {
+    cache?: SharedPrCache;
+    now?: () => number;
+    gitRemote?: GitRemote;
+  } = {},
 ) {
   const cache = options.cache ?? createSharedPrCache({ gh: runGh });
   const now = options.now ?? Date.now;
+  const gitRemote = options.gitRemote ?? readOrigin;
   let logged: string | null = null;
+  /** Each checkout's repo, read once per TTL; a failed read is kept as none. */
+  const remotes = new Map<string, { repo: Promise<string | null>; at: number }>();
+
+  const checkoutRepo = (path: string): Promise<string | null> => {
+    const known = remotes.get(path);
+    if (known !== undefined && now() - known.at < REMOTE_TTL_MS)
+      return known.repo;
+    const repo = gitRemote(path).then(githubRepoOf, () => null);
+    remotes.set(path, { repo, at: now() });
+    return repo;
+  };
+
+  /** bb's remote on record first, else the project's own checkout. */
+  const repoOf = async (projectId: string): Promise<string | null> => {
+    const project = await bb.sdk.projects.get({ projectId });
+    const recorded = projectRepo(project);
+    if (recorded !== null || project.gitRemoteUrl !== null) return recorded;
+    const checkout = projectCheckout(project);
+    return checkout === null ? null : checkoutRepo(checkout);
+  };
 
   const note = (shared: SharedCache): SharedCache => {
     const error = shared.lastError;
@@ -140,7 +182,7 @@ export function createPullRequestReader(
 
   return {
     read: async (projectId: string): Promise<CrewPullRequests> => {
-      const repo = projectRepo(await bb.sdk.projects.get({ projectId }));
+      const repo = await repoOf(projectId);
       if (repo === null)
         return { repo: null, pullRequests: [], fetchedAt: null, retryAt: null };
       let shared = await cache.read();
