@@ -2,7 +2,7 @@ import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
 import type { ThreadEntry } from "./model";
 import { isBusy } from "./status";
-import { formatClockTime, formatRunTime } from "./time";
+import { formatClockTime, formatDuration, formatRunTime } from "./time";
 
 /**
  * When a worker's current run began. "turn" is its latest `turn/started`
@@ -41,6 +41,42 @@ export function runTitle(start: RunStart, now: number): string {
   return start.source === "turn"
     ? `${running} · started ${since}`
     : `${running} · working since ${since}, by its last status change`;
+}
+
+/** "3h ago", or "just now" in its first minute. */
+function createdAgo(createdAt: number, now: number): string {
+  const age = formatDuration(now - createdAt);
+  return age === "now" ? "just now" : `${age} ago`;
+}
+
+/**
+ * A Crew row's two times. `lead` is how long the current run has gone, or
+ * "idle 4m" since the last activity, and `created` is the thread's age.
+ */
+export type WorkerTimes = { lead: string; created: string; title: string };
+
+export function workerTimes(
+  entry: Pick<ThreadEntry, "lastActivityAt"> & {
+    thread: Pick<PluginSidebarThread, "createdAt">;
+  },
+  start: RunStart | null,
+  now: number,
+): WorkerTimes {
+  const created = createdAgo(entry.thread.createdAt, now);
+  const createdTitle = `created ${formatClockTime(entry.thread.createdAt, now)} (${created})`;
+  if (start !== null)
+    return {
+      lead: formatRunTime(now - start.at),
+      created,
+      title: `${runTitle(start, now)} · ${createdTitle}`,
+    };
+  const quiet = now - entry.lastActivityAt;
+  const idle = quiet < 60_000 ? "<1m" : formatDuration(quiet);
+  return {
+    lead: `idle ${idle}`,
+    created,
+    title: `Idle for ${idle} · last active ${formatClockTime(entry.lastActivityAt, now)} · ${createdTitle}`,
+  };
 }
 
 /** "2 working · longest 34m", or null when no run has a start. */

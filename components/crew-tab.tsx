@@ -23,7 +23,7 @@ import { crewRunTitle, type RunStart } from "@/lib/run-start";
 import { parseBooleanMap } from "@/lib/storage";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { Age, RunTime } from "./age";
+import { WorkerTime } from "./age";
 import { Summary } from "./captain-row";
 import { CaptainTile } from "./captain-tile";
 import { MemorySection } from "./memory-section";
@@ -136,7 +136,7 @@ function WorkerRow({
   parkActions,
 }: {
   entry: ThreadEntry;
-  /** Set while the worker runs, which shows how long instead of its age. */
+  /** Set while the worker runs, which shows how long instead of how long idle. */
   runStart: RunStart | null;
   current: boolean;
   onOpen: Open;
@@ -197,11 +197,7 @@ function WorkerRow({
                       <StatusGlyph status={entry.status} />
                     </span>
                   )}
-                  {runStart === null ? (
-                    <Age at={entry.lastActivityAt} />
-                  ) : (
-                    <RunTime start={runStart} />
-                  )}
+                  <WorkerTime entry={entry} start={runStart} />
                 </>
               }
             />

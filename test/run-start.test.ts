@@ -6,6 +6,7 @@ import {
   isRunning,
   runStartOf,
   runTitle,
+  workerTimes,
 } from "../lib/run-start";
 import type { Status } from "../lib/status";
 import { NOW, thread } from "./fixtures";
@@ -78,6 +79,44 @@ describe("runTitle", () => {
     expect(runTitle({ at: NOW - 5 * MINUTE, source: "status" }, NOW)).toMatch(
       /^Running for 5m · working since .+, by its last status change$/,
     );
+  });
+});
+
+describe("workerTimes", () => {
+  const worker = (createdAgo: number, activeAgo: number) => ({
+    lastActivityAt: NOW - activeAgo,
+    thread: { createdAt: NOW - createdAgo },
+  });
+  const CLOCK = "\\d{1,2}:\\d{2}";
+
+  it("puts a run's time first and the thread's age after it", () => {
+    const times = workerTimes(
+      worker(3 * 60 * MINUTE, MINUTE),
+      { at: NOW - 12 * MINUTE, source: "turn" },
+      NOW,
+    );
+    expect(`${times.lead} · ${times.created}`).toBe("12m · 3h ago");
+    expect(times.title).toMatch(
+      new RegExp(
+        `^Running for 12m · started ${CLOCK}.* · created ${CLOCK}.* \\(3h ago\\)$`,
+      ),
+    );
+  });
+
+  it("says how long an idle worker has been quiet, then its age", () => {
+    const times = workerTimes(worker(3 * 60 * MINUTE, 4 * MINUTE), null, NOW);
+    expect(`${times.lead} · ${times.created}`).toBe("idle 4m · 3h ago");
+    expect(times.title).toMatch(
+      new RegExp(
+        `^Idle for 4m · last active ${CLOCK}.* · created ${CLOCK}.* \\(3h ago\\)$`,
+      ),
+    );
+  });
+
+  it("reads cleanly in a thread's first minute", () => {
+    const times = workerTimes(worker(20_000, 20_000), null, NOW);
+    expect(`${times.lead} · ${times.created}`).toBe("idle <1m · just now");
+    expect(times.title).toMatch(/\(just now\)$/);
   });
 });
 

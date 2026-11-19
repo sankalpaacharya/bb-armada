@@ -335,10 +335,10 @@ describe("the crew tab's running workers", () => {
     });
     await screen.findByText("Long run");
     await waitFor(() =>
-      expect(timeOf("Long run")?.textContent).toBe("1h 4m"),
+      expect(timeOf("Long run")?.textContent).toBe("1h 4m · 3h ago"),
     );
     expect(timeOf("Long run")?.getAttribute("title")).toMatch(
-      /^Running for 1h 4m · started /,
+      /^Running for 1h 4m · started .+ · created .+ \(3h ago\)$/,
     );
     expect(view.inspection.sdkCalls).toEqual([
       {
@@ -354,7 +354,8 @@ describe("the crew tab's running workers", () => {
       },
     ]);
     const idle = screen.getByText("Resting").closest("button")!;
-    expect(idle.textContent).toMatch(/1h$/);
+    expect(idle.textContent).toMatch(/idle 1h · 1h ago$/);
+    expect(idle.querySelector("[title^='Idle for 1h']")).toBeTruthy();
     expect(idle.querySelector("[title^='Running']")).toBeNull();
   });
 
@@ -372,10 +373,10 @@ describe("the crew tab's running workers", () => {
       },
     });
     await screen.findByText("New run");
-    expect(timeOf("New run")?.textContent).toBe("5m");
+    expect(timeOf("New run")?.textContent).toBe("5m · 3h ago");
     await waitFor(() =>
       expect(timeOf("New run")?.getAttribute("title")).toMatch(
-        /by its last status change$/,
+        /by its last status change · created /,
       ),
     );
   });
