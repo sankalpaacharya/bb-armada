@@ -86,7 +86,7 @@ export type CompactRole = "coordinator" | "worker";
 
 const CHECKPOINT: Record<CompactRole, string> = {
   coordinator:
-    "Armada will compact this thread when this turn ends. Run stow now, so your home holds everything this chat knows that it does not yet: In flight with worker ids, Waiting on the user, decisions, the outbox cursor. Do nothing else, then end the turn.",
+    "Armada will compact this thread when this turn ends. Run stow now, so your home holds everything this chat knows that it does not yet: In flight with worker ids, Waiting on the user, decisions, the outbox cursor. Do nothing else, then end the turn. After the compaction, run Recovery before you answer anything.",
   worker:
     "Armada will compact this thread when this turn ends. Write your current state to state.md next to your brief (or at your workspace root if you have no brief): branch, head SHA, what is done, what is left, decisions made, open questions. Do nothing else, then end the turn. After the compaction, read state.md and your brief and run git status before you continue.",
 };
