@@ -53,6 +53,10 @@ right-click it for the snooze presets.
 
 ## Captains
 
+Drag a captain by its grip to change the sidebar order. Focus the grip and use
+Arrow Up or Arrow Down to move it with the keyboard. The order is saved by BB
+and shared across clients; newly added captains appear at the end.
+
 Each captain keeps its memory in a folder of its own, named after it:
 `~/.bb/captains/video-editing/` for a captain named "Video editing". A project
 can have several captains, say one per ongoing task on Personal, and each starts

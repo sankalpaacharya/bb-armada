@@ -3,6 +3,12 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 import { createAutoSettle } from "./lib/auto-settle";
+import {
+  CAPTAIN_ORDER_KEY,
+  captainOrderSchema,
+  moveCaptain,
+  orderedCaptains,
+} from "./lib/captain-order";
 import { captainSlug, freshHome, homeOf } from "./lib/captain-home";
 import {
   adoptedInput,
@@ -116,6 +122,15 @@ export default async function plugin(bb: BbPluginApi) {
   const captainRecords = () =>
     listRecords(kv, CAPTAIN_KEY_PREFIX, parseStoredCaptain, bb.log.warn);
 
+  const listedCaptains = async (): Promise<CaptainRecord[]> => {
+    const [records, raw] = await Promise.all([
+      captainRecords(),
+      kv.get<unknown>(CAPTAIN_ORDER_KEY),
+    ]);
+    const order = captainOrderSchema.safeParse(raw);
+    return orderedCaptains(records, order.success ? order.data : []);
+  };
+
   const homeOfCaptain = async (captain: {
     threadId: string;
     project: string;
@@ -219,7 +234,22 @@ export default async function plugin(bb: BbPluginApi) {
   };
 
   bb.rpc.register(rpcContract, {
-    captains_list: captainRecords,
+    captains_list: listedCaptains,
+
+    captains_reorder: ({ threadId, beforeThreadId }) =>
+      queue(CAPTAIN_ORDER_KEY, async () => {
+        const records = moveCaptain(
+          await listedCaptains(),
+          threadId,
+          beforeThreadId,
+        );
+        await kv.set(
+          CAPTAIN_ORDER_KEY,
+          records.map((record) => record.threadId),
+        );
+        bb.rpc.experimental_invalidate([CAPTAINS_TAG]);
+        return null;
+      }),
 
     captains_create: async ({
       projectId,

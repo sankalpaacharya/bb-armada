@@ -94,6 +94,10 @@ export const rpcContract = defineRpcContract({
     output: captainRecordSchema,
   },
   captains_remove: { input: z.strictObject({ threadId }), output: z.null() },
+  captains_reorder: {
+    input: z.strictObject({ threadId, beforeThreadId: threadId.nullable() }),
+    output: z.null(),
+  },
 
   parks_list: {
     input: z.null(),

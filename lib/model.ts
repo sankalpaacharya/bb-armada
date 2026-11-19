@@ -204,16 +204,10 @@ export function buildArmada(
     };
   };
 
-  const captains = captainRecords
-    .map(({ record, thread }): CaptainEntry => {
-      const tree = [thread, ...liveSubtreeOf(thread.id)];
-      return { record, thread, counts: countStatuses(tree), ...fold(tree) };
-    })
-    .sort(
-      (a, b) =>
-        a.record.createdAt.localeCompare(b.record.createdAt) ||
-        a.record.threadId.localeCompare(b.record.threadId),
-    );
+  const captains = captainRecords.map(({ record, thread }): CaptainEntry => {
+    const tree = [thread, ...liveSubtreeOf(thread.id)];
+    return { record, thread, counts: countStatuses(tree), ...fold(tree) };
+  });
 
   const entries = roots.map(entryOf);
   const on = (shelf: Shelf) => entries.filter((entry) => entry.shelf === shelf);

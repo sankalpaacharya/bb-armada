@@ -4,6 +4,7 @@ import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import plugin from "../server";
+import { CAPTAIN_ORDER_KEY } from "../lib/captain-order";
 import {
   LEGACY_CAPTAINS_BACKUP_KEY,
   LEGACY_CAPTAINS_KEY,
@@ -191,6 +192,120 @@ const create = {
     serviceTier: "fast",
   },
 };
+
+describe("captain order", () => {
+  const seed = async (kv: Kv) => {
+    for (const [index, threadId] of ["a", "b", "c"].entries()) {
+      await kv.set(`captain:${threadId}`, {
+        threadId,
+        avatar: avatar(threadId),
+        createdAt: `2026-01-0${index + 1}T00:00:00.000Z`,
+      });
+    }
+  };
+  const orderOf = async (list: () => Promise<CaptainRecord[]>) =>
+    (await list()).map((record) => record.threadId);
+
+  it("saves a move across reloads, keeps it after avatar edits, and appends new captains", async () => {
+    const { bb, harness, list } = await load({ seed });
+    expect(await orderOf(list)).toEqual(["a", "b", "c"]);
+    await harness.callRpc("captains_reorder", {
+      threadId: "c",
+      beforeThreadId: "a",
+    });
+    expect(await orderOf(list)).toEqual(["c", "a", "b"]);
+    await harness.callRpc("captains_update", {
+      threadId: "c",
+      avatar: avatar("new"),
+    });
+    await harness.callRpc("captains_create", create);
+    expect(await orderOf(list)).toEqual(["c", "a", "b", "thr_new"]);
+    expect(await bb.storage.kv.get(CAPTAIN_ORDER_KEY)).toEqual(["c", "a", "b"]);
+    const reloaded = await harness.lifecycle.reload(plugin);
+    const records = await reloaded.harness.behavior.callRpc(
+      "captains_list",
+      null,
+    );
+    expect(records).toEqual([
+      expect.objectContaining({ threadId: "c" }),
+      expect.objectContaining({ threadId: "a" }),
+      expect.objectContaining({ threadId: "b" }),
+      expect.objectContaining({ threadId: "thr_new" }),
+    ]);
+  });
+
+  it("moves a captain to the end and never brings a removed captain back", async () => {
+    const { harness, list } = await load({ seed });
+    await harness.callRpc("captains_reorder", {
+      threadId: "a",
+      beforeThreadId: null,
+    });
+    expect(await orderOf(list)).toEqual(["b", "c", "a"]);
+    await harness.callRpc("captains_remove", { threadId: "c" });
+    expect(await orderOf(list)).toEqual(["b", "a"]);
+    await harness.callRpc("captains_reorder", {
+      threadId: "a",
+      beforeThreadId: "b",
+    });
+    expect(await orderOf(list)).toEqual(["a", "b"]);
+  });
+
+  it("applies concurrent relative moves to the latest saved order", async () => {
+    const { harness, list } = await load({ seed });
+    await Promise.all([
+      harness.callRpc("captains_reorder", {
+        threadId: "b",
+        beforeThreadId: "a",
+      }),
+      harness.callRpc("captains_reorder", {
+        threadId: "c",
+        beforeThreadId: "b",
+      }),
+    ]);
+    expect(await orderOf(list)).toEqual(["c", "b", "a"]);
+  });
+
+  it("rejects missing captains without changing order", async () => {
+    const { harness, list } = await load({ seed });
+    await expect(
+      harness.callRpc("captains_reorder", {
+        threadId: "missing",
+        beforeThreadId: "a",
+      }),
+    ).rejects.toThrow("not a captain");
+    await expect(
+      harness.callRpc("captains_reorder", {
+        threadId: "a",
+        beforeThreadId: "missing",
+      }),
+    ).rejects.toThrow("not a captain");
+    expect(await orderOf(list)).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps the previous order if saving fails", async () => {
+    const { bb, harness, list } = await load({ seed });
+    vi.spyOn(bb.storage.kv, "set").mockRejectedValueOnce(
+      new Error("disk full"),
+    );
+    await expect(
+      harness.callRpc("captains_reorder", {
+        threadId: "c",
+        beforeThreadId: "a",
+      }),
+    ).rejects.toThrow("disk full");
+    expect(await orderOf(list)).toEqual(["a", "b", "c"]);
+  });
+
+  it("uses creation order if the saved order cannot be read", async () => {
+    const { list } = await load({
+      seed: async (kv) => {
+        await seed(kv);
+        await kv.set(CAPTAIN_ORDER_KEY, "unreadable");
+      },
+    });
+    expect(await orderOf(list)).toEqual(["a", "b", "c"]);
+  });
+});
 
 describe("captain records", () => {
   it("starts empty", async () => {

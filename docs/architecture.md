@@ -43,6 +43,12 @@ same way bb's composer sends one, and points it at its own home
 
 ## Storage and RPC
 
+Manual captain order is stored as thread IDs at `captain-order`. The server
+applies it in `captains_list`, appending new captains in creation order and
+ignoring removed IDs. Relative reorder requests are serialized on that key,
+so concurrent moves keep both changes without rewriting captain records.
+The sidebar predicts each move and rolls it back if saving fails.
+
 The server keeps one KV record per captain at `captain:<threadId>` and one per
 put-away thread at `park:<threadId>`. A park is `settled { at, by }`,
 `snoozed { at, until }` or `kept { at }`. A kept thread is one you moved back
@@ -67,6 +73,7 @@ colour and mark.
 | `captains_adopt` | `threadId`, `avatar`, `createdAt`, `name`, optional `home` | captain record |
 | `captains_update` | `threadId`, `avatar` | captain record |
 | `captains_remove` | `threadId` | none |
+| `captains_reorder` | `threadId`, `beforeThreadId` (null for the end) | none |
 | `parks_list` | none | park records |
 | `parks_settle` | `threadId`, `at` | park record |
 | `parks_snooze` | `threadId`, `at`, `until` | park record |
