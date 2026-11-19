@@ -362,6 +362,7 @@ export function CaptainDialog({
           >
             <CaptainTile
               avatar={avatar}
+              name={name}
               projectId={captainProjectId}
               size="preview"
             />

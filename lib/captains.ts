@@ -6,14 +6,23 @@ export const idSchema = z.string().min(1).max(200);
 const SEED_MAX = 64;
 
 const seedSchema = z.string().min(1).max(SEED_MAX);
+const avatarImageSchema = z
+  .string()
+  .startsWith("data:image/svg+xml")
+  .max(64 * 1024);
 
 /**
- * A seeded face, or the captain's project logo. A logo avatar keeps a seed
+ * A seeded face, or a logo with an optional custom image.
+ * A logo avatar keeps a seed
  * for the face it shows while the logo loads or when the project has none.
  */
 export const avatarSchema = z.discriminatedUnion("style", [
   z.strictObject({ style: z.literal("micah"), seed: seedSchema }),
-  z.strictObject({ style: z.literal("logo"), seed: seedSchema }),
+  z.strictObject({
+    style: z.literal("logo"),
+    seed: seedSchema,
+    image: avatarImageSchema.optional(),
+  }),
 ]);
 
 export type Avatar = z.infer<typeof avatarSchema>;
@@ -48,6 +57,7 @@ const storedCaptainSchema = captainRecordSchema
         z.object({
           style: z.enum(["adventurer", "micah", "logo"]),
           seed: seedSchema,
+          image: avatarImageSchema.optional(),
         }),
         z.object({ style: z.literal("anime") }),
       ])
@@ -57,6 +67,11 @@ const storedCaptainSchema = captainRecordSchema
     ...record,
     avatar: {
       style: avatar?.style === "logo" ? avatar.style : ("micah" as const),
+      ...(avatar?.style === "logo"
+        ? {
+            ...(avatar.image === undefined ? {} : { image: avatar.image }),
+          }
+        : {}),
       seed:
         avatar !== undefined && "seed" in avatar
           ? avatar.seed

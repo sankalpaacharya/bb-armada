@@ -1,4 +1,7 @@
-import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
+import {
+  experimental_useProviders,
+  type PluginThreadActionsInlineItem,
+} from "@get-bb/plugin-sdk/app";
 
 import type { CaptainCounts, CaptainEntry } from "@/lib/model";
 import { STATUS } from "@/lib/status";
@@ -41,6 +44,10 @@ export function CaptainRow({
   inline: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
 }) {
+  const { providers } = experimental_useProviders();
+  const provider = providers.find(
+    (candidate) => candidate.id === entry.thread.providerId,
+  );
   return (
     <li className="list-none">
       <ThreadLink
@@ -50,12 +57,15 @@ export function CaptainRow({
         onOpen={onOpen}
         className="flex h-11 items-center gap-2.5 px-2.5"
         titleClassName="font-medium"
+        tooltip={`Provider: ${provider?.displayName ?? entry.thread.providerId}`}
       >
         {({ title, shortcut }) => (
           <>
             <CaptainTile
               avatar={entry.record.avatar}
+              name={entry.thread.displayTitle}
               projectId={entry.thread.projectId}
+              providerId={entry.thread.providerId}
               className="pointer-events-none relative"
             />
             <span className="pointer-events-none relative flex min-w-0 flex-1 flex-col justify-center">

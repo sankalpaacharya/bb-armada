@@ -303,13 +303,14 @@ function CrewView({
         <span className="relative shrink-0">
           <CaptainTile
             avatar={captain.record.avatar}
+            name={captain.thread.displayTitle}
             projectId={captain.thread.projectId}
             size="preview"
           />
           {projectLogo === null ? null : (
             <ProjectLogo
               src={projectLogo}
-              className="absolute -right-1 -bottom-1 size-4 rounded-[5px] ring-2 ring-background"
+              className="absolute -right-1 -bottom-1 size-4 rounded-[5px]"
             />
           )}
         </span>
@@ -410,6 +411,7 @@ function CaptainPicker({
           >
             <CaptainTile
               avatar={entry.record.avatar}
+              name={entry.thread.displayTitle}
               projectId={entry.thread.projectId}
             />
             <span className="flex min-w-0 flex-1 flex-col">

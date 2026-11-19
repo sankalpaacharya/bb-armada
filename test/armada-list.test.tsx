@@ -10,6 +10,7 @@ import {
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  PluginProvidersState,
   PluginThreadActionsContextMenuProps,
   PluginThreadActionsInlineItem,
 } from "@get-bb/plugin-sdk/app";
@@ -143,6 +144,7 @@ async function render(
     rpc?: Record<string, (input: never) => unknown>;
     sdk?: Record<string, unknown>;
     settings?: Record<string, number | boolean>;
+    providers?: Partial<PluginProvidersState>;
   } = {},
 ) {
   const loaded = await loadPluginApp(app);
@@ -160,6 +162,7 @@ async function render(
       searchQuery: "",
     },
     {
+      providers: options.providers,
       sidebarThreads: {
         status: "ready",
         threads: options.threads ?? threads,
@@ -218,6 +221,46 @@ const listOf = (container: HTMLElement, id: string) =>
   rowOf(container, id)?.closest("ul")?.getAttribute("aria-label") ?? null;
 
 describe("Armada thread list", () => {
+  it("badges every captain with its thread provider while preserving the primary avatar", async () => {
+    const captains = [
+      thread("cap_codex", { providerId: "codex" }),
+      thread("cap_claude", { providerId: "claude-code" }),
+      thread("cap_other", { providerId: "other-provider" }),
+    ];
+    const { view } = await render({
+      threads: captains,
+      registry: registry(...captains.map((captain) => captain.id)),
+      providers: {
+        providers: [
+          { id: "codex", displayName: "Codex" },
+          { id: "claude-code", displayName: "Claude Code" },
+        ] as never,
+      },
+    });
+    for (const captain of captains) {
+      await waitFor(() =>
+        expect(rowOf(view.container, captain.id)).not.toBeNull(),
+      );
+      const row = rowOf(view.container, captain.id)!;
+      const providerName =
+        captain.providerId === "codex"
+          ? "Codex"
+          : captain.providerId === "claude-code"
+            ? "Claude Code"
+            : captain.providerId;
+      expect(anchorOf(view.container, captain.id)?.getAttribute("title")).toBe(
+        `Provider: ${providerName}`,
+      );
+      expect(
+        row.querySelector(`[data-provider-id="${captain.providerId}"]`),
+      ).not.toBeNull();
+      expect(row.querySelector("img")?.getAttribute("src")).toBe(
+        avatarDataUri({ style: "micah", seed: captain.id }),
+      );
+    }
+  });
+
+
   it("keeps a captain's threads out of the sidebar list, and counts them on the captain's row", async () => {
     const { view } = await render();
     await waitFor(() => expect(rowOf(view.container, "cap")).not.toBeNull());
@@ -1258,7 +1301,7 @@ describe("creating a captain", () => {
     fireEvent.click(projectTrigger(dialog));
     fireEvent.click(dialog.getByRole("option", { name: /^Alpha/ }));
     expect(projectTrigger(dialog).textContent).toBe("Alpha · 2 captains");
-    await screen.findByTestId("bb-provider-model-picker");
+    await waitCreateReady();
     expect(
       (
         dialog.getByRole("button", {

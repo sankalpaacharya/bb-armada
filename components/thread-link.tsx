@@ -39,6 +39,7 @@ export function ThreadLink({
   onOpen,
   className,
   titleClassName,
+  tooltip,
   children,
 }: {
   thread: PluginSidebarThread;
@@ -49,6 +50,7 @@ export function ThreadLink({
   onOpen: OpenThread;
   className?: string;
   titleClassName?: string;
+  tooltip?: string;
   children: (slots: ThreadLinkSlots) => ReactNode;
 }) {
   const { splitProps } = experimental_useSidebarThreadSplit(thread.id);
@@ -100,6 +102,7 @@ export function ThreadLink({
           data-sidebar-thread-id={thread.id}
           {...{ [ROW_ANCHOR]: "" }}
           aria-label={label ?? thread.displayTitle}
+          title={tooltip}
           aria-current={active ? "page" : undefined}
           aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
           draggable={false}

@@ -6,6 +6,14 @@ import type { AutoSettleSettings } from "./lifecycle";
 const HOUR = 3_600_000;
 
 export const SETTINGS = {
+  avatarStyle: {
+    type: "select",
+    label: "Captain avatars",
+    description: "Choose initials or illustrated faces for captains without a logo.",
+    options: ["faces", "initials"],
+    experimental_optionLabels: { faces: "Illustrated faces", initials: "Initials" },
+    default: "faces",
+  },
   inactiveAfterHours: {
     type: "number",
     label: "Inactive after, hours (0 = never)",

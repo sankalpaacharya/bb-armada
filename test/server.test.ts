@@ -7,6 +7,7 @@ import plugin from "../server";
 import {
   LEGACY_CAPTAINS_BACKUP_KEY,
   LEGACY_CAPTAINS_KEY,
+  captainRecordSchema,
   type CaptainRecord,
 } from "../lib/captains";
 import type { ParkRecord } from "../lib/lifecycle";
@@ -327,6 +328,28 @@ describe("captain records", () => {
         avatar: avatar("x"),
       }),
     ).rejects.toThrow("not a captain");
+  });
+
+  it("preserves a custom primary logo through writes and stored reads", async () => {
+    const { harness, list, bb } = await load();
+    const first = captainRecordSchema.parse(
+      await harness.callRpc("captains_adopt", adopt("thr_custom", "kept")),
+    );
+    const avatar = {
+      style: "logo",
+      seed: "kept",
+      image: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>",
+    };
+    const changed = await harness.callRpc("captains_update", {
+      threadId: "thr_custom",
+      avatar,
+    });
+    expect(changed).toEqual({ ...first, avatar });
+    expect(await list()).toEqual([{ ...first, avatar }]);
+    expect(await bb.storage.kv.get("captain:thr_custom")).toEqual({
+      ...first,
+      avatar,
+    });
   });
 
   it("switches a captain to its project's logo and back to the same face", async () => {
