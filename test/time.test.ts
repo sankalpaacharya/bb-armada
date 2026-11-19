@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatAge,
+  formatClockTime,
   formatDuration,
+  formatRunTime,
 } from "../lib/time";
 import { NOW } from "./fixtures";
 
@@ -43,5 +45,28 @@ describe("formatDuration rounding up", () => {
     expect(formatDuration(90 * MINUTE, "up")).toBe("2h");
     expect(formatDuration(6 * DAY + 1, "up")).toBe("1w");
     expect(formatDuration(0, "up")).toBe("now");
+  });
+});
+
+describe("formatRunTime", () => {
+  it("counts a run in minutes, then keeps a second unit past an hour", () => {
+    expect(formatRunTime(0)).toBe("<1m");
+    expect(formatRunTime(59_000)).toBe("<1m");
+    expect(formatRunTime(12 * MINUTE + 59_000)).toBe("12m");
+    expect(formatRunTime(60 * MINUTE)).toBe("1h 0m");
+    expect(formatRunTime(64 * MINUTE)).toBe("1h 4m");
+    expect(formatRunTime(23 * 60 * MINUTE + 59 * MINUTE)).toBe("23h 59m");
+    expect(formatRunTime(2 * DAY + 3 * 60 * MINUTE + 30 * MINUTE)).toBe(
+      "2d 3h",
+    );
+  });
+});
+
+describe("formatClockTime", () => {
+  it("says the time alone today, and the day before that", () => {
+    const today = formatClockTime(NOW - 30 * MINUTE, NOW);
+    expect(today).toMatch(/^\d{1,2}:\d{2}/);
+    expect(today).not.toContain(",");
+    expect(formatClockTime(NOW - DAY, NOW)).toMatch(/, \d{1,2}:\d{2}/);
   });
 });

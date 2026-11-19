@@ -100,6 +100,15 @@ home of its own. In the Crew tab, a thread no captain started belongs to its
 project's captain when the project has one, and shows the captain picker when
 it has several.
 
+A Crew row shows how long a running worker has been running, behind a timer
+icon, where an idle row shows its age (`lib/run-start.ts`,
+`hooks/use-run-starts.ts`). The start is the worker's latest `turn/started`
+event, read once each time the thread's `updatedAt` changes, which every new
+turn does. Until that read lands, or when it fails, the row counts from
+`updatedAt`, which the switch to working sets. A pin or rename also moves
+`updatedAt`, so it only stands in, and the tooltip says when it does. The
+header summary's tooltip names the longest run.
+
 The Crew tab's **Pull requests** group lists the user's own open PRs in the
 captain's project repo, the `owner/name` of its GitHub remote
 (`lib/crew-pull-requests.ts`). A personal project, or one with no GitHub

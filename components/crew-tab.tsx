@@ -12,15 +12,18 @@ import { useCrewActions } from "@/hooks/use-crew-actions";
 import { useCrewPullRequests } from "@/hooks/use-crew-pull-requests";
 import { useParkActions, type ParkActions } from "@/hooks/use-park-actions";
 import { useProjectLogos } from "@/hooks/use-project-logos";
+import { useRunStarts } from "@/hooks/use-run-starts";
 import { useStoredState } from "@/hooks/use-stored-state";
 import { toActionTarget } from "@/lib/action-target";
+import { useNow } from "@/lib/clock";
 import { captainIdOf, crewOf, type Crew } from "@/lib/crew";
 import { pullRequestRows } from "@/lib/crew-pull-requests";
-import type { CaptainEntry, ThreadEntry } from "@/lib/model";
+import type { CaptainCounts, CaptainEntry, ThreadEntry } from "@/lib/model";
+import { crewRunTitle, type RunStart } from "@/lib/run-start";
 import { parseBooleanMap } from "@/lib/storage";
 import { FOCUS_RING, PANEL_ROW, SECTION_TITLE } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { Age } from "./age";
+import { Age, RunTime } from "./age";
 import { Summary } from "./captain-row";
 import { CaptainTile } from "./captain-tile";
 import { MemorySection } from "./memory-section";
@@ -126,12 +129,15 @@ function FoldGroup({
 
 function WorkerRow({
   entry,
+  runStart,
   current,
   onOpen,
   onRemove,
   parkActions,
 }: {
   entry: ThreadEntry;
+  /** Set while the worker runs, which shows how long instead of its age. */
+  runStart: RunStart | null;
   current: boolean;
   onOpen: Open;
   onRemove: (threadId: string) => void;
@@ -191,7 +197,11 @@ function WorkerRow({
                       <StatusGlyph status={entry.status} />
                     </span>
                   )}
-                  <Age at={entry.lastActivityAt} />
+                  {runStart === null ? (
+                    <Age at={entry.lastActivityAt} />
+                  ) : (
+                    <RunTime start={runStart} />
+                  )}
                 </>
               }
             />
@@ -212,6 +222,25 @@ function WorkerRow({
         </span>
       ) : null}
     </li>
+  );
+}
+
+/** The captain's summary, with its longest run in the tooltip. */
+function CrewSummary({
+  counts,
+  runStarts,
+}: {
+  counts: CaptainCounts;
+  runStarts: ReadonlyMap<string, RunStart>;
+}) {
+  const now = useNow();
+  return (
+    <span
+      title={crewRunTitle(counts.working, runStarts.values(), now) ?? undefined}
+      className="flex items-center gap-1.5 text-2xs"
+    >
+      <Summary counts={counts} />
+    </span>
   );
 }
 
@@ -246,21 +275,22 @@ function CrewView({
   /** No corner badge when the avatar is the logo already. */
   const projectLogo = captain.record.avatar.style === "logo" ? null : logo;
   const workers = crew.active.length + crew.inactive.length + crew.parked.length;
+  const everyone = useMemo(
+    () => [...crew.active, ...crew.inactive, ...crew.parked],
+    [crew],
+  );
+  const runStarts = useRunStarts(everyone);
   const pullRequests = useCrewPullRequests(captain.thread.projectId);
   const prRows = useMemo(
-    () =>
-      pullRequestRows(pullRequests.pullRequests, [
-        ...crew.active,
-        ...crew.inactive,
-        ...crew.parked,
-      ]),
-    [pullRequests, crew],
+    () => pullRequestRows(pullRequests.pullRequests, everyone),
+    [pullRequests, everyone],
   );
   const rows = (entries: readonly ThreadEntry[]) =>
     entries.map((entry) => (
       <WorkerRow
         key={entry.thread.id}
         entry={entry}
+        runStart={runStarts.get(entry.thread.id) ?? null}
         current={entry.thread.id === currentThreadId}
         onOpen={onOpen}
         onRemove={crewActions.remove}
@@ -294,9 +324,7 @@ function CrewView({
           >
             {captain.thread.displayTitle}
           </button>
-          <span className="flex items-center gap-1.5 text-2xs">
-            <Summary counts={captain.counts} />
-          </span>
+          <CrewSummary counts={captain.counts} runStarts={runStarts} />
         </div>
         {onBack === null ? null : (
           <button

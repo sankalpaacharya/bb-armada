@@ -37,3 +37,26 @@ export function formatAge(at: number, now: number): string {
   return at <= 0 ? "" : formatDuration(now - at);
 }
 
+
+/**
+ * How long something has run, to the minute: "<1m", "12m", "1h 4m", "2d 3h".
+ * Unlike an age it keeps a second unit, so a long run still reads as moving.
+ */
+export function formatRunTime(ms: number): string {
+  if (ms < MINUTE) return "<1m";
+  if (ms < HOUR) return `${Math.floor(ms / MINUTE)}m`;
+  if (ms < DAY)
+    return `${Math.floor(ms / HOUR)}h ${Math.floor((ms % HOUR) / MINUTE)}m`;
+  return `${Math.floor(ms / DAY)}d ${Math.floor((ms % DAY) / HOUR)}h`;
+}
+
+/** A moment as a reader would say it: "1:38 PM" today, "Nov 18, 1:38 PM" before. */
+export function formatClockTime(at: number, now: number): string {
+  const date = new Date(at);
+  const time = date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  if (date.toDateString() === new Date(now).toDateString()) return time;
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`;
+}

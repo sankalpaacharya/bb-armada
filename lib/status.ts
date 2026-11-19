@@ -93,6 +93,15 @@ const BUSY_STATUSES = new Set<string>([
   "waiting-for-host",
 ]);
 
+/** The thread's own runtime is busy, not only work it left running. */
+export function isBusy(
+  thread: Pick<PluginSidebarThread, "status" | "runtimeStatus">,
+): boolean {
+  return (
+    BUSY_STATUSES.has(thread.runtimeStatus) || BUSY_STATUSES.has(thread.status)
+  );
+}
+
 /**
  * Every status a thread shows at once. They can overlap: a send can fail while
  * a turn is still running, and the thread is then both failed and working.
@@ -114,8 +123,7 @@ export function signalsOf(thread: PluginSidebarThread): Status[] {
   }
   const { activity } = thread;
   if (
-    BUSY_STATUSES.has(thread.runtimeStatus) ||
-    BUSY_STATUSES.has(thread.status) ||
+    isBusy(thread) ||
     WORKING_INDICATORS.has(thread.indicator) ||
     activity.workflows +
       activity.backgroundAgents +

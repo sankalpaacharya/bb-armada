@@ -301,6 +301,99 @@ describe("the crew tab's workers", () => {
   });
 });
 
+describe("the crew tab's running workers", () => {
+  const MINUTE = 60_000;
+  const running = (id: string, title: string, updatedAgo: number) =>
+    thread(id, {
+      title,
+      parentThreadId: "cap",
+      status: "active",
+      runtimeStatus: "active",
+      createdAt: Date.now() - 3 * 60 * MINUTE,
+      updatedAt: Date.now() - updatedAgo,
+    });
+  const timeOf = (name: string) =>
+    screen.getByText(name).closest("button")!.querySelector("[title]");
+
+  it("shows how long a worker has run since its turn started, not since its last change", async () => {
+    const turnStartedAt = Date.now() - 64 * MINUTE;
+    const { view } = renderCrew(() => ready(), {
+      workers: [
+        running("w_long", "Long run", 2 * MINUTE),
+        thread("w_idle", {
+          title: "Resting",
+          parentThreadId: "cap",
+          createdAt: Date.now() - 60 * MINUTE,
+          updatedAt: Date.now() - 60 * MINUTE,
+        }),
+      ],
+      sdk: {
+        threads: {
+          events: { list: async () => [{ createdAt: turnStartedAt }] },
+        },
+      },
+    });
+    await screen.findByText("Long run");
+    await waitFor(() =>
+      expect(timeOf("Long run")?.textContent).toBe("1h 4m"),
+    );
+    expect(timeOf("Long run")?.getAttribute("title")).toMatch(
+      /^Running for 1h 4m · started /,
+    );
+    expect(view.inspection.sdkCalls).toEqual([
+      {
+        method: "threads.events.list",
+        args: [
+          expect.objectContaining({
+            threadId: "w_long",
+            types: ["turn/started"],
+            order: "desc",
+            limit: "1",
+          }),
+        ],
+      },
+    ]);
+    const idle = screen.getByText("Resting").closest("button")!;
+    expect(idle.textContent).toMatch(/1h$/);
+    expect(idle.querySelector("[title^='Running']")).toBeNull();
+  });
+
+  it("counts from the thread's last change when the turn cannot be read, and says so", async () => {
+    renderCrew(() => ready(), {
+      workers: [running("w_new", "New run", 5 * MINUTE)],
+      sdk: {
+        threads: {
+          events: {
+            list: async () => {
+              throw new Error("offline");
+            },
+          },
+        },
+      },
+    });
+    await screen.findByText("New run");
+    expect(timeOf("New run")?.textContent).toBe("5m");
+    await waitFor(() =>
+      expect(timeOf("New run")?.getAttribute("title")).toMatch(
+        /by its last status change$/,
+      ),
+    );
+  });
+
+  it("puts the longest run in the captain's summary tooltip", async () => {
+    renderCrew(() => ready(), {
+      workers: [
+        running("w_a", "First", 12 * MINUTE),
+        running("w_b", "Second", 34 * MINUTE),
+      ],
+      sdk: { threads: { events: { list: async () => [] } } },
+    });
+    await screen.findByText("First");
+    const summary = screen.getByText("2 working").parentElement!;
+    expect(summary.getAttribute("title")).toBe("2 working · longest 34m");
+  });
+});
+
 describe("the crew tab's pull requests", () => {
   const fixer = thread("w_fix", {
     title: "WEB-41",
