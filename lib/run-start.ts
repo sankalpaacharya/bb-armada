@@ -51,12 +51,18 @@ function createdAgo(createdAt: number, now: number): string {
 
 /**
  * A Crew row's two times. `lead` is how long the current run has gone, or
- * "idle 4m" since the last activity, and `created` is the thread's age.
+ * "idle 4m" since the last activity, and `created` is the thread's age. A
+ * worker that shows working only for background work has no lead: its own
+ * turn is over, and "idle" beside the working glyph would contradict it.
  */
-export type WorkerTimes = { lead: string; created: string; title: string };
+export type WorkerTimes = {
+  lead: string | null;
+  created: string;
+  title: string;
+};
 
 export function workerTimes(
-  entry: Pick<ThreadEntry, "lastActivityAt"> & {
+  entry: Pick<ThreadEntry, "lastActivityAt" | "status"> & {
     thread: Pick<PluginSidebarThread, "createdAt">;
   },
   start: RunStart | null,
@@ -72,10 +78,17 @@ export function workerTimes(
     };
   const quiet = now - entry.lastActivityAt;
   const idle = quiet < 60_000 ? "<1m" : formatDuration(quiet);
+  const lastActive = `last active ${formatClockTime(entry.lastActivityAt, now)}`;
+  if (entry.status === "working")
+    return {
+      lead: null,
+      created,
+      title: `Working in the background · ${lastActive} · ${createdTitle}`,
+    };
   return {
     lead: `idle ${idle}`,
     created,
-    title: `Idle for ${idle} · last active ${formatClockTime(entry.lastActivityAt, now)} · ${createdTitle}`,
+    title: `Idle for ${idle} · ${lastActive} · ${createdTitle}`,
   };
 }
 

@@ -83,7 +83,12 @@ describe("runTitle", () => {
 });
 
 describe("workerTimes", () => {
-  const worker = (createdAgo: number, activeAgo: number) => ({
+  const worker = (
+    createdAgo: number,
+    activeAgo: number,
+    status: Status | null = null,
+  ) => ({
+    status,
     lastActivityAt: NOW - activeAgo,
     thread: { createdAt: NOW - createdAgo },
   });
@@ -111,6 +116,17 @@ describe("workerTimes", () => {
         `^Idle for 4m · last active ${CLOCK}.* · created ${CLOCK}.* \\(3h ago\\)$`,
       ),
     );
+  });
+
+  it("leaves out the idle time while background work keeps a worker working", () => {
+    const times = workerTimes(
+      worker(40 * MINUTE, 20_000, "working"),
+      null,
+      NOW,
+    );
+    expect(times.lead).toBeNull();
+    expect(times.created).toBe("40m ago");
+    expect(times.title).toMatch(/^Working in the background · last active /);
   });
 
   it("reads cleanly in a thread's first minute", () => {

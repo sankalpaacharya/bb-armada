@@ -111,8 +111,9 @@ A Crew row shows two times, in every group (`lib/run-start.ts`,
 `hooks/use-run-starts.ts`). The first is how long a running worker has been
 running, after its working glyph, or `idle 4m` since a worker's last
 activity. The second is how long ago the thread was created, from its
-`createdAt`: `12m · 3h ago`, `idle 4m · 3h ago`. The tooltip spells out both
-with clock times. The start is the worker's latest `turn/started`
+`createdAt`: `12m · 3h ago`, `idle 4m · 3h ago`. A worker that shows working
+only for background work, with its own turn over, shows just the age. The
+tooltip spells out both with clock times. The start is the worker's latest `turn/started`
 event, read once each time the thread's `updatedAt` changes, which every new
 turn does. Until that read lands, or when it fails, the row counts from
 `updatedAt`, which the switch to working sets. A pin or rename also moves

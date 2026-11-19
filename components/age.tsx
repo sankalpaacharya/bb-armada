@@ -37,8 +37,8 @@ export function WorkerTime({
   const times = workerTimes(entry, start, now);
   return (
     <span title={times.title} className={cn(AGE_TEXT, "whitespace-nowrap")}>
-      {times.lead}
-      <span className="text-muted-foreground/70"> · {times.created}</span>
+      {times.lead === null ? null : `${times.lead} · `}
+      <span className="text-muted-foreground/70">{times.created}</span>
     </span>
   );
 }
