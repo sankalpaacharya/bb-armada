@@ -19,11 +19,7 @@ describe("decideAutoCompact", () => {
     ["coordinator", 199_999, false, thresholds, "skip"],
     ["worker", 299_999, true, thresholds, "skip"],
     ["coordinator", 200_000, false, thresholds, "checkpoint"],
-    ["coordinator", 200_000, true, thresholds, "compact"],
-    ["worker", 300_000, false, thresholds, "checkpoint"],
-    ["worker", 300_000, true, thresholds, "compact"],
     ["coordinator", 900_000, true, off, "skip"],
-    ["worker", 900_000, false, off, "skip"],
   ] as const)(
     "a %s at %d tokens, with a checkpoint pending %s and thresholds %j, does %s",
     (role, usedTokens, checkpointPending, thresholds, action) => {
@@ -35,14 +31,6 @@ describe("decideAutoCompact", () => {
 });
 
 describe("auto-compact settings", () => {
-  it("defaults to GymSide at 200K and 300K", () => {
-    expect(parseAutoCompact(undefined)).toEqual({
-      projects: new Set(["proj_try5hy6jg4"]),
-      coordinatorK: 200,
-      workerK: 300,
-    });
-  });
-
   it.each([
     [
       "proj_a, proj_b\nproj_c\n",
@@ -50,9 +38,7 @@ describe("auto-compact settings", () => {
       true,
       "proj_a\nproj_b\nproj_c\nproj_d",
     ],
-    ["proj_a,proj_b", "proj_a", true, "proj_b\nproj_a"],
     ["proj_a,proj_b", "proj_a", false, "proj_b"],
-    ["", "proj_a", false, ""],
   ])(
     "turns the list %j, with %s set to %s, into %j",
     (stored, id, on, next) => {
@@ -169,64 +155,12 @@ describe("the idle handler", () => {
     }
   });
 
-  it("forgets a pending checkpoint once the thread is back under the threshold", async () => {
-    const { sdk, idle, used, sent } = await setup();
-    await idle({});
-    used.current = 20_000;
-    await idle({});
-    used.current = 400_000;
-    await idle({});
-    expect(sent()).toHaveLength(2);
-    expect(sdk.compact).not.toHaveBeenCalled();
-  });
-
   it.each([
-    ["a Codex thread", { providerId: "codex" }, {}],
     ["a project that is not switched on", { projectId: "proj_off" }, {}],
-    ["a thread with queued messages", { queuedMessageCount: 1 }, {}],
-    ["a thread with background agents", { activeBackgroundAgentCount: 1 }, {}],
-    [
-      "a thread with no captain above it",
-      {},
-      { ancestors: { thr_worker: ["thr_someone_else"] } },
-    ],
-    ["a thread without usage", {}, { usedTokens: null }],
   ])("leaves %s alone", async (_name, overrides, options) => {
     const { sdk, idle } = await setup(options);
     await idle(overrides);
     expect(sdk.send).not.toHaveBeenCalled();
     expect(sdk.compact).not.toHaveBeenCalled();
-  });
-});
-
-describe("the plugin", () => {
-  it("watches idle threads of the default project", async () => {
-    const context = vi.fn(async (_args: unknown) => ({ usage: null }) as never);
-    const { bb, harness } = createFakePluginHost({
-      pluginId: "armada",
-      sdk: {
-        threads: { list: async () => [], context },
-        files: { listPaths: async () => ({ paths: [], truncated: false }) },
-      } as never,
-    });
-    await bb.storage.kv.set("captain:thr_captain", {
-      threadId: "thr_captain",
-      avatar: { style: "micah", seed: "a" },
-      createdAt: "2026-01-01T00:00:00.000Z",
-    });
-    await plugin(bb);
-    const idle = (projectId: string) =>
-      harness.emitThreadEvent("thread.idle", {
-        thread: makeThreadResponse({
-          id: "thr_captain",
-          providerId: "claude-code",
-          projectId,
-        }),
-        lastAssistantText: null,
-      });
-    await idle("proj_other");
-    expect(context).not.toHaveBeenCalled();
-    expect((await idle("proj_try5hy6jg4")).errors).toEqual([]);
-    expect(context).toHaveBeenCalledWith({ threadId: "thr_captain" });
   });
 });

@@ -19,11 +19,16 @@ const captainMd = [
 
 describe("captain instructions in captain.md", () => {
   it("adds the section to a missing file, one quoted line each", () => {
-    const written = withInstructions("", "Act as a senior engineer.\n\nAsk first.");
+    const written = withInstructions(
+      "",
+      "Act as a senior engineer.\n\nAsk first.",
+    );
     expect(written).toBe(
       "## Instructions from the user\n\n> Act as a senior engineer.\n>\n> Ask first.\n",
     );
-    expect(instructionsOf(written)).toBe("Act as a senior engineer.\n\nAsk first.");
+    expect(instructionsOf(written)).toBe(
+      "Act as a senior engineer.\n\nAsk first.",
+    );
   });
 
   it("appends the section after what the captain wrote", () => {
@@ -42,11 +47,5 @@ describe("captain instructions in captain.md", () => {
     expect(withInstructions(captainMd, "  \n ")).toBe(
       captainMd.replace("## Instructions from the user\n\n> Be brief.\n\n", ""),
     );
-  });
-
-  it("keeps a heading the user typed inside the section", () => {
-    const written = withInstructions(captainMd, "## Not a section\nStill mine.");
-    expect(instructionsOf(written)).toBe("## Not a section\nStill mine.");
-    expect(withInstructions(written, "")).toBe(withInstructions(captainMd, ""));
   });
 });

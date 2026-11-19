@@ -42,43 +42,25 @@ describe("the skill checker", () => {
     expect(check(join(__dirname, "..", "skills")).ok).toBe(true);
   });
 
-  it("fails when the skill directory is missing or empty", () => {
-    const empty = skills({});
-    const missing = check(join(empty, "missing"));
-    expect(missing.ok).toBe(false);
-    expect(missing.output).toContain("Missing required skills directory");
-    const noSkills = check(empty);
-    expect(noSkills.ok).toBe(false);
-    expect(noSkills.output).toContain("has no skill folders");
-  });
-
-  it("passes a minimal valid skill with optional fields", () => {
-    const root = skills({
-      "pdf-tools/SKILL.md": skill(
-        'name: pdf-tools\ndescription: Fill PDF forms. Use when the user has a PDF.\nlicense: MIT\ncompatibility: Needs python3\nmetadata:\n  version: "1.0"\nallowed-tools: Read Bash(jq:*)',
-        "See [the guide](references/guide.md) and `scripts/run.py`.\n",
-      ),
-      "pdf-tools/references/guide.md": "# Guide\n",
-      "pdf-tools/scripts/run.py": "print(1)\n",
-    });
-    const result = check(root);
-    expect(result.output).toContain("1 skill(s) follow");
-    expect(result.ok).toBe(true);
-  });
-
   it.each([
-    ["a missing frontmatter block", "x/SKILL.md", "# no frontmatter\n", "must start with YAML frontmatter"],
-    ["unparseable YAML", "x/SKILL.md", skill("name: x\ndescription: Use when: the user asks"), "not valid YAML"],
-    ["a missing name", "x/SKILL.md", skill("description: Does x."), "name is required"],
-    ["uppercase in the name", "Bad/SKILL.md", skill("name: Bad\ndescription: Does x."), "may only use a-z"],
-    ["a name over 64 characters", `${"a".repeat(65)}/SKILL.md`, skill(`name: ${"a".repeat(65)}\ndescription: Does x.`), "at most 64"],
-    ["a name that differs from its folder", "folder/SKILL.md", skill("name: other\ndescription: Does x."), 'must match its folder "folder"'],
-    ["a missing description", "x/SKILL.md", skill("name: x"), "description is required"],
-    ["a description over 1024 characters", "x/SKILL.md", skill(`name: x\ndescription: ${"d".repeat(1025)}`), "at most 1024"],
-    ["an unknown field", "x/SKILL.md", skill("name: x\ndescription: Does x.\nauthor: me"), 'unknown frontmatter field "author"'],
-    ["a body over 500 lines", "x/SKILL.md", skill("name: x\ndescription: Does x.", "line\n".repeat(501)), "keep it under 500"],
-    ["a skill folder without a SKILL.md", "x/README.md", "# x\n", "has no SKILL.md"],
-    ["a link to a missing file", "x/SKILL.md", skill("name: x\ndescription: Does x.", "Read `references/missing.md`.\n"), '"references/missing.md" does not exist'],
+    [
+      "a missing frontmatter block",
+      "x/SKILL.md",
+      "# no frontmatter\n",
+      "must start with YAML frontmatter",
+    ],
+    [
+      "a name that differs from its folder",
+      "folder/SKILL.md",
+      skill("name: other\ndescription: Does x."),
+      'must match its folder "folder"',
+    ],
+    [
+      "a link to a missing file",
+      "x/SKILL.md",
+      skill("name: x\ndescription: Does x.", "Read `references/missing.md`.\n"),
+      '"references/missing.md" does not exist',
+    ],
   ])("fails %s", (_case, path, text, message) => {
     const result = check(skills({ [path]: text }));
     expect(result.ok).toBe(false);

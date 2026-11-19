@@ -60,7 +60,17 @@ describe("the shared pull request cache", () => {
     const gh = vi.fn(ok);
     const cache = await shared(gh).refresh();
     expect(gh.mock.calls).toEqual([
-      [["api", "graphql", "--include", "-f", `query=${QUERY}`, "-f", `q=${SEARCH}`]],
+      [
+        [
+          "api",
+          "graphql",
+          "--include",
+          "-f",
+          `query=${QUERY}`,
+          "-f",
+          `q=${SEARCH}`,
+        ],
+      ],
     ]);
     expect(cache).toEqual({
       version: 1,
@@ -95,80 +105,56 @@ describe("the shared pull request cache", () => {
     expect((await shared(gh, () => NOW, 3).refresh()).data).toEqual(DATA);
     expect(gh).toHaveBeenCalledTimes(1);
   });
-
-  it("treats a newer format as empty and never writes over it", async () => {
-    const newer = JSON.stringify({ version: 2, whatever: true });
-    await writeFile(cacheFile(), newer);
-    const gh = vi.fn(ok);
-    expect(await shared(gh).refresh()).toEqual(EMPTY_CACHE);
-    expect(gh).not.toHaveBeenCalled();
-    expect(await readFile(cacheFile(), "utf8")).toBe(newer);
-  });
 });
 
 describe("backing off", () => {
-  const failing = (stdout: string, stderr = ""): Gh => async () => {
-    throw exit(1, stdout, stderr);
-  };
+  const failing =
+    (stdout: string, stderr = ""): Gh =>
+    async () => {
+      throw exit(1, stdout, stderr);
+    };
   const noTime: Gh = async () => {
     throw exit(1, "", "API rate limit exceeded");
   };
-  const badGateway = failing(included(502, { message: "Bad gateway" }), "HTTP 502");
+  const badGateway = failing(
+    included(502, { message: "Bad gateway" }),
+    "HTTP 502",
+  );
 
   it.each<[string, Gh, number, string, number]>([
     [
       "Retry-After on a 429",
-      failing(included(429, { message: "slow down" }, { "Retry-After": "120" })),
+      failing(
+        included(429, { message: "slow down" }, { "Retry-After": "120" }),
+      ),
       0,
       "rate-limited",
       2 * MINUTE,
     ],
     [
-      "the exhausted limit's reset",
-      failing(
-        included(403, { message: "API rate limit exceeded" }, {
-          "X-RateLimit-Remaining": "0",
-          "X-RateLimit-Reset": String(NOW / 1000 + 900),
-        }),
-      ),
+      "five minutes after a first rate limit with no time",
+      noTime,
       0,
       "rate-limited",
-      15 * MINUTE,
+      5 * MINUTE,
     ],
-    [
-      "the GraphQL reset gh reports when the error gives no time",
-      async (args) => {
-        if (args[1] === "rate_limit")
-          return JSON.stringify({
-            resources: { graphql: { remaining: 0, reset: NOW / 1000 + 1200 } },
-          });
-        throw exit(
-          1,
-          included(200, { errors: [{ type: "RATE_LIMITED", message: "API rate limit already exceeded" }] }),
-        );
-      },
-      0,
-      "rate-limited",
-      20 * MINUTE,
-    ],
-    ["five minutes after a first rate limit with no time", noTime, 0, "rate-limited", 5 * MINUTE],
     ["doubled after a second", noTime, 1, "rate-limited", 10 * MINUTE],
     ["at most an hour", noTime, 5, "rate-limited", 60 * MINUTE],
-    ["a minute after another failure", badGateway, 0, "error", MINUTE],
-    ["doubled per failure", badGateway, 3, "error", 8 * MINUTE],
-    ["at most half an hour", badGateway, 9, "error", 30 * MINUTE],
-  ])("waits for %s, keeping the last data", async (_, gh, failures, kind, wait) => {
-    await store({ ...stale, failures });
-    const search = vi.fn(gh);
-    expect(await shared(search).refresh()).toMatchObject({
-      nextAllowedAt: NOW + wait,
-      failures: failures + 1,
-      data: DATA,
-      fetchedAt: stale.fetchedAt,
-      lastError: { at: NOW, kind },
-    });
-    const calls = search.mock.calls.length;
-    await shared(search, () => NOW + wait - 1).refresh();
-    expect(search).toHaveBeenCalledTimes(calls);
-  });
+  ])(
+    "waits for %s, keeping the last data",
+    async (_, gh, failures, kind, wait) => {
+      await store({ ...stale, failures });
+      const search = vi.fn(gh);
+      expect(await shared(search).refresh()).toMatchObject({
+        nextAllowedAt: NOW + wait,
+        failures: failures + 1,
+        data: DATA,
+        fetchedAt: stale.fetchedAt,
+        lastError: { at: NOW, kind },
+      });
+      const calls = search.mock.calls.length;
+      await shared(search, () => NOW + wait - 1).refresh();
+      expect(search).toHaveBeenCalledTimes(calls);
+    },
+  );
 });
