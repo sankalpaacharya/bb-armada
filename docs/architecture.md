@@ -107,8 +107,8 @@ home of its own. In the Crew tab, a thread no captain started belongs to its
 project's captain when the project has one, and shows the captain picker when
 it has several.
 
-A Crew row shows how long a running worker has been running, behind a timer
-icon, where an idle row shows its age (`lib/run-start.ts`,
+A Crew row shows how long a running worker has been running, after its
+working glyph, where an idle row shows its age (`lib/run-start.ts`,
 `hooks/use-run-starts.ts`). The start is the worker's latest `turn/started`
 event, read once each time the thread's `updatedAt` changes, which every new
 turn does. Until that read lands, or when it fails, the row counts from
