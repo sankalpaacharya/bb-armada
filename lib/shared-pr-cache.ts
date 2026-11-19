@@ -42,7 +42,7 @@ export const QUERY = `query($q: String!) {
 export const CACHE_DIR = path.join(os.homedir(), ".cache", "bb-prs");
 
 export const FRESH_MS = 5 * 60_000;
-export const LOCK_STALE_MS = 60_000;
+const LOCK_STALE_MS = 60_000;
 const MINUTE = 60_000;
 
 const errorKinds = ["rate-limited", "no-gh", "signed-out", "error"] as const;

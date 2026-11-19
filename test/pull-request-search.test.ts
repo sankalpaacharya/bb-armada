@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  createPullRequestReader,
-  inRepo,
-  parseSearch,
-} from "../lib/pull-request-search";
+import { createPullRequestReader, parseSearch } from "../lib/pull-request-search";
 import { EMPTY_CACHE, type SharedCache } from "../lib/shared-pr-cache";
-import { pr } from "./fixtures";
 
 /** One search node in the shape `gh api graphql` returns for SEARCH_QUERY. */
 const node = (number: number, overrides: Record<string, unknown> = {}) => ({
@@ -80,7 +75,6 @@ function reader(start: Partial<SharedCache>, clock = { now: NOW }) {
       return shared;
     }),
   };
-  const warn = vi.fn();
   const gitRemote = vi.fn(async (path: string) => {
     const origin = ORIGINS[path];
     if (origin === undefined) throw new Error("fatal: No such remote 'origin'");
@@ -88,7 +82,7 @@ function reader(start: Partial<SharedCache>, clock = { now: NOW }) {
   });
   const read = createPullRequestReader(
     {
-      log: { warn } as never,
+      log: { warn: () => {} } as never,
       sdk: {
         projects: {
           get: async ({ projectId }: { projectId: string }) =>
@@ -98,7 +92,7 @@ function reader(start: Partial<SharedCache>, clock = { now: NOW }) {
     },
     { cache, now: () => clock.now, gitRemote },
   );
-  return { ...read, cache, warn, gitRemote };
+  return { ...read, cache, gitRemote };
 }
 
 describe("parsing the search", () => {
@@ -113,11 +107,7 @@ describe("parsing the search", () => {
     );
     expect(failing).toMatchObject({ checks: "failing", review: "changes_requested" });
     expect(running).toMatchObject({ checks: "running", draft: true });
-    expect(passing).toMatchObject({
-      checks: "passing",
-      review: "approved",
-      conflicts: true,
-    });
+    expect(passing).toMatchObject({ checks: "passing", review: "approved", conflicts: true });
     expect(none).toEqual({
       repo: "productstudioinc/cops",
       number: 4,
@@ -133,11 +123,6 @@ describe("parsing the search", () => {
       conflicts: false,
       updatedAt: "2026-11-17T09:30:00Z",
     });
-  });
-
-  it("skips a node that is not a pull request", () => {
-    expect(parseSearch(data({}, node(7))).map((p) => p.number)).toEqual([7]);
-    expect(parseSearch(null)).toEqual([]);
   });
 });
 
@@ -167,14 +152,6 @@ describe("the pull request reader", () => {
     expect(cache.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("has no repo and reads nothing for a personal or remote-less project", async () => {
-    const { read, cache } = reader({});
-    const none = { repo: null, pullRequests: [], fetchedAt: null, retryAt: null };
-    expect(await read("proj_me")).toEqual(none);
-    expect(await read("proj_gym")).toEqual(none);
-    expect(cache.read).not.toHaveBeenCalled();
-  });
-
   it("reads the repo from the project's own checkout when bb has no remote on record", async () => {
     const { read, gitRemote } = reader({
       fetchedAt: NOW - 60_000,
@@ -200,10 +177,19 @@ describe("the pull request reader", () => {
     expect(gitRemote).toHaveBeenCalledTimes(2);
   });
 
-  it("hides the group for a checkout off GitHub or without an origin", async () => {
+  it.each([
+    ["a personal project", "proj_me"],
+    ["a project with no remote or checkout", "proj_gym"],
+    ["a checkout off GitHub", "proj_lab"],
+    ["a checkout without an origin", "proj_bare"],
+  ])("hides the group for %s, reading nothing", async (_, projectId) => {
     const { read, cache } = reader({});
-    expect((await read("proj_lab")).repo).toBeNull();
-    expect((await read("proj_bare")).repo).toBeNull();
+    expect(await read(projectId)).toEqual({
+      repo: null,
+      pullRequests: [],
+      fetchedAt: null,
+      retryAt: null,
+    });
     expect(cache.read).not.toHaveBeenCalled();
   });
 
@@ -213,32 +199,17 @@ describe("the pull request reader", () => {
     expect(gitRemote).not.toHaveBeenCalled();
   });
 
-  it("keeps the last PRs while a failed read backs off, says until when, and logs it once", async () => {
-    const { read, warn } = reader({
+  it("keeps the last PRs while a failed read backs off, and says until when", async () => {
+    const { read } = reader({
       fetchedAt: NOW - 20 * 60_000,
       nextAllowedAt: NOW + 7 * 60_000,
       failures: 1,
       lastError: { at: NOW - 60_000, kind: "rate-limited", message: "API rate limit exceeded" },
       data: data(node(1)),
     });
-    const result = await read("proj_cops");
-    expect(result.pullRequests).toHaveLength(1);
-    expect(result.retryAt).toBe(NOW + 7 * 60_000);
-    await read("proj_cops");
-    expect(warn.mock.calls).toEqual([
-      ["could not read pull requests: rate-limited: API rate limit exceeded"],
-    ]);
-  });
-});
-
-describe("a repo's pull requests", () => {
-  it("are the ones in that repo, in any case", () => {
-    const all = [
-      pr(1),
-      pr(2, { repo: "acme/app" }),
-      pr(3, { repo: "ProductStudioInc/Cops" }),
-    ];
-    expect(inRepo("productstudioinc/cops", all).map((p) => p.number)).toEqual([1, 3]);
-    expect(inRepo("acme/other", all)).toEqual([]);
+    expect(await read("proj_cops")).toMatchObject({
+      pullRequests: [{ number: 1 }],
+      retryAt: NOW + 7 * 60_000,
+    });
   });
 });

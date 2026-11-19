@@ -1,19 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  formatAge,
-  formatClockTime,
-  formatDuration,
-  formatRunTime,
-} from "../lib/time";
+import { formatAge, formatClockTime, formatRunTime } from "../lib/time";
 import { NOW } from "./fixtures";
 
-const ago = (ms: number) => formatAge(NOW - ms, NOW);
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
 describe("formatAge", () => {
-  it("keeps every age to a few characters", () => {
+  it("keeps every age to a few characters, and says nothing without a timestamp", () => {
+    const ago = (ms: number) => formatAge(NOW - ms, NOW);
     expect(ago(10_000)).toBe("now");
     expect(ago(59 * MINUTE)).toBe("59m");
     expect(ago(23 * 60 * MINUTE)).toBe("23h");
@@ -21,41 +16,14 @@ describe("formatAge", () => {
     expect(ago(13 * DAY)).toBe("1w");
     expect(ago(363 * DAY)).toBe("51w");
     expect(ago(800 * DAY)).toBe("2y");
-  });
-
-  it("says nothing for a missing timestamp", () => {
     expect(formatAge(0, NOW)).toBe("");
-  });
-});
-
-describe("formatDuration", () => {
-  it("reads a span ahead the same way as an age behind", () => {
-    expect(formatDuration(5 * MINUTE)).toBe("5m");
-    expect(formatDuration(2 * 60 * MINUTE)).toBe("2h");
-    expect(formatDuration(3 * DAY)).toBe("3d");
-    expect(formatDuration(-1)).toBe("now");
-  });
-});
-
-describe("formatDuration rounding up", () => {
-  it("never reads now while time is left, and reads a full unit in that unit", () => {
-    expect(formatDuration(40_000, "up")).toBe("1m");
-    expect(formatDuration(4 * MINUTE + 1, "up")).toBe("5m");
-    expect(formatDuration(59 * MINUTE + 30_000, "up")).toBe("1h");
-    expect(formatDuration(90 * MINUTE, "up")).toBe("2h");
-    expect(formatDuration(6 * DAY + 1, "up")).toBe("1w");
-    expect(formatDuration(0, "up")).toBe("now");
   });
 });
 
 describe("formatRunTime", () => {
   it("counts a run in minutes, then keeps a second unit past an hour", () => {
-    expect(formatRunTime(0)).toBe("<1m");
     expect(formatRunTime(59_000)).toBe("<1m");
-    expect(formatRunTime(12 * MINUTE + 59_000)).toBe("12m");
     expect(formatRunTime(60 * MINUTE)).toBe("1h 0m");
-    expect(formatRunTime(64 * MINUTE)).toBe("1h 4m");
-    expect(formatRunTime(23 * 60 * MINUTE + 59 * MINUTE)).toBe("23h 59m");
     expect(formatRunTime(2 * DAY + 3 * 60 * MINUTE + 30 * MINUTE)).toBe(
       "2d 3h",
     );

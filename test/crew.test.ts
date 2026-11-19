@@ -24,57 +24,44 @@ const threads = [
   thread("loose", { projectId: "proj_c" }),
 ];
 
-const model = buildArmada(
+const armada = (
+  all: typeof threads,
+  projects: ReturnType<typeof project>[],
+  captains: string[],
+  parks: ReturnType<typeof settledAt>[] = [],
+  supervisors: string[] = [],
+) =>
+  buildArmada(all, projects, {}, captains.map(record), parks, new Set(supervisors), NOW, 6 * 3_600_000);
+
+const model = armada(
   threads,
   [project("proj_a", "Alpha"), project("proj_b", "Beta"), project("proj_c", "Gamma")],
-  {},
-  [record("cap"), record("other")],
+  ["cap", "other"],
   [settledAt("done", NOW - 1000)],
-  new Set(["sup"]),
-  NOW,
-  6 * 3_600_000,
+  ["sup"],
 );
 
 describe("a thread's captain", () => {
-  it("is the thread itself, its parent, or a captain further up", () => {
-    expect(captainIdOf(model, threads, "cap")).toBe("cap");
-    expect(captainIdOf(model, threads, "busy")).toBe("cap");
-    expect(captainIdOf(model, threads, "sub")).toBe("cap");
-    expect(captainIdOf(model, threads, "theirs")).toBe("other");
-  });
-
-  it("is the supervisor's captain, for the supervisor and the threads it runs", () => {
-    expect(captainIdOf(model, threads, "sup")).toBe("cap");
-    expect(captainIdOf(model, threads, "run")).toBe("cap");
-  });
-
-  it("falls back to the captain of the thread's project when no captain launched it", () => {
-    expect(captainIdOf(model, threads, "solo")).toBe("cap");
+  it.each<[string, string | null, string]>([
+    ["cap", "cap", "the captain itself"],
+    ["busy", "cap", "its worker"],
+    ["sub", "cap", "a worker's child"],
+    ["theirs", "other", "another captain's worker"],
+    ["sup", "cap", "its supervisor"],
+    ["run", "cap", "a thread its supervisor runs"],
+    ["solo", "cap", "a thread no captain launched, by its project"],
+    ["loose", null, "a thread in a project with no captain"],
+    ["nope", null, "a thread that is gone"],
+  ])("of %s is %s, for %s", (id, captain) => {
+    expect(captainIdOf(model, threads, id)).toBe(captain);
   });
 
   it("is missing for a thread no captain launched when its project has several, so the Crew tab asks which", () => {
-    const shared = [
-      ...threads,
-      thread("cap2", { title: "Video editing", createdAt: NOW }),
-    ];
-    const several = buildArmada(
-      shared,
-      [project("proj_a", "Alpha")],
-      {},
-      [record("cap"), record("cap2")],
-      [],
-      new Set(),
-      NOW,
-      6 * 3_600_000,
-    );
+    const shared = [...threads, thread("cap2", { title: "Video editing", createdAt: NOW })];
+    const several = armada(shared, [project("proj_a", "Alpha")], ["cap", "cap2"]);
     expect(captainIdOf(several, shared, "solo")).toBeNull();
     expect(captainIdOf(several, shared, "busy")).toBe("cap");
     expect(captainIdOf(several, shared, "cap2")).toBe("cap2");
-  });
-
-  it("is missing for a thread in a project with no captain, or one that is gone", () => {
-    expect(captainIdOf(model, threads, "loose")).toBeNull();
-    expect(captainIdOf(model, threads, "nope")).toBeNull();
   });
 });
 
@@ -82,15 +69,8 @@ describe("a captain's crew", () => {
   it("splits its own workers, its supervisor's included, into active, inactive and settled, leaving out other captains' threads", () => {
     const crew = crewOf(model, "cap")!;
     expect(crew.captain.thread.id).toBe("cap");
-    expect(crew.active.map((entry) => entry.thread.id)).toEqual([
-      "run",
-      "busy",
-    ]);
+    expect(crew.active.map((entry) => entry.thread.id)).toEqual(["run", "busy"]);
     expect(crew.inactive.map((entry) => entry.thread.id)).toEqual(["old"]);
     expect(crew.parked.map((entry) => entry.thread.id)).toEqual(["done"]);
-  });
-
-  it("is null for a thread that is not a captain", () => {
-    expect(crewOf(model, "solo")).toBeNull();
   });
 });

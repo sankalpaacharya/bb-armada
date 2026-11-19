@@ -39,110 +39,45 @@ function renderTile(
           status === "loading"
             ? []
             : ([
-                {
-                  id: "codex",
-                  displayName: "Codex",
-                  logoUrl: "/native/codex.svg",
-                },
-                {
-                  id: "claude-code",
-                  displayName: "Claude Code",
-                  logoUrl: "/native/claude.svg",
-                  strings: { iconTint: { light: "#D97757", dark: "#D97757" } },
-                },
-                {
-                  id: "other-provider",
-                  displayName: "Other provider",
-                  logoUrl: "/native/other.svg",
-                },
+                { id: "codex", displayName: "Codex", logoUrl: "/native/codex.svg" },
+                { id: "claude-code", displayName: "Claude Code", logoUrl: "/native/claude.svg" },
               ] as never),
       },
     },
   );
 }
 
+const imageOf = (view: ReturnType<typeof renderTile>) =>
+  view.container.querySelector("img")?.getAttribute("src");
+
 describe("captain provider badges", () => {
-  it("replaces faces with initials and keeps the provider badge", () => {
+  it.each([
+    ["a custom logo", { style: "logo", seed: "kept", image: customLogo }, customLogo],
+    ["the project's logo", { style: "logo", seed: "kept" }, projectLogo],
+  ] as const)("badges %s with its provider, keeping the logo", async (_case, avatar, src) => {
+    const view = renderTile(avatar, "claude-code");
+    await waitFor(() => expect(imageOf(view)).toBe(src));
+    expect(view.getByLabelText("Provider: Claude Code")).toBeTruthy();
+  });
+
+  it("swaps a face for initials and keeps the badge", () => {
     const view = renderTile({ style: "micah", seed: "kept" }, "codex", "ready", "initials");
-    expect(view.getByText("P")).not.toBeNull();
-    expect(view.container.querySelector("img")).toBeNull();
-    expect(view.container.querySelector('[data-provider-id="codex"]')).not.toBeNull();
-  });
-
-  it("keeps a custom logo when initials are selected", async () => {
-    const view = renderTile({ style: "logo", seed: "kept", image: customLogo }, "codex", "ready", "initials");
-    await waitFor(() => expect(view.container.querySelector("img")?.getAttribute("src")).toBe(customLogo));
-    expect(view.queryByText("P")).toBeNull();
-  });
-
-  it.each(["codex", "claude-code", "other-provider"])(
-    "uses the native %s metadata without changing the primary custom logo",
-    async (providerId) => {
-      const view = renderTile(
-        { style: "logo", seed: "kept", image: customLogo },
-        providerId,
-      );
-      await waitFor(() =>
-        expect(view.container.querySelector("img")?.getAttribute("src")).toBe(
-          customLogo,
-        ),
-      );
-      const mark = view.container.querySelector(
-        `[data-provider-id="${providerId}"]`,
-      );
-      expect(mark?.getAttribute("data-provider-kind")).toBe("agent");
-      expect(mark?.getAttribute("data-provider-logo")).toContain("/native/");
-      expect(mark?.getAttribute("aria-label")).toMatch(/^Provider: /);
-      expect(mark?.parentElement?.getAttribute("title")).toBe(
-        mark?.getAttribute("aria-label"),
-      );
-      expect(mark?.parentElement?.className).toContain("[color-scheme:light]");
-    },
-  );
-
-  it("badges seeded faces as well as shared project logos", async () => {
-    const face = renderTile({ style: "micah", seed: "kept" }, "codex");
-    expect(
-      face.container.querySelector('[data-provider-id="codex"]'),
-    ).not.toBeNull();
-    const logo = renderTile({ style: "logo", seed: "kept" }, "claude-code");
-    await waitFor(() =>
-      expect(logo.container.querySelector("img")?.getAttribute("src")).toBe(
-        projectLogo,
-      ),
-    );
-    expect(
-      logo.container.querySelector('[data-provider-id="claude-code"]'),
-    ).not.toBeNull();
+    expect(view.getByText("P")).toBeTruthy();
+    expect(imageOf(view)).toBeUndefined();
+    expect(view.getByLabelText("Provider: Codex")).toBeTruthy();
   });
 
   it.each(["loading", "ready"] as const)(
-    "keeps an unknown provider accessible while the catalog is %s",
+    "names an unknown provider by its id while the catalog is %s",
     (status) => {
-      const view = renderTile(
-        { style: "micah", seed: "kept" },
-        "unknown-provider",
-        status,
-      );
-      const mark = view.container.querySelector(
-        '[data-provider-id="unknown-provider"]',
-      );
-      expect(mark?.getAttribute("aria-label")).toBe(
-        "Provider: unknown-provider",
-      );
-      expect(mark?.parentElement?.getAttribute("title")).toBe(
-        "Provider: unknown-provider",
-      );
+      const view = renderTile({ style: "micah", seed: "kept" }, "unknown-provider", status);
+      expect(view.getByLabelText("Provider: unknown-provider")).toBeTruthy();
     },
   );
 
-  it("leaves primary-only previews unbadged", async () => {
+  it("leaves a tile without a provider unbadged", async () => {
     const view = renderTile({ style: "logo", seed: "kept" });
-    await waitFor(() =>
-      expect(view.container.querySelector("img")?.getAttribute("src")).toBe(
-        projectLogo,
-      ),
-    );
-    expect(view.container.querySelector("[data-provider-id]")).toBeNull();
+    await waitFor(() => expect(imageOf(view)).toBe(projectLogo));
+    expect(view.queryByLabelText(/^Provider:/)).toBeNull();
   });
 });

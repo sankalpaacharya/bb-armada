@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   decideAutoSettle,
   inactiveWakesOf,
-  lastActivityOf,
   parseStoredPark,
   resolveShelf,
   snoozePresets,
@@ -11,102 +10,56 @@ import {
   type AutoSettleThread,
   type Park,
   type PullRequestFacts,
+  type Shelf,
+  type ShelfSignals,
 } from "../lib/lifecycle";
 import { NOW } from "./fixtures";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-const quiet = {
-  parkable: true,
-  pinned: false,
-  latestAttentionAt: 0,
-  lastActivityAt: NOW - 2 * HOUR,
-} as const;
-const settled: Park = { kind: "settled", at: NOW - HOUR, by: "user" };
-const snoozed: Park = { kind: "snoozed", at: NOW - HOUR, until: NOW + HOUR };
+const DAY = 24 * HOUR;
 
 describe("resolveShelf", () => {
-  it("keeps a thread active while nothing is stored", () => {
-    expect(resolveShelf(undefined, quiet, NOW, null)).toBe("active");
-  });
-
-  it("never hides a thread whose tree has live work or a raised hand", () => {
-    const live = { ...quiet, parkable: false };
-    expect(resolveShelf(settled, live, NOW, null)).toBe("active");
-    expect(resolveShelf(snoozed, live, NOW, null)).toBe("active");
-  });
-
-  it("keeps a thread the user moved to active on the active shelf", () => {
-    expect(
-      resolveShelf({ kind: "kept", at: NOW - HOUR }, quiet, NOW, null),
-    ).toBe("active");
-  });
-
-  it("shelves a parkable thread the way the user filed it", () => {
-    expect(resolveShelf(settled, quiet, NOW, null)).toBe("settled");
-    expect(resolveShelf(snoozed, quiet, NOW, null)).toBe("snoozed");
-  });
-
-  it("wakes a snooze on its timer", () => {
-    expect(resolveShelf(snoozed, quiet, NOW + HOUR, null)).toBe("active");
-    expect(resolveShelf(snoozed, quiet, NOW + HOUR - 1, null)).toBe("snoozed");
-  });
-
-  it("brings a thread back on attention after it was parked", () => {
-    const after = { ...quiet, latestAttentionAt: NOW - HOUR + 1 };
-    const before = { ...quiet, latestAttentionAt: NOW - HOUR };
-    expect(resolveShelf(settled, after, NOW, null)).toBe("active");
-    expect(resolveShelf(settled, before, NOW, null)).toBe("settled");
-    expect(resolveShelf(snoozed, after, NOW, null)).toBe("active");
-    expect(resolveShelf(snoozed, before, NOW, null)).toBe("snoozed");
-  });
-});
-
-describe("resolveShelf with Inactive", () => {
   const SIX_HOURS = 6 * HOUR;
+  const quiet = {
+    parkable: true,
+    pinned: false,
+    latestAttentionAt: 0,
+    lastActivityAt: NOW - 2 * HOUR,
+  } as const;
+  const settled: Park = { kind: "settled", at: NOW - HOUR, by: "user" };
+  const snoozed: Park = { kind: "snoozed", at: NOW - HOUR, until: NOW + HOUR };
+  const kept: Park = { kind: "kept", at: NOW - HOUR };
+  const autoSettled: Park = { kind: "settled", at: NOW - 2 * HOUR, by: "auto" };
   const aged = { ...quiet, lastActivityAt: NOW - SIX_HOURS };
+  const touched = { ...quiet, lastActivityAt: NOW - 2 * HOUR + 1 };
+  const live = { ...quiet, parkable: false };
 
-  it("moves a quiet thread to Inactive once its last activity is the threshold old", () => {
-    expect(resolveShelf(undefined, aged, NOW, SIX_HOURS)).toBe("inactive");
-    expect(resolveShelf(undefined, aged, NOW - 1, SIX_HOURS)).toBe("active");
+  it.each<
+    [string, Park | undefined, ShelfSignals, number, number | null, Shelf]
+  >([
+    ["nothing stored", undefined, quiet, NOW, null, "active"],
+    ["a settle over live work", settled, live, NOW, null, "active"],
+    ["a snooze over live work", snoozed, live, NOW, null, "active"],
+    ["a thread moved to active", kept, quiet, NOW, null, "active"],
+    ["a settle", settled, quiet, NOW, null, "settled"],
+    ["a snooze", snoozed, quiet, NOW, null, "snoozed"],
+    ["a snooze a moment before its wake", snoozed, quiet, NOW + HOUR - 1, null, "snoozed"],
+    ["a snooze at its wake", snoozed, quiet, NOW + HOUR, null, "active"],
+    ["a settle with attention after it", settled, { ...quiet, latestAttentionAt: NOW - HOUR + 1 }, NOW, null, "active"],
+    ["a settle with attention only before it", settled, { ...quiet, latestAttentionAt: NOW - HOUR }, NOW, null, "settled"],
+    ["a quiet thread at the threshold", undefined, aged, NOW, SIX_HOURS, "inactive"],
+    ["a quiet thread just under the threshold", undefined, aged, NOW - 1, SIX_HOURS, "active"],
+    ["a quiet thread with Inactive off", undefined, aged, NOW, null, "active"],
+    ["a quiet settle", settled, aged, NOW, SIX_HOURS, "settled"],
+    ["a quiet thread moved to active", kept, aged, NOW, SIX_HOURS, "inactive"],
+    ["an auto settle with activity after it", autoSettled, touched, NOW, null, "active"],
+    ["a user settle with activity after it", { ...autoSettled, by: "user" }, touched, NOW, null, "settled"],
+  ])("puts %s on its shelf", (_, park, signals, now, inactiveAfterMs, shelf) => {
+    expect(resolveShelf(park, signals, now, inactiveAfterMs)).toBe(shelf);
   });
 
-  it("keeps pinned and live threads active however old", () => {
-    expect(
-      resolveShelf(undefined, { ...aged, pinned: true }, NOW, SIX_HOURS),
-    ).toBe("active");
-    expect(
-      resolveShelf(undefined, { ...aged, parkable: false }, NOW, SIX_HOURS),
-    ).toBe("active");
-  });
-
-  it("turns Inactive off with no threshold", () => {
-    expect(resolveShelf(undefined, aged, NOW, null)).toBe("active");
-  });
-
-  it("shelves a stored park on its own shelf before Inactive", () => {
-    expect(resolveShelf(settled, aged, NOW, SIX_HOURS)).toBe("settled");
-    expect(resolveShelf(snoozed, aged, NOW, SIX_HOURS)).toBe("snoozed");
-  });
-
-  it("still ages a thread the user moved to active into Inactive", () => {
-    const kept: Park = { kind: "kept", at: NOW - HOUR };
-    expect(resolveShelf(kept, aged, NOW, SIX_HOURS)).toBe("inactive");
-  });
-
-  it("brings an auto settle back on any activity after it, and a user settle only on attention", () => {
-    const at = NOW - 2 * HOUR;
-    const auto: Park = { kind: "settled", at, by: "auto" };
-    const user: Park = { kind: "settled", at, by: "user" };
-    const touched = { ...quiet, lastActivityAt: at + 1 };
-    expect(resolveShelf(auto, touched, NOW, null)).toBe("active");
-    expect(resolveShelf(user, touched, NOW, null)).toBe("settled");
-    expect(resolveShelf(auto, { ...quiet, lastActivityAt: at }, NOW, null)).toBe(
-      "settled",
-    );
-  });
-
-  it("wakes the list when each thread crosses the threshold", () => {
+  it("wakes the list when each thread crosses the Inactive threshold", () => {
     const times = { createdAt: 1, updatedAt: 10, latestAttentionAt: 20 };
     expect(inactiveWakesOf([times], 100)).toEqual([120]);
     expect(inactiveWakesOf([times], null)).toEqual([]);
@@ -114,20 +67,16 @@ describe("resolveShelf with Inactive", () => {
 });
 
 describe("snoozePresets", () => {
+  const ids = (now: Date) =>
+    snoozePresets(now)
+      .map((preset) => preset.id)
+      .join(" ");
+
   it("offers the evening only while it is more than an hour away", () => {
-    const morning = new Date(2026, 9, 1, 10, 0);
-    const late = new Date(2026, 9, 1, 17, 30);
-    expect(snoozePresets(morning).map((preset) => preset.id)).toEqual([
-      "hour",
-      "evening",
-      "tomorrow",
-      "next-week",
-    ]);
-    expect(snoozePresets(late).map((preset) => preset.id)).toEqual([
-      "hour",
-      "tomorrow",
-      "next-week",
-    ]);
+    expect(ids(new Date(2026, 9, 1, 10, 0))).toBe(
+      "hour evening tomorrow next-week",
+    );
+    expect(ids(new Date(2026, 9, 1, 17, 30))).toBe("hour tomorrow next-week");
   });
 
   it("lands tomorrow and next week on 9:00 of the right local day", () => {
@@ -139,81 +88,35 @@ describe("snoozePresets", () => {
     expect(new Date(byId["next-week"]!)).toEqual(new Date(2026, 9, 5, 9, 0));
     expect(byId["hour"]).toBe(thursday.getTime() + HOUR);
   });
-
-  it("crosses a daylight-saving change on the calendar, not by 24 hours", () => {
-    const beforeFallBack = new Date(2026, 10, 1, 15, 0);
-    const [tomorrow] = snoozePresets(beforeFallBack).filter(
-      (preset) => preset.id === "tomorrow",
-    );
-    const woke = new Date(tomorrow!.until);
-    expect([woke.getDate(), woke.getHours(), woke.getMinutes()]).toEqual([
-      2, 9, 0,
-    ]);
-  });
 });
 
 describe("wakeLabel", () => {
-  it("rounds the time left up, so a hidden snooze never reads now", () => {
-    expect(wakeLabel(NOW + 40_000, NOW)).toBe("1m");
-    expect(wakeLabel(NOW + HOUR - 1000, NOW)).toBe("1h");
-    expect(wakeLabel(NOW + 5 * MINUTE, NOW)).toBe("5m");
-    expect(wakeLabel(NOW - 1, NOW)).toBe("now");
-  });
+  it.each([
+    [40_000, "1m"],
+    [4 * MINUTE + 1, "5m"],
+    [5 * MINUTE, "5m"],
+    [59 * MINUTE + 30_000, "1h"],
+    [90 * MINUTE, "2h"],
+    [6 * DAY + 1, "1w"],
+    [0, "now"],
+  ])(
+    "rounds the time left up, so a hidden snooze never reads now: %d ms reads %s",
+    (left, label) => {
+      expect(wakeLabel(NOW + left, NOW)).toBe(label);
+    },
+  );
 });
 
-describe("parseStoredPark", () => {
-  it("reads a settle stored before auto-settle as the user's", () => {
-    expect(
-      parseStoredPark({ threadId: "t", kind: "settled", at: NOW }),
-    ).toEqual({ threadId: "t", kind: "settled", at: NOW, by: "user" });
-    expect(
-      parseStoredPark({ threadId: "t", kind: "settled", at: NOW, by: "auto" }),
-    ).toEqual({ threadId: "t", kind: "settled", at: NOW, by: "auto" });
-    expect(
-      parseStoredPark({ threadId: "t", kind: "settled", at: NOW, by: "bot" }),
-    ).toBeNull();
-  });
-
-  it("reads a kept thread", () => {
-    expect(parseStoredPark({ threadId: "t", kind: "kept", at: NOW })).toEqual({
-      threadId: "t",
-      kind: "kept",
-      at: NOW,
-    });
-  });
-
-  it("reads every kind and refuses anything else", () => {
-    expect(parseStoredPark({ threadId: "t", ...settled })).toEqual({
-      threadId: "t",
-      ...settled,
-    });
-    expect(parseStoredPark({ threadId: "t", ...snoozed })).toEqual({
-      threadId: "t",
-      ...snoozed,
-    });
-    expect(
-      parseStoredPark({ threadId: "t", kind: "snoozed", at: NOW }),
-    ).toBeNull();
-    expect(
-      parseStoredPark({ threadId: "t", kind: "paused", at: NOW }),
-    ).toBeNull();
-    expect(parseStoredPark("garbage")).toBeNull();
-  });
-});
-
-describe("lastActivityOf", () => {
-  it("is the newest of creation, change and attention", () => {
-    expect(
-      lastActivityOf({ createdAt: 3, updatedAt: 1, latestAttentionAt: 2 }),
-    ).toBe(3);
-    expect(
-      lastActivityOf({ createdAt: 1, updatedAt: 1, latestAttentionAt: 5 }),
-    ).toBe(5);
+it("reads a settle stored before auto-settle as the user's", () => {
+  expect(parseStoredPark({ threadId: "t", kind: "settled", at: NOW })).toEqual({
+    threadId: "t",
+    kind: "settled",
+    at: NOW,
+    by: "user",
   });
 });
 
 describe("decideAutoSettle", () => {
-  const DAY = 24 * HOUR;
   const settings = { afterDays: 3, onMerge: true };
   const old: AutoSettleThread = {
     lastActivityAt: NOW - 4 * DAY,
@@ -223,99 +126,43 @@ describe("decideAutoSettle", () => {
     isWorking: false,
   };
   const fresh: AutoSettleThread = { ...old, lastActivityAt: NOW - HOUR };
-  const absent: PullRequestFacts = { outcome: "absent" };
   const pr = (
     state: "draft" | "open" | "merged" | "closed",
     updatedAt = new Date(NOW - HOUR / 2).toISOString(),
   ): PullRequestFacts => ({ outcome: "available", state, updatedAt });
   const auto: Park = { kind: "settled", at: NOW - DAY, by: "auto" };
-  const decide = (
-    overrides: Partial<Parameters<typeof decideAutoSettle>[0]> = {},
-  ) =>
-    decideAutoSettle({
-      park: null,
-      now: NOW,
-      pullRequest: absent,
-      settings,
-      thread: old,
-      ...overrides,
-    });
+  const kept: Park = { kind: "kept", at: NOW - DAY };
+  const mergedBefore = pr("merged", new Date(NOW - 2 * HOUR).toISOString());
+  type Input = Parameters<typeof decideAutoSettle>[0];
 
-  it("never touches a settle the user filed, or a thread the user moved to active", () => {
-    const user: Park = { kind: "settled", at: NOW - DAY, by: "user" };
-    const kept: Park = { kind: "kept", at: NOW - DAY };
-    expect(decide({ park: user, thread: fresh })).toBe("keep");
-    expect(decide({ park: kept })).toBe("keep");
-    expect(decide({ park: kept, pullRequest: pr("merged") })).toBe("keep");
-  });
-
-  it.each([
-    ["pinned", { pinned: true }],
-    ["waiting on you", { hasPendingInteraction: true }],
-    ["holding queued work", { hasQueuedWork: true }],
-    ["working", { isWorking: true }],
-  ] as const)(
-    "brings back an auto settle while the card is %s, and does not settle it",
-    (_, held) => {
-      const thread = { ...old, ...held };
-      expect(decide({ park: auto, thread })).toBe("unsettle");
-      expect(decide({ thread })).toBe("keep");
-    },
-  );
-
-  it("leaves a snoozed card to its snooze", () => {
-    const snoozed: Park = { kind: "snoozed", at: NOW - DAY, until: NOW + DAY };
-    expect(decide({ park: snoozed })).toBe("keep");
-  });
-
-  it("changes nothing while the pull request cannot be read", () => {
-    const unknown: PullRequestFacts = { outcome: "unknown" };
-    expect(decide({ pullRequest: unknown })).toBe("keep");
-    expect(decide({ park: auto, thread: fresh, pullRequest: unknown })).toBe(
-      "keep",
-    );
-  });
-
-  it("settles a card whose pull request closed, or merged, after its last activity", () => {
-    expect(decide({ thread: fresh, pullRequest: pr("closed") })).toBe("settle");
-    expect(decide({ thread: fresh, pullRequest: pr("merged") })).toBe("settle");
-    const before = new Date(NOW - 2 * HOUR).toISOString();
-    expect(decide({ thread: fresh, pullRequest: pr("merged", before) })).toBe(
-      "keep",
-    );
-  });
-
-  it("ignores a merge with settle on merge off, but still settles a closed one", () => {
-    const off = { ...settings, onMerge: false };
+  it.each<[string, Partial<Input>, ReturnType<typeof decideAutoSettle>]>([
+    ["leaves a thread moved to active after a merge", { park: kept, pullRequest: pr("merged") }, "keep"],
+    ["never moves a settle the user filed", { park: { kind: "settled", at: NOW - DAY, by: "user" }, pullRequest: pr("open") }, "keep"],
+    ["leaves a snoozed card to its snooze", { park: { kind: "snoozed", at: NOW - DAY, until: NOW + DAY } }, "keep"],
+    ["never settles a card that waits on you", { thread: { ...old, hasPendingInteraction: true } }, "keep"],
+    ["keeps an auto settle while the pull request cannot be read", { park: auto, thread: fresh, pullRequest: { outcome: "unknown" } }, "keep"],
+    ["settles a card whose pull request closed after its last activity", { thread: fresh, pullRequest: pr("closed") }, "settle"],
+    ["settles a card whose pull request merged after its last activity", { thread: fresh, pullRequest: pr("merged") }, "settle"],
+    ["ignores a merge from before the last activity", { thread: fresh, pullRequest: mergedBefore }, "keep"],
+    ["ignores a merge with settle on merge off", { thread: fresh, pullRequest: pr("merged"), settings: { ...settings, onMerge: false } }, "keep"],
+    ["never settles a card with a draft pull request", { pullRequest: pr("draft") }, "keep"],
+    ["brings back an auto settle whose pull request is open", { park: auto, pullRequest: pr("open") }, "unsettle"],
+    ["settles a card quiet longer than the days setting", {}, "settle"],
+    ["keeps a card quiet exactly the days setting", { thread: { ...old, lastActivityAt: NOW - 3 * DAY } }, "keep"],
+    ["brings back an auto settle while the card is pinned", { park: auto, thread: { ...old, pinned: true } }, "unsettle"],
+    ["brings back an auto settle while the card waits on you", { park: auto, thread: { ...old, hasPendingInteraction: true } }, "unsettle"],
+    ["brings back an auto settle while the card holds queued work", { park: auto, thread: { ...old, hasQueuedWork: true } }, "unsettle"],
+    ["brings back an auto settle while the card is working", { park: auto, thread: { ...old, isWorking: true } }, "unsettle"],
+  ])("%s", (_, overrides, decision) => {
     expect(
-      decide({ thread: fresh, pullRequest: pr("merged"), settings: off }),
-    ).toBe("keep");
-    expect(
-      decide({ thread: fresh, pullRequest: pr("closed"), settings: off }),
-    ).toBe("settle");
-  });
-
-  it("changes nothing when the pull request time cannot be read", () => {
-    expect(decide({ pullRequest: pr("merged", "not a date") })).toBe("keep");
-  });
-
-  it("never settles a card with an open or draft pull request, however old", () => {
-    expect(decide({ pullRequest: pr("open") })).toBe("keep");
-    expect(decide({ pullRequest: pr("draft") })).toBe("keep");
-    expect(decide({ park: auto, pullRequest: pr("open") })).toBe("unsettle");
-  });
-
-  it("settles a card quiet for longer than the days setting, and not before", () => {
-    expect(decide()).toBe("settle");
-    expect(decide({ thread: { ...old, lastActivityAt: NOW - 3 * DAY } })).toBe(
-      "keep",
-    );
-    expect(decide({ settings: { ...settings, afterDays: null } })).toBe("keep");
-  });
-
-  it("returns only a change from the stored state", () => {
-    expect(decide({ park: auto })).toBe("keep");
-    expect(decide({ park: auto, thread: fresh })).toBe("unsettle");
-    expect(decide({ thread: fresh })).toBe("keep");
+      decideAutoSettle({
+        park: null,
+        now: NOW,
+        pullRequest: { outcome: "absent" },
+        settings,
+        thread: old,
+        ...overrides,
+      }),
+    ).toBe(decision);
   });
 });

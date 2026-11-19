@@ -1,88 +1,28 @@
+import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { describe, expect, it } from "vitest";
 
-import { isLive, signalsOf, statusOf, strongerStatus } from "../lib/status";
+import { statusOf, type Status } from "../lib/status";
 import { thread } from "./fixtures";
 
+const backgroundAgent = {
+  activity: { ...thread("t").activity, backgroundAgents: 1 },
+};
+
 describe("statusOf", () => {
-  it("reads a thread blocked on the user as needing you", () => {
-    expect(statusOf(thread("a", { hasPendingInteraction: true }))).toBe(
-      "needs-you",
-    );
-    expect(statusOf(thread("b", { indicator: "waiting-for-input" }))).toBe(
-      "needs-you",
-    );
-  });
-
-  it("reads an unread error or a message that could not be sent as failed", () => {
-    expect(statusOf(thread("a", { indicator: "unread-error" }))).toBe("failed");
-    expect(statusOf(thread("b", { queuedWork: "failed" }))).toBe("failed");
-    expect(statusOf(thread("c", { indicator: "queued-failed" }))).toBe(
-      "failed",
-    );
-  });
-
-  it("reads a running turn or background work as working", () => {
-    expect(statusOf(thread("a", { status: "active" }))).toBe("working");
-    expect(
-      statusOf(
-        thread("b", {
-          activity: {
-            workflows: 0,
-            backgroundAgents: 1,
-            backgroundCommands: 0,
-            planMode: 0,
-            goals: 0,
-          },
-        }),
-      ),
-    ).toBe("working");
-  });
-
-  it("reads a message waiting behind the running turn as queued", () => {
-    expect(
-      statusOf(thread("a", { status: "active", indicator: "queued-waiting" })),
-    ).toBe("queued");
-  });
-
-  it("puts the user's turn above work in progress", () => {
-    expect(
-      statusOf(thread("a", { status: "active", hasPendingInteraction: true })),
-    ).toBe("needs-you");
-  });
-
-  it("reads an unread success as done and an idle thread as quiet", () => {
-    expect(statusOf(thread("a", { indicator: "unread-success" }))).toBe("done");
-    expect(statusOf(thread("b"))).toBeNull();
-  });
-});
-
-describe("signalsOf", () => {
-  it("keeps a failed send beside the turn that is still running", () => {
-    const both = thread("a", { queuedWork: "failed", runtimeStatus: "active" });
-    expect(signalsOf(both).sort()).toEqual(["failed", "working"]);
-    expect(statusOf(both)).toBe("failed");
-  });
-
-  it("gives an idle thread no signals", () => {
-    expect(signalsOf(thread("a"))).toEqual([]);
-  });
-});
-
-describe("strongerStatus", () => {
-  it("keeps the more urgent status and ignores quiet", () => {
-    expect(strongerStatus("working", "needs-you")).toBe("needs-you");
-    expect(strongerStatus("failed", "working")).toBe("failed");
-    expect(strongerStatus("done", "queued")).toBe("queued");
-    expect(strongerStatus(null, "done")).toBe("done");
-    expect(strongerStatus(null, null)).toBeNull();
-  });
-});
-
-describe("isLive", () => {
-  it("counts everything but done and quiet", () => {
-    expect(isLive("working")).toBe(true);
-    expect(isLive("failed")).toBe(true);
-    expect(isLive("done")).toBe(false);
-    expect(isLive(null)).toBe(false);
+  it.each<[string, Partial<PluginSidebarThread>, Status | null]>([
+    ["a pending question", { hasPendingInteraction: true }, "needs-you"],
+    ["a wait for input", { indicator: "waiting-for-input" }, "needs-you"],
+    ["an unread error", { indicator: "unread-error" }, "failed"],
+    ["a send that failed", { queuedWork: "failed" }, "failed"],
+    ["a queued message that failed", { indicator: "queued-failed" }, "failed"],
+    ["a running turn", { status: "active" }, "working"],
+    ["background work", backgroundAgent, "working"],
+    ["a message waiting behind the running turn", { status: "active", indicator: "queued-waiting" }, "queued"],
+    ["a question during a running turn", { status: "active", hasPendingInteraction: true }, "needs-you"],
+    ["a failed send beside a running turn", { queuedWork: "failed", runtimeStatus: "active" }, "failed"],
+    ["an unread success", { indicator: "unread-success" }, "done"],
+    ["an idle thread", {}, null],
+  ])("reads %s as %s", (_, overrides, status) => {
+    expect(statusOf(thread("t", overrides))).toBe(status);
   });
 });

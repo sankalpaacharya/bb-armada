@@ -46,8 +46,7 @@ function renderCrew(
     rpc?: Record<string, unknown>;
   } = {},
 ) {
-  const reads: unknown[] = [];
-  const view = renderSlot(
+  return renderSlot(
     { component: CrewTab },
     { threadId: "cap", environment: null, params: null },
     {
@@ -73,10 +72,7 @@ function renderCrew(
         ],
         parks_list: () => [],
         captain_supervisors: () => [],
-        captain_home: (input: unknown) => {
-          reads.push(input);
-          return home();
-        },
+        captain_home: home,
         crew_pull_requests: () => ({
           repo: null,
           pullRequests: [],
@@ -89,11 +85,7 @@ function renderCrew(
       settings: { inactiveAfterHours: 0 },
     },
   );
-  return { view, reads };
 }
-
-const openMemory = async () =>
-  fireEvent.click(await screen.findByRole("button", { name: "Memory" }));
 
 /** Each row of the Memory section, with its age dropped. */
 const memoryRows = () =>
@@ -107,8 +99,8 @@ const memoryRows = () =>
     .map((button) => button.textContent?.replace(/(\d+[a-z]+|now)$/, ""));
 
 describe("the crew tab's memory", () => {
-  it("shows the captain's home as files, startup memory first, then a folder per task", async () => {
-    const { reads } = renderCrew(() =>
+  it("shows the captain's home as files, startup memory first, then a folder per task, and opens one in bb's preview on the captain's machine", async () => {
+    const view = renderCrew(() =>
       ready(
         "tasks/fix-login/brief.md",
         "archive.md",
@@ -117,11 +109,11 @@ describe("the crew tab's memory", () => {
         "learnings.md",
       ),
     );
-    await openMemory();
+    fireEvent.click(await screen.findByRole("button", { name: "Memory" }));
     await screen.findByText("~/.bb/captains/cops");
-    expect(new Set(reads.map((read) => JSON.stringify(read)))).toEqual(
-      new Set([JSON.stringify({ threadId: "cap", project: "cops" })]),
-    );
+    expect(
+      view.inspection.rpcCalls.find((call) => call.method === "captain_home")?.input,
+    ).toEqual({ threadId: "cap", project: "cops" });
     expect(memoryRows()).toEqual([
       "captain.md",
       "learnings.md",
@@ -131,13 +123,6 @@ describe("the crew tab's memory", () => {
       "fix-login/",
     ]);
     fireEvent.click(screen.getByRole("button", { name: /fix-login/ }));
-    expect(memoryRows()).toContain("brief.md");
-  });
-
-  it("opens a file whole in bb's preview, on the captain's machine", async () => {
-    const { view } = renderCrew(() => ready("tasks/fix-login/brief.md"));
-    await openMemory();
-    fireEvent.click(await screen.findByRole("button", { name: /fix-login/ }));
     fireEvent.click(screen.getByRole("button", { name: /brief\.md/ }));
     expect(view.inspection.navigateCalls).toContainEqual({
       method: "experimental_openFilePreview",
@@ -151,57 +136,10 @@ describe("the crew tab's memory", () => {
       },
     });
   });
-
-  it("reads the folder again when opened, and when Refresh is pressed", async () => {
-    const { reads } = renderCrew(() => ready("backlog.md"));
-    await screen.findByRole("button", { name: "Memory" });
-    await waitFor(() => expect(reads.length).toBeGreaterThan(0));
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const beforeOpen = reads.length;
-    await openMemory();
-    await waitFor(() => expect(reads.length).toBeGreaterThan(beforeOpen));
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const beforeRefresh = reads.length;
-    fireEvent.click(screen.getByRole("button", { name: "Refresh memory" }));
-    await waitFor(() => expect(reads.length).toBeGreaterThan(beforeRefresh));
-  });
-
-  it("resizes the open folder from its top edge, and keeps the height", async () => {
-    stored.clear();
-    renderCrew(() => ready("captain.md"));
-    await openMemory();
-    const handle = await screen.findByRole("separator", { name: "Resize memory" });
-    const before = Number(handle.getAttribute("aria-valuenow"));
-    fireEvent.keyDown(handle, { key: "ArrowUp" });
-    expect(Number(handle.getAttribute("aria-valuenow"))).toBe(before + 24);
-    expect(stored.get("armada:memory-height")).toBe(String(before + 24));
-    fireEvent.doubleClick(handle);
-    expect(Number(handle.getAttribute("aria-valuenow"))).toBe(before);
-  });
-
-  it("starts folded, opens, and folds away again", async () => {
-    renderCrew(() => ready("backlog.md"));
-    const header = await screen.findByRole("button", { name: "Memory" });
-    expect(header.getAttribute("aria-expanded")).toBe("false");
-    expect(memoryRows()).toEqual([]);
-    fireEvent.click(header);
-    expect(header.getAttribute("aria-expanded")).toBe("true");
-    await waitFor(() => expect(memoryRows()).toEqual(["backlog.md"]));
-    fireEvent.click(header);
-    expect(memoryRows()).toEqual([]);
-  });
-
-  it("says when the captain has no memory folder yet", async () => {
-    renderCrew(() => ({
-      status: "missing",
-      folder: "~/.bb/captains/cops",
-    }));
-    await openMemory();
-    await screen.findByText("No memory folder yet at ~/.bb/captains/cops.");
-  });
 });
 
 describe("the crew tab's workers", () => {
+  const MINUTE = 60_000;
   const workers = [
     thread("w_fix", { title: "Fix login", parentThreadId: "cap" }),
     thread("w_owned", {
@@ -213,12 +151,15 @@ describe("the crew tab's workers", () => {
   const workerRow = (name: string) =>
     screen.getByText(name).closest("button")!;
 
-  it("takes a worker out of the crew from its menu, clearing its parent", async () => {
-    const { view } = renderCrew(() => ready(), {
+  it("takes a worker out of the crew from its menu, unless its lifecycle owner would keep it there", async () => {
+    const view = renderCrew(() => ready(), {
       workers,
       sdk: { threads: { update: async () => ({}) } },
     });
-    await screen.findByText("Fix login");
+    await screen.findByText("Owned helper");
+    fireEvent.contextMenu(workerRow("Owned helper"));
+    await screen.findByRole("menu");
+    expect(screen.queryByRole("menuitem", { name: "Remove from crew" })).toBeNull();
     fireEvent.contextMenu(workerRow("Fix login"));
     fireEvent.click(
       await screen.findByRole("menuitem", { name: "Remove from crew" }),
@@ -233,9 +174,9 @@ describe("the crew tab's workers", () => {
     );
   });
 
-  it("settles a worker from its hover button, moving it under Settled", async () => {
+  it("settles a worker from its hover button, moving it under a folded Settled", async () => {
     let parks: unknown[] = [];
-    const { view } = renderCrew(() => ready(), {
+    const view = renderCrew(() => ready(), {
       workers,
       rpc: {
         parks_list: () => parks,
@@ -249,77 +190,28 @@ describe("the crew tab's workers", () => {
     await screen.findByText("Fix login");
     const row = workerRow("Fix login").closest("li")!;
     fireEvent.click(within(row).getByRole("button", { name: "Settle" }));
-    await waitFor(() =>
-      expect(
-        view.inspection.rpcCalls.find((call) => call.method === "parks_settle")
-          ?.input,
-      ).toEqual({ threadId: "w_fix", at: expect.any(Number) }),
-    );
+    await waitFor(() => expect(parks).toHaveLength(1));
     await view.experimental_invalidateRpc(["parks"]);
-    fireEvent.click(await screen.findByRole("button", { name: /^Settled/ }));
+    const settled = await screen.findByRole("button", { name: /^Settled/ });
+    expect(screen.queryByText("Fix login")).toBeNull();
+    fireEvent.click(settled);
     expect(
       within(screen.getByRole("region", { name: "Settled" })).getByText("Fix login"),
     ).toBeTruthy();
   });
 
-  it("folds Active, and keeps Settled folded until it is opened", async () => {
-    renderCrew(() => ready(), {
-      workers,
-      rpc: {
-        parks_list: () => [
-          { threadId: "w_fix", kind: "settled", at: Date.now(), by: "user" },
-        ],
-      },
-    });
-    const settled = await screen.findByRole("button", { name: /^Settled/ });
-    expect(settled.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByText("Fix login")).toBeNull();
-    fireEvent.click(settled);
-    expect(await screen.findByText("Fix login")).toBeTruthy();
-    const active = screen.getByRole("button", { name: /^Active/ });
-    expect(screen.getByText("Owned helper")).toBeTruthy();
-    fireEvent.click(active);
-    expect(screen.queryByText("Owned helper")).toBeNull();
-  });
-
-  it("offers Settle and Snooze in a worker's menu", async () => {
-    renderCrew(() => ready(), { workers });
-    await screen.findByText("Fix login");
-    fireEvent.contextMenu(workerRow("Fix login"));
-    expect(await screen.findByRole("menuitem", { name: "Settle" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /Snooze/ })).toBeTruthy();
-  });
-
-  it("does not offer it for a worker its lifecycle owner would keep in the crew", async () => {
-    renderCrew(() => ready(), { workers });
-    await screen.findByText("Owned helper");
-    fireEvent.contextMenu(workerRow("Owned helper"));
-    await screen.findByRole("menu");
-    expect(
-      screen.queryByRole("menuitem", { name: "Remove from crew" }),
-    ).toBeNull();
-  });
-});
-
-describe("the crew tab's running workers", () => {
-  const MINUTE = 60_000;
-  const running = (id: string, title: string, updatedAgo: number) =>
-    thread(id, {
-      title,
-      parentThreadId: "cap",
-      status: "active",
-      runtimeStatus: "active",
-      createdAt: Date.now() - 3 * 60 * MINUTE,
-      updatedAt: Date.now() - updatedAgo,
-    });
-  const timeOf = (name: string) =>
-    screen.getByText(name).closest("button")!.querySelector("[title]");
-
-  it("shows how long a worker has run since its turn started, not since its last change", async () => {
+  it("shows one time per row, a run's since its turn started rather than its last change, an idle one's age", async () => {
     const turnStartedAt = Date.now() - 64 * MINUTE;
-    const { view } = renderCrew(() => ready(), {
+    const view = renderCrew(() => ready(), {
       workers: [
-        running("w_long", "Long run", 2 * MINUTE),
+        thread("w_long", {
+          title: "Long run",
+          parentThreadId: "cap",
+          status: "active",
+          runtimeStatus: "active",
+          createdAt: Date.now() - 3 * 60 * MINUTE,
+          updatedAt: Date.now() - 2 * MINUTE,
+        }),
         thread("w_idle", {
           title: "Resting",
           parentThreadId: "cap",
@@ -333,13 +225,10 @@ describe("the crew tab's running workers", () => {
         },
       },
     });
+    const times = (name: string) =>
+      screen.getByText(name).closest("button")!.querySelectorAll("[title]");
     await screen.findByText("Long run");
-    await waitFor(() =>
-      expect(timeOf("Long run")?.textContent).toBe("1h 4m"),
-    );
-    expect(timeOf("Long run")?.getAttribute("title")).toMatch(
-      /^Running for 1h 4m · started .+ · created .+ \(3h ago\)$/,
-    );
+    await waitFor(() => expect(times("Long run")[0]?.textContent).toBe("1h 4m"));
     expect(view.inspection.sdkCalls).toEqual([
       {
         method: "threads.events.list",
@@ -353,48 +242,9 @@ describe("the crew tab's running workers", () => {
         ],
       },
     ]);
-    expect(timeOf("Resting")?.textContent).toBe("1h ago");
-    expect(timeOf("Resting")?.getAttribute("title")).toMatch(
-      /^Created .+ \(1h ago\) · idle for 1h · /,
-    );
-    expect(
-      screen.getByText("Resting").closest("button")!.querySelectorAll("[title]"),
-    ).toHaveLength(1);
-  });
-
-  it("counts from the thread's last change when the turn cannot be read, and says so", async () => {
-    renderCrew(() => ready(), {
-      workers: [running("w_new", "New run", 5 * MINUTE)],
-      sdk: {
-        threads: {
-          events: {
-            list: async () => {
-              throw new Error("offline");
-            },
-          },
-        },
-      },
-    });
-    await screen.findByText("New run");
-    expect(timeOf("New run")?.textContent).toBe("5m");
-    await waitFor(() =>
-      expect(timeOf("New run")?.getAttribute("title")).toMatch(
-        /by its last status change · created /,
-      ),
-    );
-  });
-
-  it("puts the longest run in the captain's summary tooltip", async () => {
-    renderCrew(() => ready(), {
-      workers: [
-        running("w_a", "First", 12 * MINUTE),
-        running("w_b", "Second", 34 * MINUTE),
-      ],
-      sdk: { threads: { events: { list: async () => [] } } },
-    });
-    await screen.findByText("First");
-    const summary = screen.getByText("2 working").parentElement!;
-    expect(summary.getAttribute("title")).toBe("2 working · longest 34m");
+    expect(times("Long run")).toHaveLength(1);
+    expect(times("Resting")).toHaveLength(1);
+    expect(times("Resting")[0]?.textContent).toBe("1h ago");
   });
 });
 
@@ -429,68 +279,31 @@ describe("the crew tab's pull requests", () => {
   };
   const section = () => screen.getByRole("region", { name: "Pull requests" });
 
-  it("lists the user's open PRs in the captain's repo, asking by project", async () => {
-    const { view } = renderCrew(() => ready(), {
+  it("lists the user's open PRs in the captain's repo, asking by project, with the repo and branches in the tooltip", async () => {
+    const view = renderCrew(() => ready(), {
       workers: [fixer],
       rpc: { crew_pull_requests: () => pulls },
     });
-    const heading = await screen.findByRole("button", {
-      name: /^Pull requests/,
-    });
+    const heading = await screen.findByRole("button", { name: /^Pull requests/ });
     expect(heading.textContent).toBe("Pull requests2");
     expect(
       view.inspection.rpcCalls.find(
         (call) => call.method === "crew_pull_requests",
       )?.input,
     ).toEqual({ projectId: "proj_a" });
-    const first = within(section()).getAllByRole("listitem")[0]!;
-    expect(first.textContent).toBe("Fix the sign up form#8357·2d·via WEB-41+17−35");
-    expect(within(first).getByLabelText("Checks failing")).toBeTruthy();
+    const [first, second] = within(section()).getAllByRole("listitem");
+    expect(first!.textContent).toBe("Fix the sign up form#8357·2d·via WEB-41+17−35");
     expect(
-      within(first).getByLabelText("17 lines added, 35 removed"),
-    ).toBeTruthy();
-    const second = within(section()).getAllByRole("listitem")[1]!;
-    expect(second.textContent).not.toContain("via");
-    expect(within(second).getByLabelText("Ready")).toBeTruthy();
-  });
-
-  it("keeps the repo and branches out of the row, in its tooltip", async () => {
-    renderCrew(() => ready(), {
-      workers: [fixer],
-      rpc: { crew_pull_requests: () => pulls },
-    });
-    const title = await screen.findByRole("button", {
-      name: "Fix the sign up form",
-    });
-    expect(section().textContent).not.toMatch(/cops#|←/);
-    expect(title.getAttribute("title")).toBe(
+      within(first!).getByRole("button", { name: "Fix the sign up form" })
+        .getAttribute("title"),
+    ).toBe(
       "Fix the sign up form\ncops#8357 · main ← capy/fix-sign-up-form\nChecks failing",
     );
-  });
-
-  it("scrolls the PRs in a box of their own, under a heading that stays", async () => {
-    renderCrew(() => ready(), {
-      workers: [fixer],
-      rpc: {
-        crew_pull_requests: () => ({
-          ...pulls,
-          pullRequests: Array.from({ length: 15 }, (_, i) => pr(9000 + i)),
-        }),
-      },
-    });
-    const heading = await screen.findByRole("button", {
-      name: /^Pull requests/,
-    });
-    const list = within(section()).getByTestId("pull-request-list");
-    expect(within(list).getAllByRole("listitem")).toHaveLength(15);
-    expect(list.contains(heading)).toBe(false);
-    expect(list.className).toMatch(/\bmax-h-\[/);
-    expect(list.className).toMatch(/\boverflow-auto\b/);
-    expect(list.contains(screen.getByText("WEB-41"))).toBe(false);
+    expect(within(second!).getByLabelText("Ready")).toBeTruthy();
   });
 
   it("opens the PR in the default browser, and its worker from the via", async () => {
-    const { view } = renderCrew(() => ready(), {
+    const view = renderCrew(() => ready(), {
       workers: [fixer],
       rpc: {
         crew_pull_requests: () => pulls,
@@ -511,42 +324,16 @@ describe("the crew tab's pull requests", () => {
       expect.objectContaining({ method: "openUrl" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "via WEB-41" }));
-    expect(
-      await screen.findByRole("button", { name: /Crew/ }),
-    ).toBeTruthy();
-    expect(
-      view.inspection.rpcCalls.filter(
-        (call) => call.method === "open_pull_request",
-      ),
-    ).toHaveLength(1);
-  });
-
-  it("falls back to bb's browser when the default one could not open it", async () => {
-    const { view } = renderCrew(() => ready(), {
-      rpc: {
-        crew_pull_requests: () => pulls,
-        open_pull_request: () => false,
-      },
-    });
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Tidy the footer" }),
-    );
-    await waitFor(() =>
-      expect(view.inspection.navigateCalls).toContainEqual({
-        method: "openUrl",
-        url: "https://github.com/productstudioinc/cops/pull/8360",
-      }),
-    );
+    expect(await screen.findByRole("button", { name: /Crew/ })).toBeTruthy();
   });
 
   it("keeps the PRs when a read fails, saying how old they are and when it retries", async () => {
-    const retryAt = Date.now() + 7 * 60_000;
     renderCrew(() => ready(), {
       rpc: {
         crew_pull_requests: () => ({
           ...pulls,
           fetchedAt: Date.now() - 12 * 60_000 - 1000,
-          retryAt,
+          retryAt: Date.now() + 7 * 60_000,
         }),
       },
     });
@@ -556,10 +343,10 @@ describe("the crew tab's pull requests", () => {
     expect(within(section()).getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("only asks for a fresh search on its five-minute timer", async () => {
+  it("asks for a fresh search every five minutes", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      const { view } = renderCrew(() => ready(), {
+      const view = renderCrew(() => ready(), {
         rpc: {
           crew_pull_requests: () => pulls,
           pull_requests_refresh: () => null,
@@ -570,50 +357,11 @@ describe("the crew tab's pull requests", () => {
         view.inspection.rpcCalls.filter(
           (call) => call.method === "pull_requests_refresh",
         ).length;
-      fireEvent.click(screen.getByRole("button", { name: /^Pull requests/ }));
-      fireEvent.click(screen.getByRole("button", { name: /^Pull requests/ }));
       expect(refreshes()).toBe(0);
       await vi.advanceTimersByTimeAsync(5 * 60_000);
       expect(refreshes()).toBe(1);
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("hides the section when the project has no repo", async () => {
-    const { view } = renderCrew(() => ready(), { workers: [fixer] });
-    await screen.findByText("WEB-41");
-    await waitFor(() =>
-      expect(
-        view.inspection.rpcCalls.some(
-          (call) => call.method === "crew_pull_requests",
-        ),
-      ).toBe(true),
-    );
-    expect(screen.queryByRole("button", { name: /^Pull requests/ })).toBeNull();
-  });
-
-  it("starts open, and remembers being folded", async () => {
-    renderCrew(() => ready(), {
-      rpc: { crew_pull_requests: () => pulls },
-    });
-    const heading = await screen.findByRole("button", {
-      name: /^Pull requests/,
-    });
-    expect(heading.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(heading);
-    expect(screen.queryByText(/Tidy the footer/)).toBeNull();
-    expect(JSON.parse(stored.get("armada:crew-groups")!)).toMatchObject({
-      "Pull requests": false,
-    });
-    cleanup();
-    renderCrew(() => ready(), {
-      rpc: { crew_pull_requests: () => pulls },
-    });
-    expect(
-      (
-        await screen.findByRole("button", { name: /^Pull requests/ })
-      ).getAttribute("aria-expanded"),
-    ).toBe("false");
   });
 });

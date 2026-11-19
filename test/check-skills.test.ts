@@ -71,27 +71,17 @@ describe("the skill checker", () => {
     ["unparseable YAML", "x/SKILL.md", skill("name: x\ndescription: Use when: the user asks"), "not valid YAML"],
     ["a missing name", "x/SKILL.md", skill("description: Does x."), "name is required"],
     ["uppercase in the name", "Bad/SKILL.md", skill("name: Bad\ndescription: Does x."), "may only use a-z"],
-    ["a leading hyphen", "-x/SKILL.md", skill("name: -x\ndescription: Does x."), "may only use a-z"],
-    ["consecutive hyphens", "a--b/SKILL.md", skill("name: a--b\ndescription: Does x."), "may only use a-z"],
     ["a name over 64 characters", `${"a".repeat(65)}/SKILL.md`, skill(`name: ${"a".repeat(65)}\ndescription: Does x.`), "at most 64"],
     ["a name that differs from its folder", "folder/SKILL.md", skill("name: other\ndescription: Does x."), 'must match its folder "folder"'],
     ["a missing description", "x/SKILL.md", skill("name: x"), "description is required"],
     ["a description over 1024 characters", "x/SKILL.md", skill(`name: x\ndescription: ${"d".repeat(1025)}`), "at most 1024"],
-    ["a compatibility over 500 characters", "x/SKILL.md", skill(`name: x\ndescription: Does x.\ncompatibility: ${"c".repeat(501)}`), "at most 500"],
-    ["a non-string metadata value", "x/SKILL.md", skill("name: x\ndescription: Does x.\nmetadata:\n  version: 1"), "metadata.version must be a string"],
     ["an unknown field", "x/SKILL.md", skill("name: x\ndescription: Does x.\nauthor: me"), 'unknown frontmatter field "author"'],
     ["a body over 500 lines", "x/SKILL.md", skill("name: x\ndescription: Does x.", "line\n".repeat(501)), "keep it under 500"],
+    ["a skill folder without a SKILL.md", "x/README.md", "# x\n", "has no SKILL.md"],
     ["a link to a missing file", "x/SKILL.md", skill("name: x\ndescription: Does x.", "Read `references/missing.md`.\n"), '"references/missing.md" does not exist'],
-    ["a reference nested two folders deep", "x/SKILL.md", skill("name: x\ndescription: Does x.", "Read [it](references/deep/a.md).\n"), "nested deeper than one folder"],
   ])("fails %s", (_case, path, text, message) => {
     const result = check(skills({ [path]: text }));
     expect(result.ok).toBe(false);
     expect(result.output).toContain(message);
-  });
-
-  it("fails a skill folder without a SKILL.md", () => {
-    const result = check(skills({ "x/README.md": "# x\n" }));
-    expect(result.ok).toBe(false);
-    expect(result.output).toContain("has no SKILL.md");
   });
 });

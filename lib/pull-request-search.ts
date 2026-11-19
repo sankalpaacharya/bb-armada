@@ -119,7 +119,7 @@ const readOrigin: GitRemote = async (path) =>
 const REMOTE_TTL_MS = 10 * 60_000;
 
 /** A repo's pull requests out of everything the search found. */
-export const inRepo = (
+const inRepo = (
   repo: string,
   pullRequests: readonly CrewPullRequest[],
 ): CrewPullRequest[] =>

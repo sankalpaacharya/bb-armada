@@ -17,8 +17,6 @@ export type StatusRow = {
   glyph: StatusGlyph;
   /** The card shows the word next to the glyph; the grid speaks for itself. */
   wordOnCard: boolean;
-  /** Compact rows show the glyph; a status that is not live shows the age. */
-  live: boolean;
   parkable: boolean;
 };
 
@@ -34,7 +32,6 @@ export const STATUS: Record<Status, StatusRow> = {
     tone: "text-attention",
     glyph: indicator("waiting-for-input"),
     wordOnCard: true,
-    live: true,
     parkable: false,
   },
   failed: {
@@ -43,7 +40,6 @@ export const STATUS: Record<Status, StatusRow> = {
     tone: "text-destructive-text",
     glyph: indicator("unread-error"),
     wordOnCard: true,
-    live: true,
     parkable: true,
   },
   working: {
@@ -52,7 +48,6 @@ export const STATUS: Record<Status, StatusRow> = {
     tone: "text-[color:var(--bbb-accent,var(--timeline-accent))]",
     glyph: { kind: "grid" },
     wordOnCard: false,
-    live: true,
     parkable: false,
   },
   queued: {
@@ -61,7 +56,6 @@ export const STATUS: Record<Status, StatusRow> = {
     tone: "text-muted-foreground",
     glyph: indicator("queued-waiting"),
     wordOnCard: true,
-    live: true,
     parkable: false,
   },
   done: {
@@ -70,7 +64,6 @@ export const STATUS: Record<Status, StatusRow> = {
     tone: "text-[color:var(--bbb-accent,var(--timeline-accent))]",
     glyph: { kind: "word" },
     wordOnCard: true,
-    live: false,
     parkable: true,
   },
 };
@@ -149,8 +142,4 @@ export function strongerStatus(
   if (a === null) return b;
   if (b === null) return a;
   return STATUS[b].rank > STATUS[a].rank ? b : a;
-}
-
-export function isLive(status: Status | null): boolean {
-  return status !== null && STATUS[status].live;
 }

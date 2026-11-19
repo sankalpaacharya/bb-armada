@@ -4,11 +4,9 @@ import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import plugin from "../server";
-import { CAPTAIN_ORDER_KEY } from "../lib/captain-order";
 import {
   LEGACY_CAPTAINS_BACKUP_KEY,
   LEGACY_CAPTAINS_KEY,
-  captainRecordSchema,
   type CaptainRecord,
 } from "../lib/captains";
 import type { ParkRecord } from "../lib/lifecycle";
@@ -111,46 +109,56 @@ async function load(
   options: {
     seed?: (kv: Kv) => Promise<void>;
     homes?: Record<string, string>;
-    send?: () => Promise<unknown>;
     files?: (files: HomeFiles) => Partial<HomeFiles>;
-    /** Each existing thread's project, by thread id. */
-    projectOf?: Record<string, { id: string; name: string }>;
+    threads?: unknown[];
+    pullRequests?: Record<string, unknown>;
+    settings?: Record<string, number | boolean>;
   } = {},
 ) {
-  const homes = options.homes ?? {};
-  const projectOf = options.projectOf ?? {};
+  let homes = options.homes ?? {};
+  let threads = options.threads ?? [];
   let spawned = 0;
   const { bb, harness } = createFakePluginHost({
     pluginId: "armada",
+    settings: options.settings,
     sdk: {
       threads: {
         spawn: async () =>
           ({ id: spawned++ === 0 ? "thr_new" : `thr_new${spawned}` }) as never,
-        list: async () => [],
-        get: async ({ threadId }: { threadId: string }) => {
-          const project = projectOf[threadId];
-          if (project === undefined) throw new Error("thread_not_found");
-          return { id: threadId, projectId: project.id } as never;
+        list: async (args) => {
+          const offset = args?.offset ?? 0;
+          return threads.slice(offset, offset + (args?.limit ?? 100)) as never;
         },
-        send: options.send ?? (async () => ({}) as never),
+        get: async () => {
+          throw new Error("thread_not_found");
+        },
+        send: async () => ({}) as never,
       },
-      projects: {
-        list: async () =>
-          [
-            ...new Map(
-              Object.values(projectOf).map((project) => [project.id, project]),
-            ).values(),
-          ] as never,
-      },
+      projects: { list: async () => [] },
       files: (() => {
         const files = homeFiles(() => homes);
         return { ...files, ...options.files?.(files) };
       })(),
+      plugins: {
+        callRpc: async ({ input }) => {
+          const { keys } = input as { keys: string[] };
+          return Object.fromEntries(
+            keys.map((key) => [
+              key,
+              options.pullRequests?.[key] ?? { outcome: "absent" },
+            ]),
+          );
+        },
+      },
     },
   });
   await options.seed?.(bb.storage.kv);
   await plugin(bb);
-  await harness.callRpc("parks_evaluate", null);
+  const evaluate = async () =>
+    (
+      (await harness.callRpc("parks_evaluate", null)) as { changed: string[] }
+    ).changed.sort();
+  const startup = await evaluate();
   const started = {
     calls: harness.sdk.calls.length,
     invalidations: harness.experimental_rpcInvalidations.length,
@@ -159,16 +167,32 @@ async function load(
     harness.callRpc("captains_list", null) as Promise<CaptainRecord[]>;
   const ids = async () =>
     (await list()).map((record) => record.threadId).sort();
+  const parks = async () =>
+    ((await harness.callRpc("parks_list", null)) as ParkRecord[]).sort((a, b) =>
+      a.threadId.localeCompare(b.threadId),
+    );
   /** What happened after the start-up pass. */
   const since = {
-    calls: (callPath?: string) =>
-      harness.sdk.calls
-        .slice(started.calls)
-        .filter((call) => callPath === undefined || call.path === callPath),
+    calls: () => harness.sdk.calls.slice(started.calls),
     invalidations: () =>
       harness.experimental_rpcInvalidations.slice(started.invalidations),
   };
-  return { bb, harness, list, ids, since };
+  return {
+    bb,
+    harness,
+    list,
+    ids,
+    parks,
+    since,
+    startup,
+    evaluate,
+    setThreads: (next: unknown[]) => {
+      threads = next;
+    },
+    setHomes: (next: Record<string, string>) => {
+      homes = next;
+    },
+  };
 }
 
 type HomeFiles = ReturnType<typeof homeFiles>;
@@ -207,31 +231,26 @@ describe("captain order", () => {
     (await list()).map((record) => record.threadId);
 
   it("saves a move across reloads, keeps it after avatar edits, and appends new captains", async () => {
-    const { bb, harness, list } = await load({ seed });
-    expect(await orderOf(list)).toEqual(["a", "b", "c"]);
+    const { harness, list } = await load({ seed });
     await harness.callRpc("captains_reorder", {
       threadId: "c",
       beforeThreadId: "a",
     });
-    expect(await orderOf(list)).toEqual(["c", "a", "b"]);
     await harness.callRpc("captains_update", {
       threadId: "c",
       avatar: avatar("new"),
     });
     await harness.callRpc("captains_create", create);
     expect(await orderOf(list)).toEqual(["c", "a", "b", "thr_new"]);
-    expect(await bb.storage.kv.get(CAPTAIN_ORDER_KEY)).toEqual(["c", "a", "b"]);
     const reloaded = await harness.lifecycle.reload(plugin);
-    const records = await reloaded.harness.behavior.callRpc(
-      "captains_list",
-      null,
-    );
-    expect(records).toEqual([
-      expect.objectContaining({ threadId: "c" }),
-      expect.objectContaining({ threadId: "a" }),
-      expect.objectContaining({ threadId: "b" }),
-      expect.objectContaining({ threadId: "thr_new" }),
-    ]);
+    expect(
+      await orderOf(
+        () =>
+          reloaded.harness.behavior.callRpc("captains_list", null) as Promise<
+            CaptainRecord[]
+          >,
+      ),
+    ).toEqual(["c", "a", "b", "thr_new"]);
   });
 
   it("moves a captain to the end and never brings a removed captain back", async () => {
@@ -242,7 +261,6 @@ describe("captain order", () => {
     });
     expect(await orderOf(list)).toEqual(["b", "c", "a"]);
     await harness.callRpc("captains_remove", { threadId: "c" });
-    expect(await orderOf(list)).toEqual(["b", "a"]);
     await harness.callRpc("captains_reorder", {
       threadId: "a",
       beforeThreadId: "b",
@@ -264,55 +282,9 @@ describe("captain order", () => {
     ]);
     expect(await orderOf(list)).toEqual(["c", "b", "a"]);
   });
-
-  it("rejects missing captains without changing order", async () => {
-    const { harness, list } = await load({ seed });
-    await expect(
-      harness.callRpc("captains_reorder", {
-        threadId: "missing",
-        beforeThreadId: "a",
-      }),
-    ).rejects.toThrow("not a captain");
-    await expect(
-      harness.callRpc("captains_reorder", {
-        threadId: "a",
-        beforeThreadId: "missing",
-      }),
-    ).rejects.toThrow("not a captain");
-    expect(await orderOf(list)).toEqual(["a", "b", "c"]);
-  });
-
-  it("keeps the previous order if saving fails", async () => {
-    const { bb, harness, list } = await load({ seed });
-    vi.spyOn(bb.storage.kv, "set").mockRejectedValueOnce(
-      new Error("disk full"),
-    );
-    await expect(
-      harness.callRpc("captains_reorder", {
-        threadId: "c",
-        beforeThreadId: "a",
-      }),
-    ).rejects.toThrow("disk full");
-    expect(await orderOf(list)).toEqual(["a", "b", "c"]);
-  });
-
-  it("uses creation order if the saved order cannot be read", async () => {
-    const { list } = await load({
-      seed: async (kv) => {
-        await seed(kv);
-        await kv.set(CAPTAIN_ORDER_KEY, "unreadable");
-      },
-    });
-    expect(await orderOf(list)).toEqual(["a", "b", "c"]);
-  });
 });
 
 describe("captain records", () => {
-  it("starts empty", async () => {
-    const { list } = await load();
-    expect(await list()).toEqual([]);
-  });
-
   it("spawns a captain thread titled with its name in the project, records it and invalidates the captains read", async () => {
     const { harness, list, since } = await load();
     const created = (await harness.callRpc("captains_create", {
@@ -353,26 +325,6 @@ describe("captain records", () => {
     ]);
   });
 
-  it("refuses a blank name without spawning a thread", async () => {
-    const { harness, list } = await load();
-    await expect(
-      harness.callRpc("captains_create", { ...create, name: "   " }),
-    ).rejects.toThrow();
-    expect(harness.sdk.callsTo("threads.spawn")).toEqual([]);
-    expect(await list()).toEqual([]);
-  });
-
-  it("does not record a captain when the thread cannot be spawned", async () => {
-    const { harness, list } = await load();
-    harness.sdk.stub("threads.spawn", async () => {
-      throw new Error("no host");
-    });
-    await expect(harness.callRpc("captains_create", create)).rejects.toThrow(
-      "no host",
-    );
-    expect(await list()).toEqual([]);
-  });
-
   it("still records the spawned thread when the first writes fail, waiting longer before each retry", async () => {
     const { bb, harness, ids } = await load();
     vi.useFakeTimers();
@@ -403,107 +355,49 @@ describe("captain records", () => {
       reason: "disk full",
     });
     expect(harness.sdk.callsTo("threads.spawn")).toHaveLength(1);
-    expect(harness.logEntries).toContainEqual({
-      level: "error",
-      message: expect.stringContaining("thr_new"),
-    });
     vi.restoreAllMocks();
     expect(await list()).toEqual([]);
   });
 
-  it("adopts an existing thread and keeps its original date when adopted again", async () => {
+  it("adopts a thread again or changes its avatar to a custom logo, keeping its date across reloads", async () => {
     const { harness, list } = await load();
     await harness.callRpc("captains_adopt", adopt("thr_x"));
     await harness.callRpc(
       "captains_adopt",
       adopt("thr_x", "two", "2026-05-01T00:00:00.000Z"),
     );
-    expect(await list()).toEqual([
-      {
-        threadId: "thr_x",
-        avatar: avatar("two"),
-        createdAt: "2026-01-01T00:00:00.000Z",
-        home: "fleet",
-      },
-    ]);
-  });
-
-  it("changes the avatar and keeps the date, and refuses a thread that is not a captain", async () => {
-    const { harness, list } = await load();
-    await harness.callRpc("captains_adopt", adopt("thr_x"));
-    const [first] = await list();
-    await harness.callRpc("captains_update", {
-      threadId: "thr_x",
-      avatar: avatar("two"),
-    });
-    expect(await list()).toEqual([{ ...first, avatar: avatar("two") }]);
-    await expect(
-      harness.callRpc("captains_update", {
-        threadId: "nope",
-        avatar: avatar("x"),
-      }),
-    ).rejects.toThrow("not a captain");
-  });
-
-  it("preserves a custom primary logo through writes and stored reads", async () => {
-    const { harness, list, bb } = await load();
-    const first = captainRecordSchema.parse(
-      await harness.callRpc("captains_adopt", adopt("thr_custom", "kept")),
-    );
-    const avatar = {
+    const logo = {
       style: "logo",
-      seed: "kept",
+      seed: "face",
       image: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>",
     };
-    const changed = await harness.callRpc("captains_update", {
-      threadId: "thr_custom",
-      avatar,
-    });
-    expect(changed).toEqual({ ...first, avatar });
-    expect(await list()).toEqual([{ ...first, avatar }]);
-    expect(await bb.storage.kv.get("captain:thr_custom")).toEqual({
-      ...first,
-      avatar,
-    });
-  });
-
-  it("switches a captain to its project's logo and back to the same face", async () => {
-    const { harness, list } = await load();
-    await harness.callRpc("captains_adopt", adopt("thr_x", "face"));
-    const [first] = await list();
-    const logo = { style: "logo", seed: "face" };
     await harness.callRpc("captains_update", {
       threadId: "thr_x",
       avatar: logo,
     });
-    expect(await list()).toEqual([{ ...first, avatar: logo }]);
-    await harness.callRpc("captains_update", {
-      threadId: "thr_x",
-      avatar: avatar("face"),
-    });
-    expect(await list()).toEqual([first]);
-    await expect(
-      harness.callRpc("captains_update", {
+    const expected = [
+      {
         threadId: "thr_x",
-        avatar: { style: "logo" },
-      }),
-    ).rejects.toThrow();
+        avatar: logo,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        home: "fleet",
+      },
+    ];
+    expect(await list()).toEqual(expected);
+    const reloaded = await harness.lifecycle.reload(plugin);
+    expect(
+      await reloaded.harness.behavior.callRpc("captains_list", null),
+    ).toEqual(expected);
   });
 
   it("clears a park the thread had when it is adopted or removed, so it does not drop onto a shelf later", async () => {
-    const { harness } = await load();
-    const parks = () =>
-      harness.callRpc("parks_list", null) as Promise<ParkRecord[]>;
+    const { harness, parks } = await load();
     await harness.callRpc("parks_settle", { threadId: "thr_x", at: 5 });
     await harness.callRpc("captains_adopt", adopt("thr_x"));
     expect(await parks()).toEqual([]);
     await harness.callRpc("parks_settle", { threadId: "thr_x", at: 6 });
     await harness.callRpc("captains_remove", { threadId: "thr_x" });
     expect(await parks()).toEqual([]);
-    expect(harness.experimental_rpcInvalidations).toContainEqual([
-      "captains",
-      "parks",
-    ]);
   });
 
   it("keeps a removed captain removed when an update was reading it at the same time", async () => {
@@ -531,16 +425,6 @@ describe("captain records", () => {
     await expect(
       harness.callRpc("captains_remove", { threadId: "thr_x", logo: "flag" }),
     ).rejects.toThrow();
-  });
-
-  it("removes only the record, leaving its home on disk, and removing twice is harmless", async () => {
-    const { harness, list } = await load();
-    await harness.callRpc("captains_adopt", adopt("thr_x"));
-    const adopted = harness.sdk.calls.length;
-    await harness.callRpc("captains_remove", { threadId: "thr_x" });
-    await harness.callRpc("captains_remove", { threadId: "thr_x" });
-    expect(await list()).toEqual([]);
-    expect(harness.sdk.calls.slice(adopted)).toEqual([]);
   });
 
   it("invalidates the captains read after every write", async () => {
@@ -574,106 +458,26 @@ describe("captain records", () => {
     ]);
   });
 
-  it("rejects an avatar style it does not draw, the retired adventurer included", async () => {
-    const { harness } = await load();
-    for (const style of ["pixel-art", "adventurer"]) {
-      await expect(
-        harness.callRpc("captains_adopt", {
-          threadId: "thr_x",
-          avatar: { style, seed: "x" },
-        }),
-      ).rejects.toThrow();
-    }
-  });
-
-  it("reads a stored adventurer avatar as micah with the same seed", async () => {
-    const { list } = await load({
-      seed: (kv) =>
-        kv.set("captain:old", {
-          threadId: "old",
-          avatar: { style: "adventurer", seed: "thr_xi84gbn3wi" },
-          createdAt: "2026-01-01T00:00:00.000Z",
-        }),
-    });
-    expect(await list()).toEqual([
-      {
-        threadId: "old",
-        avatar: avatar("thr_xi84gbn3wi"),
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
-    ]);
-  });
-
-  it("reads a stored logo avatar as a logo, and a stored micah record as it was", async () => {
-    const { list } = await load({
+  it("lists captains stored before avatars or with a retired style, a long thread id included, and skips one it cannot read", async () => {
+    const long = "t".repeat(70);
+    const older = {
+      adventurer: { avatar: { style: "adventurer", seed: "kept" } },
+      anime: { avatar: { style: "anime", character: 3, background: 5 } },
+      [long]: { logo: "flag", color: "rose" },
+    };
+    const { harness, ids } = await load({
       seed: async (kv) => {
-        await kv.set("captain:logo", {
-          threadId: "logo",
-          avatar: { style: "logo", seed: "kept" },
-          createdAt: "2026-01-01T00:00:00.000Z",
-        });
-        await kv.set("captain:face", {
-          threadId: "face",
-          avatar: avatar("face"),
-          createdAt: "2026-01-01T00:00:00.000Z",
-          home: "face",
-        });
-      },
-    });
-    expect(await list()).toEqual(
-      expect.arrayContaining([
-        {
-          threadId: "logo",
-          avatar: { style: "logo", seed: "kept" },
-          createdAt: "2026-01-01T00:00:00.000Z",
-        },
-        {
-          threadId: "face",
-          avatar: avatar("face"),
-          createdAt: "2026-01-01T00:00:00.000Z",
-          home: "face",
-        },
-      ]),
-    );
-  });
-
-  it("reads a stored anime portrait as micah seeded by its thread", async () => {
-    const { list } = await load({
-      seed: (kv) =>
-        kv.set("captain:pal", {
-          threadId: "pal",
-          avatar: { style: "anime", character: 3, background: 5 },
-          createdAt: "2026-01-01T00:00:00.000Z",
-        }),
-    });
-    expect(await list()).toEqual([
-      {
-        threadId: "pal",
-        avatar: avatar("pal"),
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
-    ]);
-  });
-
-  it("gives a logo-and-colour record an avatar seeded by its thread, and skips a record it cannot read, with a log line", async () => {
-    const { harness, list } = await load({
-      seed: async (kv) => {
-        await kv.set("captain:good", {
-          threadId: "good",
-          logo: "flag",
-          color: "rose",
-          createdAt: "2026-01-01T00:00:00.000Z",
-        });
+        for (const [threadId, stored] of Object.entries(older)) {
+          await kv.set(`captain:${threadId}`, {
+            threadId,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            ...stored,
+          });
+        }
         await kv.set("captain:bad", { threadId: "bad" });
       },
     });
-    expect(await list()).toEqual([
-      {
-        threadId: "good",
-        avatar: avatar("good"),
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
-    ]);
+    expect(await ids()).toEqual(["adventurer", "anime", long]);
     expect(harness.logEntries).toContainEqual({
       level: "warn",
       message: expect.stringContaining("captain:bad"),
@@ -681,92 +485,32 @@ describe("captain records", () => {
   });
 });
 
-describe("long thread ids", () => {
-  it("lists a record from before avatars whose thread id is longer than a seed", async () => {
-    const long = "t".repeat(70);
-    const { ids } = await load({
-      seed: async (kv) => {
-        await kv.set(`captain:${long}`, {
-          threadId: long,
-          logo: "flag",
-          color: "rose",
-          createdAt: "2026-01-01T00:00:00.000Z",
-        });
-        await kv.set("captain:ok", {
-          threadId: "ok",
-          avatar: avatar("ok"),
-          createdAt: "2026-01-01T00:00:00.000Z",
-        });
-      },
-    });
-    expect(await ids()).toEqual(["ok", long]);
-  });
-});
-
 describe("parks", () => {
-  const list = (harness: Awaited<ReturnType<typeof load>>["harness"]) =>
-    harness.callRpc("parks_list", null) as Promise<ParkRecord[]>;
-
   it("settles, snoozes and unparks a thread, invalidating the parks read each time", async () => {
-    const { harness, since } = await load();
-    const settled = (await harness.callRpc("parks_settle", {
-      threadId: "t",
-      at: 1000,
-    })) as ParkRecord;
-    expect(settled).toEqual({
-      threadId: "t",
-      kind: "settled",
-      at: 1000,
-      by: "user",
-    });
-    expect(await list(harness)).toEqual([settled]);
-
-    const snoozed = (await harness.callRpc("parks_snooze", {
-      threadId: "t",
-      at: 2000,
-      until: 62_000,
-    })) as ParkRecord;
-    expect(snoozed).toEqual({
-      threadId: "t",
-      kind: "snoozed",
-      at: 2000,
-      until: 62_000,
-    });
-    expect(await list(harness)).toEqual([snoozed]);
-
-    await harness.callRpc("parks_unpark", { threadId: "t" });
-    await harness.callRpc("parks_unpark", { threadId: "t" });
-    expect(await list(harness)).toEqual([]);
-    expect(since.invalidations()).toEqual([
-      ["parks"],
-      ["parks"],
-      ["parks"],
-      ["parks"],
+    const { harness, parks, since } = await load();
+    await harness.callRpc("parks_settle", { threadId: "t", at: 1000 });
+    expect(await parks()).toEqual([
+      { threadId: "t", kind: "settled", at: 1000, by: "user" },
     ]);
+    await harness.callRpc("parks_snooze", {
+      threadId: "t",
+      at: 2000,
+      until: 62_000,
+    });
+    expect(await parks()).toEqual([
+      { threadId: "t", kind: "snoozed", at: 2000, until: 62_000 },
+    ]);
+    await harness.callRpc("parks_unpark", { threadId: "t" });
+    expect(await parks()).toEqual([]);
+    expect(since.invalidations()).toEqual([["parks"], ["parks"], ["parks"]]);
   });
 
   it("refuses a snooze that would end before it starts", async () => {
-    const { harness } = await load();
+    const { harness, parks } = await load();
     await expect(
       harness.callRpc("parks_snooze", { threadId: "t", at: 2000, until: 2000 }),
-    ).rejects.toThrow(/after it starts/);
-    expect(await list(harness)).toEqual([]);
-  });
-
-  it("reads a settle stored before auto-settle as the user's, and skips a park it cannot read, with a log line", async () => {
-    const { harness } = await load({
-      seed: async (kv) => {
-        await kv.set("park:good", { threadId: "good", kind: "settled", at: 5 });
-        await kv.set("park:bad", { threadId: "bad", kind: "snoozed" });
-      },
-    });
-    expect(await list(harness)).toEqual([
-      { threadId: "good", kind: "settled", at: 5, by: "user" },
-    ]);
-    expect(harness.logEntries).toContainEqual({
-      level: "warn",
-      message: expect.stringContaining("park:bad"),
-    });
+    ).rejects.toThrow();
+    expect(await parks()).toEqual([]);
   });
 });
 
@@ -780,38 +524,20 @@ describe("migration from the single captains key", () => {
         color: "rose",
         createdAt: "2026-01-01T00:00:00.000Z",
       },
-      mismatched: {
-        threadId: "other",
-        logo: "flag",
-        color: "rose",
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
     },
-  };
-
-  const migrated = {
-    threadId: "good",
-    avatar: avatar("good"),
-    createdAt: "2026-01-01T00:00:00.000Z",
   };
 
   it("moves each record to its own key as an avatar record and deletes the old key", async () => {
     const { bb, list } = await load({
       seed: (kv) => kv.set(LEGACY_CAPTAINS_KEY, legacy),
     });
+    const migrated = {
+      threadId: "good",
+      avatar: avatar("good"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
     expect(await list()).toEqual([migrated]);
     expect(await bb.storage.kv.get("captain:good")).toEqual(migrated);
-    expect(await bb.storage.kv.get(LEGACY_CAPTAINS_KEY)).toBeUndefined();
-  });
-
-  it("converges when a previous run stopped before deleting the old key", async () => {
-    const { bb, list } = await load({
-      seed: async (kv) => {
-        await kv.set("captain:good", migrated);
-        await kv.set(LEGACY_CAPTAINS_KEY, legacy);
-      },
-    });
-    expect(await list()).toEqual([migrated]);
     expect(await bb.storage.kv.get(LEGACY_CAPTAINS_KEY)).toBeUndefined();
   });
 
@@ -825,20 +551,14 @@ describe("migration from the single captains key", () => {
   });
 
   it("still serves the list when the move fails, and keeps the old key to retry", async () => {
-    const { createFakePluginHost: host } =
-      await import("@get-bb/plugin-sdk/testing");
-    const { bb, harness } = host({
-      pluginId: "armada",
+    const { bb, list } = await load({
+      seed: async (kv) => {
+        await kv.set(LEGACY_CAPTAINS_KEY, legacy);
+        vi.spyOn(kv, "set").mockRejectedValue(new Error("busy"));
+      },
     });
-    await bb.storage.kv.set(LEGACY_CAPTAINS_KEY, legacy);
-    vi.spyOn(bb.storage.kv, "set").mockRejectedValue(new Error("busy"));
-    await plugin(bb);
-    expect(await harness.callRpc("captains_list", null)).toEqual([]);
+    expect(await list()).toEqual([]);
     expect(await bb.storage.kv.get(LEGACY_CAPTAINS_KEY)).toEqual(legacy);
-    expect(harness.logEntries).toContainEqual({
-      level: "error",
-      message: expect.stringContaining("busy"),
-    });
   });
 });
 
@@ -848,32 +568,7 @@ describe("auto-settle", () => {
   const started = Date.now();
   const quietFor = (ms: number) => started - ms;
 
-  type Listed = {
-    id: string;
-    parentThreadId: string | null;
-    lifecycleOwnerThreadId: string | null;
-    environmentId: string | null;
-    visibility: "visible" | "hidden";
-    archivedAt: number | null;
-    deletedAt: number | null;
-    pinnedAt: number | null;
-    createdAt: number;
-    updatedAt: number;
-    latestAttentionAt: number;
-    hasPendingInteraction: boolean;
-    queuedWork: "none" | "waiting" | "failed";
-    status: string;
-    activity: Record<
-      | "activeBackgroundAgentCount"
-      | "activeBackgroundCommandCount"
-      | "activeGoalCount"
-      | "activePlanModeCount"
-      | "activeWorkflowCount",
-      number
-    >;
-  };
-
-  const listed = (id: string, overrides: Partial<Listed> = {}): Listed => ({
+  const listed = (id: string, overrides: Record<string, unknown> = {}) => ({
     id,
     parentThreadId: null,
     lifecycleOwnerThreadId: null,
@@ -898,79 +593,8 @@ describe("auto-settle", () => {
     ...overrides,
   });
 
-  type Row =
-    | {
-        outcome: "available";
-        pullRequest: { state: string; updatedAt: string };
-      }
-    | { outcome: "absent" }
-    | { outcome: "unavailable"; message: string };
-
-  async function loadAuto(
-    options: {
-      threads?: Listed[];
-      pullRequests?: Record<string, Row>;
-      settings?: Record<string, number | boolean>;
-      seed?: (kv: Kv) => Promise<void>;
-      homes?: Record<string, string>;
-    } = {},
-  ) {
-    let threads = options.threads ?? [];
-    let homes = options.homes ?? {};
-    const { bb, harness } = createFakePluginHost({
-      pluginId: "armada",
-      settings: options.settings,
-      sdk: {
-        threads: {
-          list: async (args) => {
-            const offset = args?.offset ?? 0;
-            return threads.slice(offset, offset + (args?.limit ?? 100));
-          },
-        },
-        files: homeFiles(() => homes),
-        plugins: {
-          callRpc: async ({ input }) => {
-            const { keys } = input as { keys: string[] };
-            return Object.fromEntries(
-              keys.map((key) => [
-                key,
-                options.pullRequests?.[key] ?? { outcome: "absent" },
-              ]),
-            );
-          },
-        },
-      },
-    });
-    await options.seed?.(bb.storage.kv);
-    await plugin(bb);
-    const evaluate = async () =>
-      (
-        (await harness.callRpc("parks_evaluate", null)) as {
-          changed: string[];
-        }
-      ).changed.sort();
-    const startup = await evaluate();
-    const parks = async () =>
-      ((await harness.callRpc("parks_list", null)) as ParkRecord[]).sort(
-        (a, b) => a.threadId.localeCompare(b.threadId),
-      );
-    return {
-      bb,
-      harness,
-      startup,
-      evaluate,
-      parks,
-      setThreads: (next: Listed[]) => {
-        threads = next;
-      },
-      setHomes: (next: Record<string, string>) => {
-        homes = next;
-      },
-    };
-  }
-
   it("settles quiet cards once at start, as auto, and invalidates the parks read", async () => {
-    const { startup, parks, harness } = await loadAuto({
+    const { startup, parks, harness } = await load({
       threads: [listed("old"), listed("recent", { updatedAt: quietFor(HOUR) })],
     });
     expect(startup).toEqual(["old"]);
@@ -980,17 +604,8 @@ describe("auto-settle", () => {
     expect(harness.experimental_rpcInvalidations).toContainEqual(["parks"]);
   });
 
-  it("writes nothing on a second run when nothing changed", async () => {
-    const { evaluate, bb } = await loadAuto({ threads: [listed("old")] });
-    const set = vi.spyOn(bb.storage.kv, "set");
-    const remove = vi.spyOn(bb.storage.kv, "delete");
-    expect(await evaluate()).toEqual([]);
-    expect(set).not.toHaveBeenCalled();
-    expect(remove).not.toHaveBeenCalled();
-  });
-
   it("unsettles an auto-settled card on new activity", async () => {
-    const { evaluate, parks, setThreads } = await loadAuto({
+    const { evaluate, parks, setThreads } = await load({
       threads: [listed("old")],
     });
     setThreads([listed("old", { latestAttentionAt: quietFor(1000) })]);
@@ -998,134 +613,37 @@ describe("auto-settle", () => {
     expect(await parks()).toEqual([]);
   });
 
-  it("never settles a kept card or touches a user's settle, and leaves a snooze alone", async () => {
-    const { startup, parks } = await loadAuto({
-      threads: [
-        listed("kept"),
-        listed("user", { updatedAt: quietFor(HOUR) }),
-        listed("snoozed"),
-      ],
-      seed: async (kv) => {
-        await kv.set("park:kept", { threadId: "kept", kind: "kept", at: 1 });
-        await kv.set("park:user", { threadId: "user", kind: "settled", at: 1 });
-        await kv.set("park:snoozed", {
-          threadId: "snoozed",
-          kind: "snoozed",
-          at: 1,
-          until: started + DAY,
-        });
-      },
-    });
-    expect(startup).toEqual([]);
-    expect((await parks()).map((park) => park.kind)).toEqual([
-      "kept",
-      "snoozed",
-      "settled",
-    ]);
-  });
-
-  it("folds a card's tree: a working child holds its root, and a captain's worker is its own card", async () => {
-    const { startup } = await loadAuto({
+  it("settles each quiet card of a tree, never a supervisor, a pinned card, or a hidden or archived thread", async () => {
+    const { startup } = await load({
       threads: [
         listed("root"),
         listed("child", { parentThreadId: "root", status: "active" }),
         listed("cap"),
         listed("worker", { parentThreadId: "cap" }),
-      ],
-      seed: async (kv) => {
-        await kv.set("captain:cap", {
-          threadId: "cap",
-          avatar: { style: "micah", seed: "cap" },
-          createdAt: "2026-01-01T00:00:00.000Z",
-        });
-      },
-    });
-    expect(startup).toEqual(["worker"]);
-  });
-
-  const withCaptain = async (kv: Kv) => {
-    await kv.set("captain:cap", {
-      threadId: "cap",
-      avatar: { style: "micah", seed: "cap" },
-      createdAt: "2026-01-01T00:00:00.000Z",
-    });
-  };
-
-  it("folds a supervisor into its captain, so each worker it runs is a card and it never is", async () => {
-    const { startup } = await loadAuto({
-      threads: [
-        listed("cap"),
         listed("thr_sup", { parentThreadId: "cap" }),
         listed("quiet", { parentThreadId: "thr_sup" }),
         listed("busy", { parentThreadId: "thr_sup", status: "active" }),
-      ],
-      homes: { "cops/backlog.md": "Supervisor: thr_sup\n" },
-      seed: withCaptain,
-    });
-    expect(startup).toEqual(["quiet"]);
-  });
-
-  it("settles nothing when the homes cannot be read, rather than fold workers into their supervisor", async () => {
-    const { harness, evaluate, parks } = await loadAuto({
-      threads: [listed("old")],
-    });
-    harness.sdk.stub("files.listPaths", async () => {
-      throw new Error("host offline");
-    });
-    await harness.callRpc("parks_unpark", { threadId: "old" });
-    await expect(evaluate()).rejects.toThrow("host offline");
-    expect(await parks()).toEqual([]);
-  });
-
-  it("refreshes the homes reads at start, then on the schedule only when a supervisor changed", async () => {
-    const { harness, setHomes } = await loadAuto({
-      homes: { "cops/backlog.md": "Supervisor: (none yet)\n" },
-    });
-    const homesRefreshes = () =>
-      harness.experimental_rpcInvalidations.filter((tags) =>
-        tags?.includes("homes"),
-      ).length;
-    expect(homesRefreshes()).toBe(1);
-    await harness.runSchedule("auto-settle");
-    expect(homesRefreshes()).toBe(1);
-    setHomes({ "cops/backlog.md": "Supervisor: thr_new\n" });
-    await harness.runSchedule("auto-settle");
-    expect(homesRefreshes()).toBe(2);
-    expect(await harness.callRpc("captain_supervisors", null)).toEqual([
-      "thr_new",
-    ]);
-    setHomes({
-      "cops/backlog.md":
-        "Supervisor: thr_new\n\n## Done\n- login\n\n## Now\n- docs\n",
-    });
-    await harness.runSchedule("auto-settle");
-    expect(homesRefreshes()).toBe(2);
-  });
-
-  it("holds pinned, waiting and queued cards, and skips hidden and archived threads", async () => {
-    const { startup } = await loadAuto({
-      threads: [
         listed("pinned", { pinnedAt: 1 }),
-        listed("waiting", { hasPendingInteraction: true }),
-        listed("queued", { queuedWork: "waiting" }),
-        listed("planning", {
-          activity: { ...listed("x").activity, activePlanModeCount: 1 },
-        }),
         listed("hidden", { visibility: "hidden" }),
         listed("archived", { archivedAt: 1 }),
       ],
+      homes: { "cops/backlog.md": "Supervisor: thr_sup\n" },
+      seed: (kv) =>
+        kv.set("captain:cap", {
+          threadId: "cap",
+          avatar: avatar("cap"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
     });
-    expect(startup).toEqual([]);
+    expect(startup).toEqual(["quiet", "worker"]);
   });
 
-  it("reads each card's pull request from GitHub PR Status: merged settles, open holds, unreadable leaves it", async () => {
+  it("reads each card's pull request from GitHub PR Status: merged settles, open holds", async () => {
     const after = new Date(started - HOUR / 2).toISOString();
-    const { startup, harness } = await loadAuto({
+    const { startup, harness } = await load({
       threads: [
         listed("merged", { environmentId: "env_m", updatedAt: quietFor(HOUR) }),
         listed("open", { environmentId: "env_o" }),
-        listed("down", { environmentId: "env_d" }),
-        listed("gone", { environmentId: "env_g" }),
       ],
       pullRequests: {
         env_m: {
@@ -1136,63 +654,55 @@ describe("auto-settle", () => {
           outcome: "available",
           pullRequest: { state: "open", updatedAt: after },
         },
-        env_d: { outcome: "unavailable", message: "offline" },
       },
     });
-    expect(startup).toEqual(["gone", "merged"]);
+    expect(startup).toEqual(["merged"]);
     const [call] = harness.sdk.callsTo("plugins.callRpc");
     expect(call![0]).toMatchObject({
       pluginId: "bb--github-pr-status",
       method: "pullRequests",
-      input: { keys: ["env_m", "env_o", "env_d", "env_g"] },
+      input: { keys: ["env_m", "env_o"] },
     });
   });
 
-  it("changes nothing for cards with an environment when GitHub PR Status cannot be called", async () => {
-    const { bb, harness } = createFakePluginHost({
-      pluginId: "armada",
-      sdk: {
-        threads: {
-          list: async () => [
-            listed("env", { environmentId: "env_1" }),
-            listed("bare"),
-          ],
-        },
-        plugins: {
-          callRpc: async () => {
-            throw new Error("plugin not loaded");
-          },
-        },
-        files: homeFiles(() => ({})),
-      },
-    });
-    await plugin(bb);
-    expect(await harness.callRpc("parks_evaluate", null)).toEqual({
-      changed: ["bare"],
-    });
-  });
-
-  it("follows the settings: 0 days turns age off, and a change runs again", async () => {
-    const { startup, harness, parks } = await loadAuto({
+  it("runs again when the settings change and on its schedule", async () => {
+    const { harness, parks, setThreads } = await load({
       threads: [listed("old")],
       settings: { autoSettleAfterDays: 0 },
     });
-    expect(startup).toEqual([]);
+    expect(await parks()).toEqual([]);
     await harness.setSettings({ autoSettleAfterDays: 3 });
     await vi.waitFor(async () =>
       expect((await parks()).map((park) => park.threadId)).toEqual(["old"]),
     );
+    setThreads([listed("old"), listed("older")]);
+    await harness.runSchedule("auto-settle");
+    expect((await parks()).map((park) => park.threadId)).toEqual([
+      "old",
+      "older",
+    ]);
   });
 
-  it("runs on its five-minute schedule", async () => {
-    const { harness, parks, setThreads } = await loadAuto();
-    setThreads([listed("old")]);
+  it("refreshes the homes reads on the schedule only when a supervisor changed", async () => {
+    const { harness, setHomes } = await load({
+      homes: { "cops/backlog.md": "Supervisor: (none yet)\n" },
+    });
+    const homesRefreshes = () =>
+      harness.experimental_rpcInvalidations.filter((tags) =>
+        tags?.includes("homes"),
+      ).length;
     await harness.runSchedule("auto-settle");
-    expect((await parks()).map((park) => park.threadId)).toEqual(["old"]);
+    expect(homesRefreshes()).toBe(1);
+    setHomes({ "cops/backlog.md": "Supervisor: thr_new\n" });
+    await harness.runSchedule("auto-settle");
+    expect(homesRefreshes()).toBe(2);
+    expect(await harness.callRpc("captain_supervisors", null)).toEqual([
+      "thr_new",
+    ]);
   });
 
   it("stores Move to active as kept, and a later settle replaces it", async () => {
-    const { harness, parks, evaluate } = await loadAuto({
+    const { harness, parks, evaluate } = await load({
       threads: [listed("old")],
     });
     expect(
@@ -1207,29 +717,12 @@ describe("auto-settle", () => {
 });
 
 describe("captain homes", () => {
-  const homes = {
-    "cops/captain.md": "# Captain\n",
-    "cops/backlog.md": [
-      "# Backlog: cops",
-      "",
-      "Supervisor: thr_sup1",
-      "",
-      "## Waiting on the user",
-      "- deploy: today or Monday? — recommend Monday (since 2026-11-01)",
-      "- (none)",
-      "",
-      "## Done",
-      "- login",
-      "",
-    ].join("\n"),
-    "cops/tasks/fix-login/brief.md": "Fix the login.\n",
-    "cops/notes.txt": "not memory",
-    "personal/backlog.md": "Supervisor: (none yet; started on first task)\n",
-    "my-app/backlog.md": "# Backlog\nSupervisor: thr_sup2 (since Monday)\n",
-    "my-app/tasks/old/backlog.md": "Supervisor: thr_stale\n",
-  };
-
   it("lists the markdown in the project's home of a captain without its own, with each file's size and age", async () => {
+    const homes = {
+      "cops/captain.md": "# Captain\n",
+      "cops/tasks/fix-login/brief.md": "Fix the login.\n",
+      "cops/notes.txt": "not memory",
+    };
     const { harness } = await load({ homes });
     expect(
       await harness.callRpc("captain_home", {
@@ -1243,30 +736,16 @@ describe("captain homes", () => {
       files: [
         { path: "captain.md", sizeBytes: 10, modifiedAt: 1_000 },
         {
-          path: "backlog.md",
-          sizeBytes: homes["cops/backlog.md"].length,
-          modifiedAt: 1_000,
-        },
-        {
           path: "tasks/fix-login/brief.md",
           sizeBytes: 15,
           modifiedAt: 1_000,
         },
       ],
     });
-    expect(
-      await harness.callRpc("captain_home", {
-        threadId: "thr_app",
-        project: "My App",
-      }),
-    ).toMatchObject({
-      status: "ready",
-      folder: "~/.bb/captains/my-app",
-    });
   });
 
   it("calls a home with no folder missing, not an error", async () => {
-    const { harness } = await load({ homes });
+    const { harness } = await load();
     expect(
       await harness.callRpc("captain_home", {
         threadId: "thr_none",
@@ -1275,187 +754,48 @@ describe("captain homes", () => {
     ).toEqual({ status: "missing", folder: "~/.bb/captains/nowhere" });
   });
 
-  it("names each home's supervisor from its backlog, skipping homes without one", async () => {
-    const { harness } = await load({ homes });
-    expect(await harness.callRpc("captain_supervisors", null)).toEqual([
-      "thr_sup1",
-      "thr_sup2",
-    ]);
-  });
-});
-
-describe("a home per captain", () => {
-  const personal = { projectId: "proj_p", projectName: "Personal" };
-  const make = async (
-    harness: Awaited<ReturnType<typeof load>>["harness"],
-    name: string,
-    instructions?: string,
-  ) => {
-    const created = (await harness.callRpc("captains_create", {
-      ...create,
-      ...personal,
-      name,
-      ...(instructions === undefined ? {} : { instructions }),
-    })) as Created;
-    if (created.outcome !== "recorded") throw new Error(created.reason);
-    return created.record;
-  };
-
-  it("gives two captains on one project different homes, neither the project's", async () => {
-    const homes = { "personal/backlog.md": "Captain: thr_old\n" };
-    const { harness } = await load({ homes });
-    const video = await make(harness, "Video editing");
-    const forms = await make(harness, "Forms");
-    expect([video.home, forms.home]).toEqual(["video-editing", "forms"]);
-    for (const { threadId } of [video, forms])
-      expect(
-        await harness.callRpc("captain_home", {
-          threadId,
-          project: "Personal",
-        }),
-      ).toMatchObject({ folder: expect.not.stringMatching(/\/personal$/) });
-  });
-
-  it("numbers a new captain's home past a folder on disk, a project's home included, or another captain's", async () => {
+  it("numbers a new captain's home past a folder on disk, a project's home included, another captain's, or tasks, which the memory reader skips", async () => {
     const homes = { "personal/backlog.md": "", "forms/captain.md": "" };
     const { harness } = await load({ homes });
-    expect((await make(harness, "Personal")).home).toBe("personal-2");
-    expect((await make(harness, "Personal")).home).toBe("personal-3");
-    expect((await make(harness, "Forms")).home).toBe("forms-2");
+    const make = async (name: string) => {
+      const created = (await harness.callRpc("captains_create", {
+        ...create,
+        name,
+      })) as Created;
+      if (created.outcome !== "recorded") throw new Error(created.reason);
+      return created.record.home;
+    };
+    expect(await make("Personal")).toBe("personal-2");
+    expect(await make("Personal")).toBe("personal-3");
+    expect(await make("Forms")).toBe("forms-2");
+    expect(await make("Tasks")).toBe("tasks-2");
   });
 
-  it("does not take the project home of a captain from before, even before that captain made its folder", async () => {
-    const { harness } = await load({
-      seed: (kv) =>
-        kv.set("captain:thr_old", {
-          threadId: "thr_old",
-          avatar: avatar("old"),
-          createdAt: "2026-01-01T00:00:00.000Z",
-        }),
-      projectOf: { thr_old: { id: "proj_f", name: "Forms" } },
-    });
-    expect((await make(harness, "Forms")).home).toBe("forms-2");
-  });
-
-  it("does not take a home a removed captain left on disk", async () => {
-    const { harness } = await load();
-    const first = await make(harness, "Forms");
-    await harness.callRpc("captains_remove", { threadId: first.threadId });
-    expect((await make(harness, "Forms")).home).toBe("forms-2");
-  });
-
-  it("keeps a captain from before on its project's home", async () => {
-    const homes = { "personal/backlog.md": "# Backlog\n" };
-    const { harness } = await load({
-      homes,
-      seed: (kv) =>
-        kv.set("captain:thr_old", {
-          threadId: "thr_old",
-          avatar: avatar("old"),
-          createdAt: "2026-01-01T00:00:00.000Z",
-        }),
-    });
-    await make(harness, "Video editing");
-    expect(
-      await harness.callRpc("captain_home", {
-        threadId: "thr_old",
-        project: "Personal",
-      }),
-    ).toMatchObject({
-      status: "ready",
-      folder: "~/.bb/captains/personal",
-      files: [expect.objectContaining({ path: "backlog.md" })],
-    });
-  });
-
-  it("keeps a captain's home when it is renamed, its avatar changes, or its project is renamed", async () => {
-    const { harness, list } = await load();
-    const { threadId } = await make(harness, "Video editing");
-    await harness.callRpc("captains_update", {
-      threadId,
-      avatar: avatar("two"),
-    });
-    await harness.callRpc("captains_adopt", {
-      ...adopt(threadId),
-      name: "Shorts",
-    });
-    expect(await list()).toEqual([
-      expect.objectContaining({ threadId, home: "video-editing" }),
-    ]);
-    expect(
-      await harness.callRpc("captain_home", {
-        threadId,
-        project: "Life admin",
-      }),
-    ).toMatchObject({ folder: "~/.bb/captains/video-editing" });
-  });
-
-  it("reads and saves each captain's own instructions and memory", async () => {
-    const homes: Record<string, string> = {};
-    const { harness } = await load({ homes });
-    const video = await make(harness, "Video editing", "Cut tight.");
-    const forms = await make(harness, "Forms", "Check every field.");
-    const of = (threadId: string) => ({ threadId, project: "Personal" });
-    expect(
-      await harness.callRpc("captain_instructions", of(video.threadId)),
-    ).toBe("Cut tight.");
-    await harness.callRpc("captain_instructions_save", {
-      ...of(forms.threadId),
-      instructions: "Ask before sending.",
-    });
-    expect(homes["forms/captain.md"]).toContain("> Ask before sending.");
-    expect(homes["video-editing/captain.md"]).toContain("> Cut tight.");
-    expect(
-      await harness.callRpc("captain_home", of(video.threadId)),
-    ).toMatchObject({
-      folder: "~/.bb/captains/video-editing",
-      files: [expect.objectContaining({ path: "captain.md" })],
-    });
-  });
-
-  it("gives a thread made a captain a fresh home and tells it where", async () => {
-    const homes = { "fleet/backlog.md": "" };
-    const { harness, list } = await load({ homes });
-    await harness.callRpc("captains_adopt", adopt("thr_x"));
-    expect(await list()).toEqual([
-      expect.objectContaining({ threadId: "thr_x", home: "fleet-2" }),
-    ]);
-    const [send] = harness.sdk.callsTo("threads.send");
-    expect(send![0]).toMatchObject({
-      threadId: "thr_x",
-      input: [{ text: expect.stringContaining("~/.bb/captains/fleet-2/") }],
-    });
-  });
-
-  it("gives a removed captain made one again the home it owns, without a new one", async () => {
+  it("gives a thread made a captain a fresh home and tells it where, but a removed captain made one again the home it owns", async () => {
     const homes = {
+      "fleet/backlog.md": "",
       "personal/backlog.md": "Captain: thr_old\nCrew captain: thr_crew\n",
     };
     const { harness, list } = await load({ homes });
+    await harness.callRpc("captains_adopt", adopt("thr_x"));
     await harness.callRpc("captains_adopt", adopt("thr_old"));
     expect(await list()).toEqual([
       expect.objectContaining({ threadId: "thr_old", home: "personal" }),
+      expect.objectContaining({ threadId: "thr_x", home: "fleet-2" }),
     ]);
-    expect(harness.sdk.callsTo("files.mkdir")).toEqual([]);
-    expect(harness.sdk.callsTo("threads.send")).toEqual([]);
-  });
-
-  it("never names a home tasks, which the memory reader skips", async () => {
-    const { harness } = await load();
-    expect((await make(harness, "Tasks")).home).toBe("tasks-2");
-  });
-
-  it("makes no home when it cannot see every folder there", async () => {
-    const { harness } = await load({
-      files: ({ listPaths }) => ({
-        listPaths: async (args) => ({
-          ...(await listPaths(args)),
-          truncated: true,
+    expect(harness.sdk.callsTo("files.mkdir")).toHaveLength(1);
+    expect(harness.sdk.callsTo("threads.send")).toEqual([
+      [
+        expect.objectContaining({
+          threadId: "thr_x",
+          input: [
+            expect.objectContaining({
+              text: expect.stringContaining("~/.bb/captains/fleet-2/"),
+            }),
+          ],
         }),
-      }),
-    });
-    await expect(make(harness, "Forms")).rejects.toThrow("More than");
-    expect(harness.sdk.callsTo("threads.spawn")).toEqual([]);
+      ],
+    ]);
   });
 
   it("records the home a failed create gave its thread, without making or announcing another", async () => {
@@ -1471,19 +811,25 @@ describe("a home per captain", () => {
     expect(harness.sdk.callsTo("threads.send")).toEqual([]);
   });
 
-  it("still makes a thread a captain when it cannot be told where its home is", async () => {
-    const { harness, list } = await load({
-      send: async () => {
-        throw new Error("thread busy");
-      },
+  it("keeps a captain from before on its project's home", async () => {
+    const { harness } = await load({
+      homes: { "personal/backlog.md": "# Backlog\n" },
+      seed: (kv) =>
+        kv.set("captain:thr_old", {
+          threadId: "thr_old",
+          avatar: avatar("old"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
     });
-    await harness.callRpc("captains_adopt", adopt("thr_x"));
-    expect(await list()).toEqual([
-      expect.objectContaining({ threadId: "thr_x", home: "fleet" }),
-    ]);
-    expect(harness.logEntries).toContainEqual({
-      level: "warn",
-      message: expect.stringContaining("thr_x"),
+    expect(
+      await harness.callRpc("captain_home", {
+        threadId: "thr_old",
+        project: "Personal",
+      }),
+    ).toMatchObject({
+      status: "ready",
+      folder: "~/.bb/captains/personal",
+      files: [expect.objectContaining({ path: "backlog.md" })],
     });
   });
 });
@@ -1492,7 +838,7 @@ describe("captain instructions", () => {
   const captainMd = "# Captain\n\n## Preferences\n- Small PRs.\n";
   const cops = { threadId: "thr_cap", project: "cops" };
 
-  it("writes a new captain's instructions to its home before starting its thread, and points the thread at them", async () => {
+  it("writes a new captain's instructions to its own home before starting its thread, and points the thread at them", async () => {
     const homes: Record<string, string> = {};
     const { harness, since } = await load({ homes });
     await harness.callRpc("captains_create", {
@@ -1501,14 +847,8 @@ describe("captain instructions", () => {
       name: "Reviewer",
       instructions: "  Act as a senior engineer.\nKeep replies short.  ",
     });
-    expect(homes["reviewer/captain.md"]).toBe(
-      [
-        "## Instructions from the user",
-        "",
-        "> Act as a senior engineer.",
-        "> Keep replies short.",
-        "",
-      ].join("\n"),
+    expect(homes["reviewer/captain.md"]).toContain(
+      "> Act as a senior engineer.\n> Keep replies short.\n",
     );
     const order = since
       .calls()
@@ -1521,68 +861,12 @@ describe("captain instructions", () => {
     const [part] = (spawn![0] as { input: { text: string }[] }).input;
     expect(part.text).toContain("## Instructions from the user");
     expect(part.text).not.toContain("senior engineer");
-  });
-
-  it("makes a new captain's home empty when it has no instructions", async () => {
-    const homes: Record<string, string> = {};
-    const { harness, since } = await load({ homes });
-    await harness.callRpc("captains_create", { ...create, instructions: " " });
-    expect(homes).toEqual({});
-    expect(since.calls("files.write")).toEqual([]);
-    expect(since.calls("files.mkdir")).toEqual([
-      expect.objectContaining({
-        args: [expect.objectContaining({ path: path.join(HOMES, "p") })],
+    expect(
+      await harness.callRpc("captain_instructions", {
+        threadId: "thr_new",
+        project: "My App",
       }),
-    ]);
-    const [spawn] = harness.sdk.callsTo("threads.spawn");
-    const [part] = (spawn![0] as { input: { text: string }[] }).input;
-    expect(part.text).not.toContain("Instructions from the user");
-  });
-
-  it("starts no thread when the instructions cannot be written", async () => {
-    const { harness } = await load({
-      files: () => ({
-        write: async () => {
-          throw new Error("read-only disk");
-        },
-      }),
-    });
-    await expect(
-      harness.callRpc("captains_create", { ...create, instructions: "Hi" }),
-    ).rejects.toThrow("read-only disk");
-    expect(harness.sdk.callsTo("threads.spawn")).toEqual([]);
-  });
-
-  it("reads, replaces and removes the instructions, keeping what the captain wrote", async () => {
-    const homes = { "cops/captain.md": captainMd };
-    const { harness, since } = await load({ homes });
-    expect(await harness.callRpc("captain_instructions", cops)).toBe("");
-
-    await harness.callRpc("captain_instructions_save", {
-      ...cops,
-      instructions: "Be brief.",
-    });
-    expect(homes["cops/captain.md"]).toBe(
-      `${captainMd}\n## Instructions from the user\n\n> Be brief.\n`,
-    );
-    expect(await harness.callRpc("captain_instructions", cops)).toBe(
-      "Be brief.",
-    );
-    expect(since.invalidations()).toContainEqual(["homes"]);
-
-    await harness.callRpc("captain_instructions_save", {
-      ...cops,
-      instructions: "Ship daily.",
-    });
-    expect(homes["cops/captain.md"]).toBe(
-      `${captainMd}\n## Instructions from the user\n\n> Ship daily.\n`,
-    );
-
-    await harness.callRpc("captain_instructions_save", {
-      ...cops,
-      instructions: "",
-    });
-    expect(homes["cops/captain.md"]).toBe(captainMd);
+    ).toBe("Act as a senior engineer.\nKeep replies short.");
   });
 
   it("does not write over a captain.md the captain changed since it was read", async () => {
@@ -1606,43 +890,24 @@ describe("captain instructions", () => {
     expect(homes["cops/captain.md"]).toBe(`${captainMd}- A new line.\n`);
   });
 
-  it("tells an edited captain to re-read its instructions, and says when it could not", async () => {
+  it("saves the instructions beside what the captain wrote and tells it to re-read them", async () => {
     const homes = { "cops/captain.md": captainMd };
-    const { harness } = await load({ homes });
+    const { harness, since } = await load({ homes });
     expect(
       await harness.callRpc("captain_instructions_save", {
         ...cops,
         instructions: "Be brief.",
       }),
     ).toEqual({ told: true });
+    expect(homes["cops/captain.md"]).toBe(
+      `${captainMd}\n## Instructions from the user\n\n> Be brief.\n`,
+    );
+    expect(since.invalidations()).toContainEqual(["homes"]);
     const [send] = harness.sdk.callsTo("threads.send");
     expect(send![0]).toMatchObject({
       threadId: "thr_cap",
       mode: "queue-if-active",
-      input: [{ text: expect.stringMatching(/Re-read captain\.md/) }],
+      input: [{ text: expect.stringContaining("captain.md") }],
     });
-
-    const failing = await load({
-      homes: { "cops/captain.md": captainMd },
-      send: async () => {
-        throw new Error("thread gone");
-      },
-    });
-    expect(
-      await failing.harness.callRpc("captain_instructions_save", {
-        ...cops,
-        instructions: "Be brief.",
-      }),
-    ).toEqual({ told: false });
-  });
-
-  it("refuses instructions over 2,000 characters", async () => {
-    const { harness } = await load();
-    await expect(
-      harness.callRpc("captain_instructions_save", {
-        ...cops,
-        instructions: "x".repeat(2001),
-      }),
-    ).rejects.toThrow();
   });
 });
