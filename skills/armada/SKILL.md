@@ -160,7 +160,10 @@ user.
   that thread is live (`references/ownership.md`).
 - If there is none, or it is gone, first look for a live child titled
   `... crew captain` or `... supervisor` in `bb thread list --parent-thread "$BB_THREAD_ID"`
-  and record that one. Otherwise start one in your own environment:
+  and record that one. Otherwise start one in your own environment. On
+  Claude Code, the crew captain runs Opus 5.5 at medium effort on the default
+  tier: `--provider claude-code --model claude-opus-5-5 --reasoning-level medium
+  --service-tier default`. Other providers keep their chosen model:
 
   ```sh
   bb thread spawn --project "$BB_PROJECT_ID" --parent-self \

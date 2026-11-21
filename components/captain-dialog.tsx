@@ -486,7 +486,7 @@ export function CaptainDialog({
             </Dropdown>
           </Field>
         ) : null}
-        {state.kind !== "adopt" && spawned === null ? (
+        {spawned === null ? (
           <Field
             label={state.kind === "create" ? "Provider and model" : "Model"}
           >
@@ -523,7 +523,7 @@ export function CaptainDialog({
                 it and the model supports it.
               </span>
             ) : null}
-            {state.kind === "edit" ? (
+            {state.kind !== "create" ? (
               <span className="text-xs text-muted-foreground">
                 Model and reasoning apply to this conversation. Change service
                 tier in the thread composer.

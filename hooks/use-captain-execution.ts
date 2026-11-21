@@ -17,6 +17,13 @@ type Execution = {
   value: Selection;
   routing?: ExperimentalProviderModelPickerRouting;
 };
+/** New and adopted Claude Code captains start on Opus 5.5 at medium effort. */
+const CLAUDE_CAPTAIN = { model: "claude-opus-5-5", reasoningLevel: "medium" };
+const captainDefaults = (selection: Selection): Selection =>
+  selection.providerId === "claude-code"
+    ? { ...selection, ...CLAUDE_CAPTAIN }
+    : selection;
+
 type Load =
   | { key: string; kind: "ready"; execution: Execution }
   | { key: string; kind: "error" }
@@ -32,7 +39,8 @@ export function useCaptainExecution(
   const environmentId = thread?.environment?.id;
   const hostId = thread?.host?.id;
   const key = state.kind === "create" ? projectId : (thread?.id ?? "");
-  const enabled = state.kind !== "adopt" && key !== "";
+  const adopting = state.kind === "adopt";
+  const enabled = key !== "";
   const [load, setLoad] = useState<Load>({ key, kind: "loading" });
 
   useEffect(() => {
@@ -60,7 +68,7 @@ export function useCaptainExecution(
               : undefined;
         return {
           initial,
-          value: initial,
+          value: adopting ? captainDefaults(initial) : initial,
           routing,
           tierReady: true,
           tierOverride: null,
@@ -92,17 +100,17 @@ export function useCaptainExecution(
       }
       const initial: Selection =
         defaults === null
-          ? {
+          ? captainDefaults({
               providerId: config.generalSettings.defaultProviderId ?? "",
               model: "",
               reasoningLevel: "medium",
-            }
-          : {
+            })
+          : captainDefaults({
               providerId: defaults.providerId,
               model: defaults.model,
               reasoningLevel: defaults.reasoningLevel,
               serviceTier: defaults.serviceTier,
-            };
+            });
       return {
         initial,
         value: initial,
@@ -124,7 +132,16 @@ export function useCaptainExecution(
     return () => {
       cancelled = true;
     };
-  }, [sdk, key, enabled, projectId, providerId, environmentId, hostId]);
+  }, [
+    sdk,
+    key,
+    enabled,
+    adopting,
+    projectId,
+    providerId,
+    environmentId,
+    hostId,
+  ]);
 
   const execution =
     load.key === key && load.kind === "ready" ? load.execution : null;
