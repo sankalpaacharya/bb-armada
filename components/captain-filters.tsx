@@ -1,6 +1,6 @@
 import type { PluginSidebarProject } from "@get-bb/plugin-sdk/app";
 
-import type { CaptainFilter } from "@/lib/captain-filter";
+import { ALL_CAPTAINS, toggleCaptainProject, type CaptainFilter } from "@/lib/captain-filter";
 import type { CaptainEntry } from "@/lib/model";
 import { FOCUS_RING } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -27,21 +27,24 @@ export function CaptainFilters({
     if (project !== undefined) groups.set(project.id, { name: project.name, count: 1 });
   }
   const choices: {
+    key: string;
     label: string;
     filter: CaptainFilter;
     selected: boolean;
     count: number;
   }[] = [
     {
+      key: "all",
       label: "All",
-      filter: { kind: "all" },
-      selected: value.kind === "all",
+      filter: ALL_CAPTAINS,
+      selected: value.length === 0,
       count: captains.length,
     },
     ...Array.from(groups, ([projectId, group]) => ({
+      key: projectId,
       label: group.name,
-      filter: { kind: "project", projectId } satisfies CaptainFilter,
-      selected: value.kind === "project" && value.projectId === projectId,
+      filter: toggleCaptainProject(value, projectId),
+      selected: value.includes(projectId),
       count: group.count,
     })),
   ];
@@ -54,7 +57,7 @@ export function CaptainFilters({
     >
       {choices.map((choice) => (
         <button
-          key={choice.filter.kind === "project" ? choice.filter.projectId : choice.filter.kind}
+          key={choice.key}
           type="button"
           aria-pressed={choice.selected}
           aria-label={`${choice.label} (${choice.count})`}

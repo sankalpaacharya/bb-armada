@@ -17,6 +17,7 @@ import {
   ALL_CAPTAINS,
   filterCaptains,
   parseCaptainFilter,
+  resolveCaptainFilter,
 } from "@/lib/captain-filter";
 import { useRunStarts } from "@/hooks/use-run-starts";
 import type { CaptainEntry, ThreadEntry } from "@/lib/model";
@@ -62,10 +63,7 @@ export function CaptainsSection({
     parseCaptainFilter,
     ALL_CAPTAINS,
   );
-  const filter =
-    storedFilter.kind === "project" && !allCaptains.some(
-      (entry) => entry.thread.projectId === storedFilter.projectId,
-    ) ? ALL_CAPTAINS : storedFilter;
+  const filter = resolveCaptainFilter(allCaptains, storedFilter);
   const captains = filterCaptains(allCaptains, filter);
   const activeWorkers = useMemo(() => threads.filter(isActiveWorker), [threads]);
   const runStarts = useRunStarts(activeWorkers);
@@ -151,7 +149,7 @@ export function CaptainsSection({
         onChange={(next) => {
           keyboardHandle.current = null;
           setDrag(null);
-          setFilter(next);
+          setFilter(resolveCaptainFilter(allCaptains, next));
         }}
       />
       <SectionHeader
