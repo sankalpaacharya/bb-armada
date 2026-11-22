@@ -107,6 +107,7 @@ export function ArmadaList({
       <CaptainsSection
         status={captains.status}
         captains={model.captains}
+        threads={model.threads}
         projects={pickable}
         activeThreadId={activeThreadId}
         onOpen={openThread}

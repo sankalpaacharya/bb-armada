@@ -6,7 +6,10 @@ import type { ReactNode } from "react";
 
 import type { CaptainCounts, CaptainEntry } from "@/lib/model";
 import { STATUS } from "@/lib/status";
+import { FOCUS_RING } from "@/lib/styles";
+import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
+import { Disclosure } from "./disclosure";
 import { WorkingGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
@@ -40,12 +43,15 @@ export function CaptainRow({
   inline,
   onOpen,
   reorderHandle,
+  fold,
 }: {
   entry: CaptainEntry;
   active: boolean;
   inline: readonly PluginThreadActionsInlineItem[];
   onOpen: OpenThread;
   reorderHandle: ReactNode;
+  /** Set while the captain has active workers, which fold under its row. */
+  fold: { open: boolean; onToggle: () => void } | null;
 }) {
   const { providers } = experimental_useProviders();
   const provider = providers.find(
@@ -58,7 +64,7 @@ export function CaptainRow({
       inline={inline}
       onOpen={onOpen}
       className="flex h-11 items-center gap-2.5 px-2.5"
-      titleClassName="font-medium"
+      titleClassName={cn("font-medium", fold !== null && "flex-initial")}
       tooltip={`Provider: ${provider?.displayName ?? entry.thread.providerId}`}
     >
       {({ title, shortcut }) => (
@@ -71,7 +77,24 @@ export function CaptainRow({
             className="pointer-events-none relative"
           />
           <span className="pointer-events-none relative flex min-w-0 flex-1 flex-col justify-center">
-            <span className="flex items-center gap-2">{title}</span>
+            <span className="flex items-center gap-1">
+              {title}
+              {fold === null ? null : (
+                <button
+                  type="button"
+                  aria-expanded={fold.open}
+                  aria-label={`${fold.open ? "Hide" : "Show"} active workers`}
+                  title={`${fold.open ? "Hide" : "Show"} active workers`}
+                  className={cn(
+                    "pointer-events-auto grid size-4 shrink-0 cursor-pointer place-items-center rounded hover:bg-state-hover",
+                    FOCUS_RING,
+                  )}
+                  onClick={fold.onToggle}
+                >
+                  <Disclosure open={fold.open} />
+                </button>
+              )}
+            </span>
             <span className="flex h-4 items-center gap-1.5 text-2xs">
               <Summary counts={entry.counts} />
             </span>

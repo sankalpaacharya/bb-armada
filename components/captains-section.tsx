@@ -2,7 +2,13 @@ import {
   experimental_useRpcMutation,
   type PluginSidebarProject,
 } from "@get-bb/plugin-sdk/app";
-import { useLayoutEffect, useRef, useState, type DragEvent } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 
 import { Icon } from "@/components/ui/icon";
 import type { CaptainsRead } from "@/hooks/use-captains";
@@ -12,7 +18,9 @@ import {
   filterCaptains,
   parseCaptainFilter,
 } from "@/lib/captain-filter";
-import type { CaptainEntry } from "@/lib/model";
+import { useRunStarts } from "@/hooks/use-run-starts";
+import type { CaptainEntry, ThreadEntry } from "@/lib/model";
+import { parseBooleanMap } from "@/lib/storage";
 import { moveCaptain } from "@/lib/captain-order";
 import { rpcContract } from "@/lib/rpc";
 import { FOCUS_RING, HEADER_ACTION } from "@/lib/styles";
@@ -20,15 +28,21 @@ import { toastFailure } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { CaptainDialogState } from "./captain-dialog";
 import { CaptainRow } from "./captain-row";
+import { CaptainWorkers } from "./captain-workers";
 import { CaptainFilters } from "./captain-filters";
 import { captainItems } from "./menu-items";
 import { Note, SectionHeader } from "./section";
 import type { OpenThread } from "./thread-link";
 
-/** Every captain, one row each. Their workers are cards in Threads. */
+const isActiveWorker = (entry: ThreadEntry) =>
+  entry.captain !== null &&
+  (entry.status === "working" || entry.status === "needs-you");
+
+/** Every captain, one row each, with its active workers folded under it. */
 export function CaptainsSection({
   status,
   captains: allCaptains,
+  threads,
   projects,
   activeThreadId,
   onOpen,
@@ -36,6 +50,8 @@ export function CaptainsSection({
 }: {
   status: CaptainsRead["status"];
   captains: readonly CaptainEntry[];
+  /** Every active thread, of which a captain's working and waiting workers nest under it. */
+  threads: readonly ThreadEntry[];
   projects: readonly PluginSidebarProject[];
   activeThreadId: string | null;
   onOpen: OpenThread;
@@ -51,6 +67,21 @@ export function CaptainsSection({
       (entry) => entry.thread.projectId === storedFilter.projectId,
     ) ? ALL_CAPTAINS : storedFilter;
   const captains = filterCaptains(allCaptains, filter);
+  const activeWorkers = useMemo(() => threads.filter(isActiveWorker), [threads]);
+  const runStarts = useRunStarts(activeWorkers);
+  const workersOf = useMemo(() => {
+    const byCaptain = new Map<string, ThreadEntry[]>();
+    for (const entry of activeWorkers) {
+      const id = entry.captain!.threadId;
+      byCaptain.set(id, [...(byCaptain.get(id) ?? []), entry]);
+    }
+    return byCaptain;
+  }, [activeWorkers]);
+  const [folds, setFolds] = useStoredState(
+    "armada/captain-workers",
+    parseBooleanMap,
+    {},
+  );
   const remove = experimental_useRpcMutation({
     contract: rpcContract,
     method: "captains_remove",
@@ -106,7 +137,8 @@ export function CaptainsSection({
   };
 
   const isAfter = (event: DragEvent<HTMLLIElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
+    const row = event.currentTarget.firstElementChild ?? event.currentTarget;
+    const rect = row.getBoundingClientRect();
     return event.clientY >= rect.top + rect.height / 2;
   };
 
@@ -150,7 +182,12 @@ export function CaptainsSection({
           </Note>
         ) : (
           <ul aria-label="Captains" className="m-0 flex flex-col gap-px p-0">
-            {captains.map((entry, index) => (
+            {captains.map((entry, index) => {
+              const workers = workersOf.get(entry.thread.id) ?? [];
+              const open =
+                folds[entry.thread.id] ??
+                workers.some((worker) => worker.status === "working");
+              return (
               <li
                 key={entry.thread.id}
                 className={cn(
@@ -204,6 +241,15 @@ export function CaptainsSection({
                         ),
                   })}
                   onOpen={onOpen}
+                  fold={
+                    workers.length === 0
+                      ? null
+                      : {
+                          open,
+                          onToggle: () =>
+                            setFolds({ ...folds, [entry.thread.id]: !open }),
+                        }
+                  }
                   reorderHandle={
                     <button
                       type="button"
@@ -262,8 +308,18 @@ export function CaptainsSection({
                     </button>
                   }
                 />
+                {workers.length === 0 ? null : (
+                  <CaptainWorkers
+                    workers={workers}
+                    open={open}
+                    runStarts={runStarts}
+                    activeThreadId={activeThreadId}
+                    onOpen={onOpen}
+                  />
+                )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>
