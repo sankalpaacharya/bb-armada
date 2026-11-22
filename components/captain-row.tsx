@@ -9,7 +9,8 @@ import { STATUS } from "@/lib/status";
 import { FOCUS_RING } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { CaptainTile } from "./captain-tile";
-import { Disclosure } from "./disclosure";
+import { EASE_OUT } from "./disclosure";
+import { Icon } from "./ui/icon";
 import { WorkingGlyph } from "./status-mark";
 import { ThreadLink, type OpenThread } from "./thread-link";
 
@@ -86,12 +87,20 @@ export function CaptainRow({
                   aria-label={`${fold.open ? "Hide" : "Show"} active workers`}
                   title={`${fold.open ? "Hide" : "Show"} active workers`}
                   className={cn(
-                    "pointer-events-auto grid size-4 shrink-0 cursor-pointer place-items-center rounded hover:bg-state-hover",
+                    "pointer-events-auto relative grid size-3 shrink-0 cursor-pointer place-items-center rounded text-foreground/35 transition-colors group-hover/row:text-foreground/50 before:absolute before:-inset-1.5 hover:text-foreground/75",
                     FOCUS_RING,
                   )}
                   onClick={fold.onToggle}
                 >
-                  <Disclosure open={fold.open} />
+                  <Icon
+                    name="ChevronRight"
+                    aria-hidden
+                    className={cn(
+                      "size-2.5 transition-transform motion-reduce:transition-none [&_*]:[stroke-width:1.5]",
+                      EASE_OUT,
+                      fold.open && "rotate-90",
+                    )}
+                  />
                 </button>
               )}
             </span>
