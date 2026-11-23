@@ -19,6 +19,7 @@ export const CAPTAINS_TAG = "captains";
 export const PARKS_TAG = "parks";
 export const HOMES_TAG = "homes";
 export const LOGOS_TAG = "logos";
+export const PULL_REQUESTS_TAG = "pull-requests";
 
 const threadId = idSchema;
 const avatar = avatarSchema;
@@ -167,6 +168,7 @@ export const rpcContract = defineRpcContract({
   crew_pull_requests: {
     input: z.strictObject({ projectId: idSchema }),
     output: crewPullRequestsSchema,
+    tags: () => [PULL_REQUESTS_TAG],
   },
   /** Reads GitHub again if the shared cache is stale and nothing is backing off; the tab's timer calls it. */
   pull_requests_refresh: { input: z.null(), output: z.null() },

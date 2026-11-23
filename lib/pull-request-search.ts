@@ -198,8 +198,8 @@ export function createPullRequestReader(
             : null,
       };
     },
-    refresh: async (): Promise<void> => {
-      note(await cache.refresh());
+    refresh: async (options?: { force?: boolean }): Promise<void> => {
+      note(await cache.refresh(options));
     },
   };
 }

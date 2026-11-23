@@ -42,6 +42,8 @@ export const QUERY = `query($q: String!) {
 export const CACHE_DIR = path.join(os.homedir(), ".cache", "bb-prs");
 
 export const FRESH_MS = 5 * 60_000;
+/** The shortest gap between searches forced by an agent opening or updating a PR. */
+export const FORCED_GAP_MS = 30_000;
 const LOCK_STALE_MS = 60_000;
 const MINUTE = 60_000;
 
@@ -81,8 +83,15 @@ export type Gh = (args: readonly string[]) => Promise<string>;
 export const isFresh = (cache: SharedCache, now: number): boolean =>
   cache.fetchedAt !== null && now - cache.fetchedAt < FRESH_MS;
 
-const mayFetch = (cache: SharedCache, now: number): boolean =>
-  !isFresh(cache, now) && now >= cache.nextAllowedAt;
+/**
+ * A forced search skips the five-minute freshness but not a failure's backoff,
+ * and comes at least 30 seconds after the last one.
+ */
+const mayFetch = (cache: SharedCache, now: number, force: boolean): boolean =>
+  force
+    ? (cache.lastError === null || now >= cache.nextAllowedAt) &&
+      (cache.fetchedAt === null || now - cache.fetchedAt >= FORCED_GAP_MS)
+    : !isFresh(cache, now) && now >= cache.nextAllowedAt;
 
 type Response = {
   status: number | null;
@@ -290,13 +299,15 @@ export function createSharedPrCache(
     }
   };
 
-  const refreshOnce = async (): Promise<SharedCache> => {
+  const refreshOnce = async (force: boolean): Promise<SharedCache> => {
     const before = await read();
-    if (!before.writable || !mayFetch(before.cache, now())) return before.cache;
+    if (!before.writable || !mayFetch(before.cache, now(), force))
+      return before.cache;
     if (!(await takeLock())) return before.cache;
     try {
       const current = await read();
-      if (!current.writable || !mayFetch(current.cache, now())) return current.cache;
+      if (!current.writable || !mayFetch(current.cache, now(), force))
+        return current.cache;
       const next = await fetchInto(current.cache, options.gh, now());
       await write(next);
       return next;
@@ -308,9 +319,12 @@ export function createSharedPrCache(
   return {
     /** The cache as it is on disk; never calls GitHub. */
     read: async (): Promise<SharedCache> => (await read()).cache,
-    /** Searches when the cache is stale and nobody is backing off or searching; otherwise reads it. */
-    refresh: (): Promise<SharedCache> => {
-      refreshing ??= refreshOnce().finally(() => {
+    /**
+     * Searches when the cache is stale, or with `force` 30 seconds after the
+     * last search, and nobody is backing off or searching; otherwise reads it.
+     */
+    refresh: ({ force = false }: { force?: boolean } = {}): Promise<SharedCache> => {
+      refreshing ??= refreshOnce(force).finally(() => {
         refreshing = null;
       });
       return refreshing;

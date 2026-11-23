@@ -204,3 +204,7 @@ export function pullRequestRows(
 /** A pull request's page on GitHub, the only URL the server opens. */
 export const PULL_REQUEST_URL =
   /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
+
+/** An agent's reply linking a PR, as one does after `gh pr create` or a push to one. */
+export const mentionsPullRequest = (text: string | null): boolean =>
+  text !== null && /github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/.test(text);

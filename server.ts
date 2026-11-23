@@ -37,6 +37,7 @@ import {
   parseStoredPark,
   type ParkRecord,
 } from "./lib/lifecycle";
+import { mentionsPullRequest } from "./lib/crew-pull-requests";
 import { openPullRequest } from "./lib/open-pull-request";
 import { createLogoReader } from "./lib/project-logos";
 import { createPullRequestReader } from "./lib/pull-request-search";
@@ -45,6 +46,7 @@ import {
   HOMES_TAG,
   LOGOS_TAG,
   PARKS_TAG,
+  PULL_REQUESTS_TAG,
   rpcContract,
   type Created,
 } from "./lib/rpc";
@@ -450,6 +452,15 @@ export default async function plugin(bb: BbPluginApi) {
     logFile: path.join(HOMES_ROOT, COMPACTION_LOG),
   });
   bb.events.on("thread.idle", ({ thread }) => autoCompact(thread));
+  bb.events.on("thread.idle", async ({ lastAssistantText }) => {
+    if (!mentionsPullRequest(lastAssistantText)) return;
+    try {
+      await pullRequests.refresh({ force: true });
+      bb.rpc.experimental_invalidate([PULL_REQUESTS_TAG]);
+    } catch (cause) {
+      bb.log.warn(`could not refresh pull requests: ${messageOf(cause)}`);
+    }
+  });
   settings.onChange(inBackground(reevaluate));
   settings.onChange((next, prev) => {
     if (next.logoSkipProjects === prev.logoSkipProjects) return;

@@ -89,6 +89,22 @@ describe("the shared pull request cache", () => {
     expect(gh).toHaveBeenCalledTimes(2);
   });
 
+  it("forces a search past freshness, 30 seconds apart, never through a backoff", async () => {
+    await store({ fetchedAt: NOW, nextAllowedAt: NOW + FRESH_MS, data: DATA });
+    const gh = vi.fn(ok);
+    await shared(gh, () => NOW + 29_999).refresh({ force: true });
+    expect(gh).toHaveBeenCalledTimes(0);
+    await shared(gh, () => NOW + 30_000).refresh({ force: true });
+    expect(gh).toHaveBeenCalledTimes(1);
+    await store({
+      ...stale,
+      nextAllowedAt: NOW + MINUTE,
+      lastError: { at: NOW, kind: "rate-limited", message: "slow down" },
+    });
+    await shared(gh).refresh({ force: true });
+    expect(gh).toHaveBeenCalledTimes(1);
+  });
+
   it("runs one search when two plugins refresh at once", async () => {
     let finish = () => {};
     const gh = vi.fn<Gh>(
