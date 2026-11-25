@@ -8,17 +8,19 @@ export function captainTitle(projectName: string): string {
 
 const SKILL = "armada";
 const TRIGGER = `/${SKILL}`;
+const POTETO_TRIGGER = "/pstack:poteto-mode";
 
-/** A message that invokes the armada skill the way bb's composer does. */
+/** Keep Armada as the sole structured mention so Claude Code invokes it. */
 function skillInput(text: string) {
+  const armadaStart = POTETO_TRIGGER.length + 1;
   return [
     {
       type: "text" as const,
-      text: `${TRIGGER} ${text}`,
+      text: `${POTETO_TRIGGER}\n${TRIGGER} Work in poteto-mode. If the pstack:poteto-mode skill is unavailable, say so once and carry on without it. ${text}`,
       mentions: [
         {
-          start: 0,
-          end: TRIGGER.length,
+          start: armadaStart,
+          end: armadaStart + TRIGGER.length,
           resource: {
             kind: "command" as const,
             trigger: "/" as const,

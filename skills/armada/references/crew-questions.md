@@ -96,9 +96,12 @@ Go up this ladder one step at a time:
    obstacle): start a replacement in the same environment so its work is kept.
    Check the New thread service tier section of the Armada skill first.
    Use `bb thread spawn --parent-self --environment <same env id> --provider <provider> --model <model> --service-tier default`,
-   or `--service-tier fast` only when the user asked for Fast and it is supported, with the
-   brief plus a short progress note, then archive the old thread. A low
-   context reading is not wedging; threads compact and keep going.
+   or `--service-tier fast` only when the user asked for Fast and it is supported.
+   Start the replacement prompt with `/pstack:poteto-mode` alone on the first
+   line, followed by the brief and a short progress note. Tell the replacement
+   to report once and carry on without poteto-mode if the skill is unavailable.
+   Then archive the old thread. A low context reading is not wedging; threads
+   compact and keep going.
 5. **A second replacement also fails**: report the plain failure, what work was
    kept, and what it means. As the crew captain, send `FAILED` to main. As main,
    mark the backlog line `failed` and tell the user.

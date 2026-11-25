@@ -10,7 +10,8 @@ threads, oversee them, answer their questions yourself, and bring back plain
 outcomes. You stay in this one thread for weeks.
 
 **If your prompt says you are the crew captain**, read `references/crew-captain.md`
-and `references/crew-questions.md` and follow those instead of this file. The Boundary and New thread service tier sections below also bind you.
+and `references/crew-questions.md` and follow those instead of this file. The
+Boundary, New thread prompts, and New thread service tier sections also bind you.
 
 Load these references when their moment comes:
 
@@ -120,6 +121,14 @@ edit it in place. Never blindly append.
 - Destructive, irreversible, security-sensitive, or production-touching actions
   always go to the user. No standing instruction pre-authorizes them.
 
+## New thread prompts
+
+Every thread a captain starts must begin its first prompt with
+`/pstack:poteto-mode` alone on the first line. This rule has no exceptions and
+applies to crew captains and every task, including scouts, reviews, and
+replacements. If the thread has no `pstack:poteto-mode` skill, it reports that
+once and carries on without it. Tell the user if a crew thread reports it.
+
 ## New thread service tier
 
 Every new captain, crew captain, worker, and replacement uses the default
@@ -170,9 +179,11 @@ user.
     --provider <provider> --model <model> --service-tier default \
     --parent-notifications stuck --environment "$BB_ENVIRONMENT_ID" \
     --title "<your title> crew captain" --prompt-file - <<'EOF'
+  /pstack:poteto-mode
   /armada You are the crew captain for bb project <project>. Home:
   ~/.bb/captains/<home>/. Main captain thread: <your BB_THREAD_ID>.
   Read references/crew-captain.md in the armada skill and follow it.
+  If the pstack:poteto-mode skill is unavailable, report that once and carry on without it.
   EOF
   ```
 
@@ -203,16 +214,15 @@ user.
 3. **Check for duplicates.** Look at `bb thread list --project "$BB_PROJECT_ID"`
    and In flight before you start.
 4. **Write the brief** to `tasks/<slug>/brief.md`:
-   - The first line is `/pstack:poteto-mode`, alone, for every task: a
-     feature, a bug fix, an investigation, a review or anything else. It puts
-     the worker in poteto mode, which picks the right playbook for the task.
-     If the worker reports that it has no `pstack:poteto-mode` skill, tell the
-     user and carry on without it.
+   - The first line is `/pstack:poteto-mode`, alone, for every task, including
+     scouts and reviews. If the worker reports that it has no
+     `pstack:poteto-mode` skill, tell the user and carry on without it.
    - `## User's intent`: the user's exact words for this task.
    - `## Task`: the shape, goal, relevant memory, the files or areas to look at,
      what done means, and how to verify it.
    - `## Rules`: the boundary above, the project's `AGENTS.md`/`CLAUDE.md` rules
-     that apply, and the relevant `captain.md` preferences.
+     that apply, and the relevant `captain.md` preferences. Tell the worker to
+     report once and carry on without poteto-mode if the skill is unavailable.
    - `## When you are unsure`: "Ask your parent thread: end your turn with the
      question, the options you see, and your pick. Never use your own ask-user
      tool; the user does not watch this thread. The captain answers. Do not
@@ -224,7 +234,7 @@ user.
    1. Add `- <slug>: starting, ship|scout` to In flight.
    2. Spawn. The title starts with the slug so the worker can be found again.
    3. Put the id on the In flight line (`- <slug>: thr_xxx, ship|scout`) and
-      add `thread: <id>` to the top of the brief.
+      add `thread: <id>` below the first line of the brief.
    4. Send the crew captain the `TASK` line.
 
    ```sh
