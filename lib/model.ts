@@ -124,7 +124,7 @@ function countStatuses(threads: readonly PluginSidebarThread[]): CaptainCounts {
   const counts = { working: 0, needsYou: 0, failed: 0 };
   for (const thread of threads) {
     const status = statusOf(thread);
-    if (status === "working" || status === "queued") counts.working += 1;
+    if (status === "working") counts.working += 1;
     else if (status === "needs-you") counts.needsYou += 1;
     else if (status === "failed") counts.failed += 1;
   }

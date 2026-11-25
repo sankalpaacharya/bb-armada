@@ -68,16 +68,6 @@ export const STATUS: Record<Status, StatusRow> = {
   },
 };
 
-const WORKING_INDICATORS = new Set<PluginSidebarThreadIndicator>([
-  "runtime",
-  "workflow",
-  "background-agent",
-  "background-command",
-  "goal",
-  "plan-mode",
-  "queued-waiting",
-  "working-draft",
-]);
 const BUSY_STATUSES = new Set<string>([
   "starting",
   "active",
@@ -98,6 +88,8 @@ export function isBusy(
 /**
  * Every status a thread shows at once. They can overlap: a send can fail while
  * a turn is still running, and the thread is then both failed and working.
+ * Working means something is running right now; a queued message on a thread
+ * that errored is stuck, so it reads as failed, not working.
  */
 export function signalsOf(thread: PluginSidebarThread): Status[] {
   const signals: Status[] = [];
@@ -107,24 +99,29 @@ export function signalsOf(thread: PluginSidebarThread): Status[] {
   ) {
     signals.push("needs-you");
   }
+  const errored =
+    thread.status === "error" || thread.runtimeStatus === "error";
+  const hasQueued =
+    thread.queuedWork !== "none" ||
+    thread.indicator === "queued-waiting" ||
+    thread.indicator === "queued-failed";
   if (
     thread.queuedWork === "failed" ||
     thread.indicator === "queued-failed" ||
-    thread.indicator === "unread-error"
+    thread.indicator === "unread-error" ||
+    (errored && hasQueued)
   ) {
     signals.push("failed");
   }
   const { activity } = thread;
   if (
     isBusy(thread) ||
-    WORKING_INDICATORS.has(thread.indicator) ||
-    activity.workflows +
-      activity.backgroundAgents +
-      activity.backgroundCommands +
-      activity.goals >
+    activity.workflows + activity.backgroundAgents + activity.backgroundCommands >
       0
   ) {
-    signals.push(thread.indicator === "queued-waiting" ? "queued" : "working");
+    signals.push("working");
+  } else if (thread.queuedWork === "waiting" && !errored) {
+    signals.push("queued");
   }
   if (thread.indicator === "unread-success") signals.push("done");
   return signals;
